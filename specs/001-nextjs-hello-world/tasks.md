@@ -72,15 +72,15 @@ npm install --save-dev jest jest-environment-jsdom @testing-library/react @testi
 
 ### Tests for User Story 2 (TDD - Write First)
 
-- [ ] T007 [US2] Write test: Homepage renders "Hello World" text in __tests__/page.test.tsx
-- [ ] T008 [US2] Write test: Page has correct document title in __tests__/page.test.tsx
+- [x] T007 [US2] Write test: Homepage renders "Hello World" text in __tests__/page.test.tsx
+- [x] T008 [US2] Write test: Page has correct document title in __tests__/page.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Simplify app/page.tsx to display only "Hello World" message
-- [ ] T010 [US2] Update app/layout.tsx metadata to set title "Git Explorer"
-- [ ] T011 [US2] Clean up app/globals.css - keep only Tailwind directives
-- [ ] T012 [US2] Run tests and verify they pass (npm run test)
+- [x] T009 [US2] Simplify app/page.tsx to display only "Hello World" message
+- [x] T010 [US2] Update app/layout.tsx metadata to set title "Git Explorer"
+- [x] T011 [US2] Clean up app/globals.css - keep only Tailwind directives
+- [x] T012 [US2] Run tests and verify they pass (npm run test)
 
 **Checkpoint**: Tests pass, "Hello World" visible at localhost:3000
 
@@ -96,10 +96,10 @@ npm install --save-dev jest jest-environment-jsdom @testing-library/react @testi
 
 > Note: This story is satisfied by T001 (create-next-app provides dev script). Verification only.
 
-- [ ] T013 [US3] Verify npm run dev starts server without errors
-- [ ] T014 [US3] Verify localhost:3000 is accessible in browser
-- [ ] T015 [US3] Verify npm run build completes without errors
-- [ ] T016 [US3] Verify npm run start works after build
+- [x] T013 [US3] Verify npm run dev starts server without errors
+- [x] T014 [US3] Verify localhost:3000 is accessible in browser
+- [x] T015 [US3] Verify npm run build completes without errors
+- [x] T016 [US3] Verify npm run start works after build
 
 **Checkpoint**: All npm scripts work, app accessible at localhost:3000
 
@@ -109,10 +109,10 @@ npm install --save-dev jest jest-environment-jsdom @testing-library/react @testi
 
 **Purpose**: Final cleanup and README update
 
-- [ ] T017 [P] Update README.md with setup instructions (clone, install, run)
-- [ ] T018 [P] Remove any unused boilerplate files from create-next-app
-- [ ] T019 Verify all acceptance criteria from spec.md are met
-- [ ] T020 Run final test suite - all tests must pass
+- [x] T017 [P] Update README.md with setup instructions (clone, install, run)
+- [x] T018 [P] Remove any unused boilerplate files from create-next-app
+- [x] T019 Verify all acceptance criteria from spec.md are met
+- [x] T020 Run final test suite - all tests must pass
 
 ---
 
