@@ -22,10 +22,10 @@
 
 **Purpose**: Initialize Next.js project with required tooling
 
-- [ ] T001 Initialize Next.js project with create-next-app (TypeScript, Tailwind, ESLint, App Router, npm)
-- [ ] T002 Install testing dependencies: jest, jest-environment-jsdom, @testing-library/react, @testing-library/jest-dom
-- [ ] T003 [P] Create jest.config.js with Next.js configuration
-- [ ] T004 [P] Create jest.setup.js with Testing Library imports
+- [x] T001 Initialize Next.js project with create-next-app (TypeScript, Tailwind, ESLint, App Router, npm)
+- [x] T002 Install testing dependencies: jest, jest-environment-jsdom, @testing-library/react, @testing-library/jest-dom
+- [x] T003 [P] Create jest.config.js with Next.js configuration
+- [x] T004 [P] Create jest.setup.js with Testing Library imports
 
 **Command for T001**:
 ```bash
@@ -43,8 +43,8 @@ npm install --save-dev jest jest-environment-jsdom @testing-library/react @testi
 
 **Purpose**: Establish testing framework before any feature implementation (TDD requirement)
 
-- [ ] T005 Verify jest runs with empty test suite (npm run test passes)
-- [ ] T006 Add test script to package.json if not present
+- [x] T005 Verify jest runs with empty test suite (npm run test passes)
+- [x] T006 Add test script to package.json if not present
 
 **Checkpoint**: Testing infrastructure ready - TDD workflow can begin
 
