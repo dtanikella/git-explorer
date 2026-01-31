@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# speckit stuff
+.specify
+.vscode
+.github/agents
+.github/prompts
