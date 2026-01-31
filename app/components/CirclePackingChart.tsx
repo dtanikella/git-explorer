@@ -9,7 +9,8 @@ interface CirclePackingChartProps {
   height: number;
   sizingStrategy: SizingStrategy;
   coloringStrategy: ColoringStrategy;
-  onHover?: (node: any) => void;
+  showTooltip?: (args: { tooltipData: any; tooltipLeft: number; tooltipTop: number }) => void;
+  hideTooltip?: () => void;
   onClick?: (node: any) => void;
 }
 
@@ -19,7 +20,8 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
   height,
   sizingStrategy,
   coloringStrategy,
-  onHover,
+  showTooltip,
+  hideTooltip,
   onClick,
 }) => {
   const root = hierarchy(data)
@@ -35,8 +37,12 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
               key={node.data.path}
               node={node}
               fill={coloringStrategy(node.data)}
-              onMouseEnter={() => onHover?.(node)}
-              onMouseLeave={() => onHover?.(null)}
+              onMouseEnter={(e) => showTooltip?.({
+                tooltipData: node.data,
+                tooltipLeft: e.clientX,
+                tooltipTop: e.clientY,
+              })}
+              onMouseLeave={() => hideTooltip?.()}
               onClick={() => onClick?.(node)}
             />
           ))}

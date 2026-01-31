@@ -78,15 +78,17 @@
 
 ### Tests for User Story 2 (TDD - write tests FIRST, verify they FAIL)
 
-- [ ] T016a [US2] Write failing component test for tooltip behavior - verify tooltip appears on hover, shows correct content for files vs folders, disappears on mouse leave
+- [X] T016a [US2] Write failing component test for tooltip behavior - verify tooltip appears on hover, shows correct content for files vs folders, disappears on mouse leave
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Create app/components/Tooltip.tsx using @visx/tooltip TooltipWithBounds
-- [ ] T017 [US2] Add useTooltip hook to RepoVisualization.tsx for tooltip state management
-- [ ] T018 [US2] Add onMouseEnter/onMouseLeave handlers to CircleNode.tsx that call showTooltip/hideTooltip
-- [ ] T019 [US2] Display different tooltip content for files vs folders (size+extension vs child count)
-- [ ] T020 [US2] Position tooltip at cursor with TooltipWithBounds for viewport-aware placement
+- [X] T016 [US2] Create app/components/Tooltip.tsx using @visx/tooltip TooltipWithBounds
+- [X] T017 [US2] Add useTooltip hook to RepoVisualization.tsx for tooltip state management
+- [X] T018 [US2] Add onMouseEnter/onMouseLeave handlers to CircleNode.tsx that call showTooltip/hideTooltip
+- [X] T019 [US2] Display different tooltip content for files vs folders (size+extension vs child count)
+- [X] T020 [US2] Position tooltip at cursor with TooltipWithBounds for viewport-aware placement
+- [X] T020a [US2] Adjust tooltip to show relative path from user-provided root directory
+- [X] T020b [US2] Remove max-width constraint to allow tooltip to align with content width
 
 **Checkpoint**: User Story 2 complete - hover shows file/folder details
 
@@ -211,11 +213,11 @@ T007 lib/strategies/coloring.ts }
 
 | Metric | Count |
 |--------|-------|
-| Total Tasks | 45 |
+| Total Tasks | 47 |
 | Setup Tasks | 4 |
 | Foundational Tasks | 9 (4 tests + 5 impl) |
 | User Story 1 Tasks | 7 (1 test + 6 impl) |
-| User Story 2 Tasks | 6 (1 test + 5 impl) |
+| User Story 2 Tasks | 8 (1 test + 7 impl) |
 | User Story 3 Tasks | 8 (1 test + 7 impl) |
 | User Story 4 Tasks | 6 (1 test + 5 impl) |
 | Polish Tasks | 5 |
