@@ -1,0 +1,47 @@
+import React from 'react';
+import { Pack, hierarchy } from '@visx/hierarchy';
+import { FileTree, SizingStrategy, ColoringStrategy } from '../../lib/types';
+import { CircleNode } from './CircleNode';
+
+interface CirclePackingChartProps {
+  data: FileTree;
+  width: number;
+  height: number;
+  sizingStrategy: SizingStrategy;
+  coloringStrategy: ColoringStrategy;
+  onHover?: (node: any) => void;
+  onClick?: (node: any) => void;
+}
+
+export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
+  data,
+  width,
+  height,
+  sizingStrategy,
+  coloringStrategy,
+  onHover,
+  onClick,
+}) => {
+  const root = hierarchy(data)
+    .sum(sizingStrategy)
+    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+
+  return (
+    <Pack root={root} size={[width, height]} padding={2}>
+      {(packData) => (
+        <svg width={width} height={height}>
+          {packData.descendants().map((node, index) => (
+            <CircleNode
+              key={node.data.path}
+              node={node}
+              fill={coloringStrategy(node.data)}
+              onMouseEnter={() => onHover?.(node)}
+              onMouseLeave={() => onHover?.(null)}
+              onClick={() => onClick?.(node)}
+            />
+          ))}
+        </svg>
+      )}
+    </Pack>
+  );
+};

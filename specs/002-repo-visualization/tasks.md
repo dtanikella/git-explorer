@@ -55,16 +55,16 @@
 
 ### Tests for User Story 1 (TDD - write tests FIRST, verify they FAIL)
 
-- [ ] T010a [US1] Write failing component test in __tests__/components/CirclePackingChart.test.tsx - verify renders correct number of circles, applies colors, accepts strategy props
+- [X] T010a [US1] Write failing component test in __tests__/components/CirclePackingChart.test.tsx - verify renders correct number of circles, applies colors, accepts strategy props
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Create app/components/CircleNode.tsx - individual circle SVG component with fill color prop (SVG element per FR-010)
-- [ ] T011 [US1] Create app/components/CirclePackingChart.tsx - Pack layout using @visx/hierarchy with sizingStrategy and coloringStrategy props
-- [ ] T012 [US1] Create app/components/RepoVisualization.tsx - container that receives FileTree and renders CirclePackingChart
-- [ ] T013 [US1] Update app/page.tsx - add state for fileTree, loading, error; fetch from /api/file-tree on submit
-- [ ] T014 [US1] Style folder circles as semi-transparent containers (FR-012) in CircleNode.tsx
-- [ ] T015 [US1] Make visualization responsive to container size using @visx/responsive or CSS
+- [X] T010 [US1] Create app/components/CircleNode.tsx - individual circle SVG component with fill color prop (SVG element per FR-010)
+- [X] T011 [US1] Create app/components/CirclePackingChart.tsx - Pack layout using @visx/hierarchy with sizingStrategy and coloringStrategy props
+- [X] T012 [US1] Create app/components/RepoVisualization.tsx - container that receives FileTree and renders CirclePackingChart
+- [X] T013 [US1] Update app/page.tsx - add state for fileTree, loading, error; fetch from /api/file-tree on submit
+- [X] T014 [US1] Style folder circles as semi-transparent containers (FR-012) in CircleNode.tsx
+- [X] T015 [US1] Make visualization responsive to container size using @visx/responsive or CSS
 
 **Checkpoint**: User Story 1 complete - visualization renders with path input
 
