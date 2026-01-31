@@ -15,10 +15,10 @@
 
 **Purpose**: Install dependencies and create project structure
 
-- [ ] T001 Install @visx dependencies: `npm install @visx/hierarchy @visx/zoom @visx/tooltip @visx/group @visx/scale`
-- [ ] T002 [P] Create lib/types.ts with FileNode, FileTree, SizingStrategy, ColoringStrategy, API response types
-- [ ] T003 [P] Create lib/colors.ts with extension-to-color mapping (12 colors per research.md)
-- [ ] T004 [P] Create app/components/ directory structure
+- [X] T001 Install @visx dependencies: `npm install @visx/hierarchy @visx/zoom @visx/tooltip @visx/group @visx/scale`
+- [X] T002 [P] Create lib/types.ts with FileNode, FileTree, SizingStrategy, ColoringStrategy, API response types
+- [X] T003 [P] Create lib/colors.ts with extension-to-color mapping (12 colors per research.md)
+- [X] T004 [P] Create app/components/ directory structure
 
 ---
 
