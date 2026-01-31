@@ -30,18 +30,18 @@
 
 ### Tests for Foundational (TDD - write tests FIRST, verify they FAIL)
 
-- [ ] T005a Write failing test for buildTree() in __tests__/lib/file-tree.test.ts - verify tree structure, node properties, recursive scanning
-- [ ] T006a [P] Write failing test for sizing strategies in __tests__/lib/sizing.test.ts - verify fileSizeStrategy returns node.size, uniformStrategy returns 1
-- [ ] T007a [P] Write failing test for coloring strategies in __tests__/lib/coloring.test.ts - verify extensionColorStrategy maps extensions to correct colors
-- [ ] T008a Write failing integration test for API route in __tests__/api/file-tree.test.ts - verify POST returns FileTree JSON, handles errors
+- [x] T005a Write failing test for buildTree() in __tests__/lib/file-tree.test.ts - verify tree structure, node properties, recursive scanning
+- [x] T006a [P] Write failing test for sizing strategies in __tests__/lib/sizing.test.ts - verify fileSizeStrategy returns node.size, uniformStrategy returns 1
+- [x] T007a [P] Write failing test for coloring strategies in __tests__/lib/coloring.test.ts - verify extensionColorStrategy maps extensions to correct colors
+- [x] T008a Write failing integration test for API route in __tests__/api/file-tree.test.ts - verify POST returns FileTree JSON, handles errors
 
 ### Implementation for Foundational
 
-- [ ] T005 Implement lib/file-tree.ts with buildTree() function for recursive filesystem scanning (including symlink following, permission skip)
-- [ ] T006 [P] Implement lib/strategies/sizing.ts with fileSizeStrategy and uniformStrategy
-- [ ] T007 [P] Implement lib/strategies/coloring.ts with extensionColorStrategy
-- [ ] T008 Implement app/api/file-tree/route.ts POST handler per contracts/file-tree-api.md
-- [ ] T009 Add path validation in API route: empty path, path not found, not a directory, permission denied
+- [x] T005 Implement lib/file-tree.ts with buildTree() function for recursive filesystem scanning (including symlink following, permission skip)
+- [x] T006 [P] Implement lib/strategies/sizing.ts with fileSizeStrategy and uniformStrategy
+- [x] T007 [P] Implement lib/strategies/coloring.ts with extensionColorStrategy
+- [x] T008 Implement app/api/file-tree/route.ts POST handler per contracts/file-tree-api.md
+- [x] T009 Add path validation in API route: empty path, path not found, not a directory, permission denied
 
 **Checkpoint**: Foundation ready - user story implementation can begin
 

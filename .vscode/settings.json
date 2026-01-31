@@ -10,7 +10,9 @@
         ".specify/scripts/bash/": true,
         ".specify/scripts/powershell/": true,
         "npm install": true,
-        "npm view": true
+        "npm view": true,
+        "npx jest": true,
+        "mkdir": true
     }
 }
 
