@@ -28,6 +28,14 @@ export interface FileCommitData {
   frequencyScore: number;
 }
 
+export interface AnalysisMetadata {
+  totalFilesAnalyzed: number;
+  filesDisplayed: number;
+  totalCommits: number;
+  timeRange: string;
+  analysisDurationMs: number;
+}
+
 export interface TreeNode {
   name: string;
   path: string;

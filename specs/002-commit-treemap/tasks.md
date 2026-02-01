@@ -162,9 +162,9 @@
 
 - [ ] T037 [P] Add responsive sizing logic in app/page.tsx (calculate treemap width/height from window size, add resize listener)
 - [ ] T038 [P] Style components with Tailwind CSS in app/globals.css and components (consistent spacing, colors, typography)
-- [ ] T039 [P] Add metadata display in app/page.tsx (show totalFilesAnalyzed, filesDisplayed, analysisDurationMs after analysis)
-- [ ] T040 Run quickstart.md validation (verify all setup steps work, update if needed)
-- [ ] T041 Update README.md with feature documentation (add usage instructions for treemap feature)
+- [x] T039 [P] Add metadata display in app/page.tsx (show totalFilesAnalyzed, filesDisplayed, analysisDurationMs after analysis)
+- [x] T040 Run quickstart.md validation (verify all setup steps work, update if needed)
+- [x] T041 Update README.md with feature documentation (add usage instructions for treemap feature)
 
 ---
 

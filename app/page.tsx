@@ -1,21 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import LoadingState from './components/LoadingState';
 import { TreemapChart } from './components/TreemapChart';
 import { ColorLegend } from './components/ColorLegend';
 import { DateRangeSelector } from './components/DateRangeSelector';
 import { ErrorDisplay } from './components/ErrorDisplay';
-import { TreeNode, TimeRangePreset } from '@/lib/git/types';
+import { TreeNode, TimeRangePreset, AnalysisMetadata } from '@/lib/git/types';
 
 export default function Home() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [treeData, setTreeData] = useState<TreeNode | null>(null);
-  const [metadata, setMetadata] = useState<any>(null);
+  const [metadata, setMetadata] = useState<AnalysisMetadata | null>(null);
   const [selectedRange, setSelectedRange] = useState<TimeRangePreset>('2w');
+  const [windowSize, setWindowSize] = useState({ width: 800, height: 600 });
+
+  useEffect(() => {
+    const updateSize = () => {
+      setWindowSize({
+        width: Math.min(window.innerWidth - 64, 1200), // Max width with padding
+        height: Math.min(window.innerHeight - 300, 800), // Leave space for other UI
+      });
+    };
+
+    updateSize(); // Set initial size
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   const handleRepositorySelect = async (path: string) => {
     setIsLoading(true);
@@ -33,11 +47,6 @@ export default function Home() {
       const result = await response.json();
 
       if (result.success) {
-        console.log('Page: Setting treeData:', {
-          hasChildren: !!result.data.children,
-          childrenLength: result.data.children?.length,
-          children: result.data.children?.map((c: TreeNode) => ({ name: c.name, isFile: c.isFile }))
-        });
         setTreeData(result.data);
         setMetadata(result.metadata);
         setRepoPath(path);
@@ -159,13 +168,40 @@ export default function Home() {
                 <>
                   <TreemapChart
                     data={treeData}
-                    width={800}
-                    height={600}
+                    width={windowSize.width}
+                    height={windowSize.height}
                   />
                   <ColorLegend className="mt-4" />
                 </>
               )}
             </div>
+
+            {metadata && (
+              <div className="mt-6 card">
+                <h3 className="text-lg font-semibold mb-3">Analysis Summary</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Files Analyzed</div>
+                    <div className="font-semibold text-lg">{metadata.totalFilesAnalyzed?.toLocaleString() || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Files Displayed</div>
+                    <div className="font-semibold text-lg">{metadata.filesDisplayed?.toLocaleString() || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Total Commits</div>
+                    <div className="font-semibold text-lg">{metadata.totalCommits?.toLocaleString() || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Analysis Time</div>
+                    <div className="font-semibold text-lg">{metadata.analysisDurationMs ? `${metadata.analysisDurationMs}ms` : 'N/A'}</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-gray-600">
+                  Time Range: {metadata.timeRange}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -65,15 +65,5 @@ export function buildTreeFromFiles(files: FileCommitData[]): TreeNode {
 
   aggregateValues(root);
 
-  console.log('buildTreeFromFiles: Final root before return:', {
-    name: root.name,
-    path: root.path,
-    value: root.value,
-    isFile: root.isFile,
-    hasChildren: !!root.children,
-    childrenLength: root.children?.length,
-    children: root.children?.map(c => ({ name: c.name, isFile: c.isFile, value: c.value }))
-  });
-
   return root;
 }

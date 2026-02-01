@@ -13,14 +13,6 @@ interface TreemapChartProps {
 }
 
 export function TreemapChart({ data, width, height, onNodeClick }: TreemapChartProps) {
-  console.log('TreemapChart: Received data:', {
-    hasData: !!data,
-    hasChildren: !!data?.children,
-    childrenLength: data?.children?.length,
-    childrenType: Array.isArray(data?.children) ? 'array' : typeof data?.children,
-    children: data?.children?.map(c => ({ name: c.name, isFile: c.isFile, value: c.value }))
-  });
-
   if (!data.children || data.children.length === 0) {
     return (
       <div

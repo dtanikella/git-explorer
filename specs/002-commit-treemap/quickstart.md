@@ -2,7 +2,7 @@
 
 **Feature**: 002-commit-treemap  
 **Branch**: `002-commit-treemap`  
-**Date**: January 31, 2026
+**Date**: February 1, 2026
 
 This guide helps developers set up, understand, and contribute to the treemap visualization feature.
 
@@ -304,22 +304,34 @@ npm test -- TreemapChart.test.tsx --watch
 
 ```json
 {
-  "@visx/group": "^3.12.0",
-  "@visx/hierarchy": "^3.12.0",
-  "@visx/scale": "^3.12.0",
   "next": "16.1.6",
-  "react": "19.2.3"
+  "react": "19.2.3",
+  "react-dom": "19.2.3",
+  "simple-git": "^3.30.0",
+  "@visx/hierarchy": "^3.12.0",
+  "@visx/group": "^3.12.0",
+  "@visx/scale": "^3.12.0",
+  "@visx/tooltip": "^3.12.0",
+  "@visx/zoom": "^3.12.0",
+  "tailwindcss": "^4",
+  "lodash.throttle": "^4.1.1",
+  "isomorphic-git": "^1.36.3"
 }
 ```
 
-### New Dependencies to Install
+### Development Dependencies (Already Installed)
 
-```bash
-# Install simple-git for git operations
-npm install simple-git
-
-# Install types
-npm install --save-dev @types/d3-scale
+```json
+{
+  "jest": "^30.2.0",
+  "jest-environment-jsdom": "^30.2.0",
+  "@testing-library/react": "^16.3.2",
+  "@testing-library/jest-dom": "^6.9.1",
+  "@testing-library/dom": "^10.4.1",
+  "typescript": "^5",
+  "eslint": "^9",
+  "eslint-config-next": "16.1.6"
+}
 ```
 
 ---

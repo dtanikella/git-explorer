@@ -67,12 +67,12 @@ export default function RepositorySelector({
             onKeyPress={handleKeyPress}
             placeholder="/path/to/your/git/repository"
             disabled={isLoading}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="flex-1 input-field disabled:bg-gray-100"
           />
           <button
             onClick={handlePathSubmit}
             disabled={isLoading || !inputPath.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed"
             aria-label={isLoading ? 'Analyzing repository' : 'Analyze repository'}
           >
             {isLoading ? 'Analyzing...' : 'Analyze'}
@@ -80,7 +80,7 @@ export default function RepositorySelector({
           <button
             onClick={handleFileSelect}
             disabled={isLoading}
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="btn-secondary disabled:bg-gray-400 disabled:cursor-not-allowed"
             aria-label="Select directory"
           >
             Browse
@@ -89,7 +89,7 @@ export default function RepositorySelector({
       </div>
 
       {error && (
-        <div role="alert" className="text-red-600 text-sm">
+        <div role="alert" className="error-message">
           {error}
         </div>
       )}

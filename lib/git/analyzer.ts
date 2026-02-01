@@ -5,7 +5,6 @@ export async function getCommits(
   repoPath: string,
   timeRange: TimeRangeConfig
 ): Promise<CommitRecord[]> {
-  console.log('getCommits: Starting with:', { repoPath, timeRange });
   const git = simpleGit(repoPath);
 
   // Use raw output to properly parse files
@@ -16,9 +15,6 @@ export async function getCommits(
     `--until=${timeRange.endDate.toISOString()}`,
     '--pretty=format:%H|%aI',
   ]);
-
-  console.log('getCommits: Raw git log output length:', logOutput.length);
-  console.log('getCommits: First 200 chars of output:', logOutput.substring(0, 200));
 
   const commits: CommitRecord[] = [];
   const lines = logOutput.split('\n');
