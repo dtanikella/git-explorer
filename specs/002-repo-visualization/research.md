@@ -257,6 +257,53 @@ No additional backend dependencies needed (using Node.js built-in `fs`).
 
 ---
 
+## 9. Performance Optimization (NFR Compliance)
+
+### Problem Identified
+
+Initial implementation exhibited render lag during pan/zoom/hover due to:
+1. Hierarchy recalculation on every render (O(n log n))
+2. Inline arrow functions causing React.memo invalidation
+3. Color strategy called per node per render (O(n))
+4. No memoization on CircleNode component
+
+### Decision: React Memoization Pattern
+
+**Approach**: Apply React's built-in memoization hooks at key render bottlenecks.
+
+| Hook | Applied To | Purpose |
+|------|-----------|---------|
+| `useMemo` | `hierarchy().sum().sort()` | Cache tree structure |
+| `useMemo` | Color map construction | Pre-compute all colors once |
+| `useCallback` | Event handlers | Stable function references |
+| `React.memo` | CircleNode component | Skip unchanged node re-renders |
+
+**Rationale**:
+- Zero new dependencies (React built-ins)
+- Follows React best practices for render optimization
+- Predictable performance: O(1) per interaction instead of O(n log n)
+- Maintains existing component architecture
+
+**Alternatives Considered**:
+
+| Approach | Pros | Cons | Verdict |
+|----------|------|------|---------|
+| **React memoization** | Zero deps, idiomatic React, surgical fix | Requires careful dependency arrays | ✅ Selected |
+| **Virtualization (react-window)** | Handles 100k+ nodes | Complexity, doesn't work well with Pack layout | ❌ Overkill for v1 |
+| **Web Workers** | Offload hierarchy calc | Complexity, serialization overhead | ❌ Premature |
+| **Canvas rendering** | Fastest for large datasets | Loses SVG benefits (crisp zoom, accessibility) | ❌ Not aligned with FR-010 |
+
+### Expected Performance Gains
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Hierarchy calc frequency | Every render | Once per data load |
+| Color calc frequency | n × renders | Once per data load |
+| CircleNode re-renders | All nodes every interaction | Only hovered node |
+| Target frame budget | 25-40ms (15-25fps) | <10ms (60fps) |
+
+---
+
 ## Summary
 
 All technical decisions resolved. No NEEDS CLARIFICATION items remain. Ready for Phase 1 design artifacts.

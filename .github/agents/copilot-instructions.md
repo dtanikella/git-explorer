@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2026-01-31
 
 ## Active Technologies
+- N/A (reads filesystem on-demand, no persistence) (002-repo-visualization)
 
 - TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x (002-repo-visualization)
 
@@ -22,6 +23,7 @@ npm test && npm run lint
 TypeScript 5.x (strict mode): Follow standard conventions
 
 ## Recent Changes
+- 002-repo-visualization: Added TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x
 
 - 002-repo-visualization: Added TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x
 

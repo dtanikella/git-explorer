@@ -102,17 +102,17 @@
 
 ### Tests for User Story 3 (TDD - write tests FIRST, verify they FAIL)
 
-- [ ] T021a [US3] Write failing component test for zoom/pan behavior - verify zoom transform applies on wheel, pan on drag, reset on double-click
+- [X] T021a [US3] Write failing component test for zoom/pan behavior - verify zoom transform applies on wheel, pan on drag, reset on double-click
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Wrap CirclePackingChart with @visx/zoom Zoom component in RepoVisualization.tsx
-- [ ] T022 [US3] Configure zoom: scaleXMin=0.1, scaleXMax=10, initial transform centered
-- [ ] T023 [US3] Add transparent rect overlay for capturing wheel/drag/double-click events
-- [ ] T024 [US3] Implement zoom on scroll wheel via zoom.handleWheel
-- [ ] T025 [US3] Implement pan on drag via zoom.dragStart/dragMove/dragEnd
-- [ ] T026 [US3] Implement reset-to-fit on double-click via zoom.reset()
-- [ ] T027 [US3] Wire click handler (no-op) to each CircleNode for future drill-down (FR-024)
+- [X] T021 [US3] Wrap CirclePackingChart with @visx/zoom Zoom component in RepoVisualization.tsx
+- [X] T022 [US3] Configure zoom: scaleXMin=0.1, scaleXMax=10, initial transform centered
+- [X] T023 [US3] Add transparent rect overlay for capturing wheel/drag/double-click events
+- [X] T024 [US3] Implement zoom on scroll wheel via zoom.handleWheel
+- [X] T025 [US3] Implement pan on drag via zoom.dragStart/dragMove/dragEnd
+- [X] T026 [US3] Implement reset-to-fit on double-click via zoom.reset()
+- [X] T027 [US3] Wire click handler (no-op) to each CircleNode for future drill-down (FR-024)
 
 **Checkpoint**: User Story 3 complete - pan/zoom navigation works
 
@@ -140,15 +140,33 @@
 
 ---
 
-## Phase 7: Polish & Cross-Cutting Concerns
+## Phase 7: Performance Optimization (NFR Compliance)
+
+**Goal**: Achieve 60fps pan/zoom/hover interactions per SC-006 and NFR-001 through NFR-005
+
+**Independent Test**: Load 1000+ file repo → pan/zoom/hover without perceptible lag
+
+### Implementation for Performance Optimization
+
+- [ ] T038 [NFR-001] Memoize hierarchy computation in app/components/CirclePackingChart.tsx - wrap hierarchy().sum().sort() in useMemo with [data, sizingStrategy] deps
+- [ ] T039 [NFR-003] Pre-compute color map in app/components/CirclePackingChart.tsx - useMemo building Map<path, color> from tree traversal
+- [ ] T040 [NFR-002] Extract stable event handlers in app/components/CirclePackingChart.tsx - useCallback for onMouseEnter, onMouseLeave, onClick
+- [ ] T041 [NFR-004] Wrap CircleNode in React.memo in app/components/CircleNode.tsx - skip re-renders when props unchanged
+- [ ] T042 Verify 60fps target - test with React DevTools Profiler on 1000+ node repo
+
+**Checkpoint**: Performance optimization complete - smooth 60fps interactions
+
+---
+
+## Phase 8: Polish & Cross-Cutting Concerns
 
 **Purpose**: Final improvements across all user stories
 
-- [ ] T033 [P] Add CSS transitions for smooth zoom/pan (60fps target per SC-006)
-- [ ] T034 [P] Verify extension color palette covers all 10+ file types per FR-019
-- [ ] T035 Run quickstart.md validation - test full flow with a real repository
-- [ ] T036 [P] Add aria-labels to circles for accessibility
-- [ ] T037 Code cleanup: remove console.logs, add comments to complex sections
+- [ ] T043 [P] Add CSS transitions for smooth zoom/pan (60fps target per SC-006)
+- [ ] T044 [P] Verify extension color palette covers all 10+ file types per FR-019
+- [ ] T045 Run quickstart.md validation - test full flow with a real repository
+- [ ] T046 [P] Add aria-labels to circles for accessibility
+- [ ] T047 Code cleanup: remove console.logs, add comments to complex sections
 
 ---
 
@@ -161,7 +179,8 @@
 - **Phase 3-6 (User Stories)**: All depend on Phase 2 completion
   - US1, US2, US3 are all P1 priority - implement in order (US1 → US2 → US3)
   - US4 is P2 priority - can be done after US1 for MVP
-- **Phase 7 (Polish)**: After all user stories complete
+- **Phase 7 (Performance)**: After US3 complete - addresses render lag in visualization
+- **Phase 8 (Polish)**: After all user stories and performance optimization complete
 
 ### User Story Dependencies
 
@@ -205,7 +224,8 @@ T007 lib/strategies/coloring.ts }
 4. **US4** (T028-T032) → Proper input/error handling (improves UX)
 5. **US2** (T016-T020) → Hover tooltips (discoverability)
 6. **US3** (T021-T027) → Pan/zoom (navigation)
-7. **Polish** (T033-T037) → Final touches
+7. **Performance** (T038-T042) → 60fps optimization
+8. **Polish** (T043-T047) → Final touches
 
 ---
 
@@ -213,13 +233,14 @@ T007 lib/strategies/coloring.ts }
 
 | Metric | Count |
 |--------|-------|
-| Total Tasks | 47 |
+| Total Tasks | 52 |
 | Setup Tasks | 4 |
 | Foundational Tasks | 9 (4 tests + 5 impl) |
 | User Story 1 Tasks | 7 (1 test + 6 impl) |
 | User Story 2 Tasks | 8 (1 test + 7 impl) |
 | User Story 3 Tasks | 8 (1 test + 7 impl) |
 | User Story 4 Tasks | 6 (1 test + 5 impl) |
+| Performance Tasks | 5 |
 | Polish Tasks | 5 |
 | Test Tasks | 8 |
 | Parallel Tasks | 13 |
@@ -233,3 +254,4 @@ T007 lib/strategies/coloring.ts }
 - US2: Tooltips appear with correct file/folder details
 - US3: Zoom/pan/reset all work smoothly
 - US4: Error messages display for all invalid input cases
+- Performance: 60fps pan/zoom/hover on 1000+ node repos

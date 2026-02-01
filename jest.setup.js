@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom'
 
 // Polyfill for Next.js API route testing
-global.Request = global.Request || class Request {
+globalThis.Request = class Request {
   constructor(input, init = {}) {
-    this.url = input;
+    this.url = typeof input === 'string' ? input : input.url;
     this.method = init.method || 'GET';
     this.headers = new Map(Object.entries(init.headers || {}));
     this.body = init.body;
@@ -18,7 +18,7 @@ global.Request = global.Request || class Request {
   }
 };
 
-global.Response = global.Response || class Response {
+globalThis.Response = class Response {
   constructor(body, init = {}) {
     this.body = body;
     this.status = init.status || 200;
@@ -31,13 +31,6 @@ global.Response = global.Response || class Response {
   }
 
   async text() {
-    return this.body;
-  }
-};
-    this.headers = new Map(Object.entries(init?.headers || {}));
-  }
-
-  async json() {
     return this.body;
   }
 };

@@ -21,6 +21,22 @@ Build an interactive circle-packing visualization for local git repositories. Us
 **Constraints**: Render full tree (no lazy loading), SVG-based for crisp zoom, filesystem access via API route  
 **Scale/Scope**: Repositories up to 5,000 files for v1; larger repos may have degraded performance (acceptable)
 
+### Performance Architecture (NFR Compliance)
+
+The spec defines non-functional requirements (NFR-001 through NFR-005) for render performance. This section documents the technical approach to satisfy each:
+
+| NFR | Requirement | Technical Approach |
+|-----|-------------|-------------------|
+| **NFR-001** | Hierarchy computations cached | `useMemo` wrapping `hierarchy().sum().sort()` with `[data, sizingStrategy]` dependencies |
+| **NFR-002** | Stable event handler references | `useCallback` for all handlers passed to child components |
+| **NFR-003** | Pre-computed colors | `useMemo` building `Map<path, color>` once per data load |
+| **NFR-004** | Skip unchanged element re-renders | `React.memo` wrapper on `CircleNode` component |
+| **NFR-005** | 60fps rendering architecture | Combined effect of NFR-001 through NFR-004 |
+
+**Implementation Files**:
+- `app/components/CirclePackingChart.tsx` — hierarchy caching (NFR-001), color map (NFR-003), stable handlers (NFR-002)
+- `app/components/CircleNode.tsx` — memoized component (NFR-004)
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
@@ -29,7 +45,7 @@ Build an interactive circle-packing visualization for local git repositories. Us
 |-----------|--------|-------|
 | **I. Test-First (TDD)** | ✅ PASS | Plan includes test strategy: unit tests for data transformation (file tree building, sizing/coloring strategies), component tests for visualization, integration tests for API route |
 | **II. Simplicity (YAGNI)** | ✅ PASS | Minimal scope: no git integration, no click drill-down UI, no strategy switcher UI. Using established library (@visx) rather than raw D3 to reduce complexity |
-| **III. User Experience First** | ✅ PASS | Hover tooltips for discovery, pan/zoom for navigation, clear error messages for invalid paths, responsive visualization |
+| **III. User Experience First** | ✅ PASS | Hover tooltips for discovery, pan/zoom for navigation, clear error messages for invalid paths, responsive visualization. **Performance NFRs ensure smooth 60fps interactions.** |
 | **IV. Visual Clarity** | ✅ PASS | Circle packing provides story-at-a-glance (folder structure), color by file type for instant pattern recognition, semi-transparent folders for hierarchy clarity |
 
 **Gate Status**: ✅ All principles satisfied — proceed to Phase 0
@@ -107,3 +123,74 @@ __tests__/
 ## Complexity Tracking
 
 > No constitution violations requiring justification. Design follows YAGNI principles.
+
+---
+
+## Performance Optimization Research
+
+### Problem Analysis
+
+The current implementation exhibits render lag during pan/zoom and hover interactions due to cascading re-renders:
+
+```
+User interaction (hover/zoom/pan)
+         ↓
+Component state change
+         ↓
+CirclePackingChart re-renders
+  → hierarchy() recalculated O(n log n)
+  → 1000+ inline callbacks created
+         ↓
+Every CircleNode re-renders
+  → coloringStrategy() called 1000+ times
+```
+
+### Solution: Memoization Strategy
+
+**1. Hierarchy Caching (NFR-001)**
+```tsx
+const root = useMemo(
+  () => hierarchy(data).sum(sizingStrategy).sort((a, b) => (b.value ?? 0) - (a.value ?? 0)),
+  [data, sizingStrategy]
+);
+```
+
+**2. Color Map Pre-computation (NFR-003)**
+```tsx
+const colorMap = useMemo(() => {
+  const map = new Map<string, string>();
+  const traverse = (node: FileNode) => {
+    map.set(node.path, coloringStrategy(node));
+    node.children?.forEach(traverse);
+  };
+  traverse(data);
+  return map;
+}, [data, coloringStrategy]);
+```
+
+**3. Stable Event Handlers (NFR-002)**
+```tsx
+const handleMouseEnter = useCallback((node: FileNode, e: React.MouseEvent) => {
+  showTooltip?.({ tooltipData: node, tooltipLeft: e.clientX, tooltipTop: e.clientY });
+}, [showTooltip]);
+
+const handleMouseLeave = useCallback(() => {
+  hideTooltip?.();
+}, [hideTooltip]);
+```
+
+**4. CircleNode Memoization (NFR-004)**
+```tsx
+export const CircleNode = React.memo<CircleNodeProps>(({ node, fill, onMouseEnter, onMouseLeave, onClick }) => {
+  // component body unchanged
+});
+```
+
+### Expected Impact
+
+| Metric | Before | After (Expected) |
+|--------|--------|------------------|
+| Hierarchy calc per interaction | O(n log n) | 0 (cached) |
+| Color computations per interaction | O(n) | 0 (cached) |
+| CircleNode re-renders per interaction | 1000+ | 1-2 (only changed) |
+| Frame time (1000 nodes) | 25-40ms | <10ms |

@@ -138,6 +138,16 @@ A user enters an invalid path (non-existent, not a directory, or not a git repos
 - **FR-023**: System MUST support reset-to-fit via double-click
 - **FR-024**: Each circle MUST have a click handler wired (no-op initially) to enable future drill-down functionality
 
+### Non-Functional Requirements
+
+#### Performance
+
+- **NFR-001**: Tree hierarchy computations MUST be cached such that they do not re-execute on user interactions (hover, pan, zoom) when the underlying data has not changed
+- **NFR-002**: Event handlers attached to visualization elements MUST maintain stable references to prevent unnecessary re-renders during user interactions
+- **NFR-003**: Color computations MUST be pre-computed once per data load rather than recalculated per element per render cycle
+- **NFR-004**: Individual visualization elements SHOULD skip re-rendering when their specific props have not changed
+- **NFR-005**: The rendering architecture MUST support smooth 60fps interactions as defined in SC-006
+
 ### Key Entities
 
 - **FileNode**: Represents a file or folder in the repository tree. Contains path, name, size, extension, type, children, and extensible metadata.
@@ -157,6 +167,15 @@ A user enters an invalid path (non-existent, not a directory, or not a git repos
 - **SC-004**: The visualization accurately reflects the file system structure with 100% of files and folders represented
 - **SC-005**: The sizing and coloring strategies can be swapped without modifying the core visualization component
 - **SC-006**: The visualization renders at 60fps during pan/zoom interactions for repositories under 5,000 files
+
+---
+
+## Clarifications
+
+### Session 2026-01-31
+
+- Q: Should the spec include performance-related NFRs that describe expected behavior guarantees without prescribing implementation? → A: Yes, add NFRs describing render performance expectations
+- Q: Should the spec clarify that color mappings are computed per file tree load? → A: NFR-003 already covers this; no additional clarification needed
 
 ---
 

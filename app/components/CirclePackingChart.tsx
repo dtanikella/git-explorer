@@ -31,7 +31,7 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
   return (
     <Pack root={root} size={[width, height]} padding={2}>
       {(packData) => (
-        <svg width={width} height={height}>
+        <g>
           {packData.descendants().map((node, index) => (
             <CircleNode
               key={node.data.path}
@@ -46,7 +46,7 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
               onClick={() => onClick?.(node)}
             />
           ))}
-        </svg>
+        </g>
       )}
     </Pack>
   );
