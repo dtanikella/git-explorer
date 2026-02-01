@@ -20,10 +20,10 @@
 
 **Purpose**: Project initialization, dependencies, and TypeScript interfaces
 
-- [ ] T001 Install required dependencies: `simple-git` via npm in package.json
-- [ ] T002 [P] Create TypeScript types file with all interfaces in lib/git/types.ts (RepositoryInput, TimeRangePreset, TimeRangeConfig, CommitRecord, FileCommitData, TreeNode)
-- [ ] T003 [P] Create date helper utilities in lib/utils/date-helpers.ts (createTimeRangeConfig function for all presets)
-- [ ] T004 [P] Create color scale utility in lib/treemap/color-scale.ts (dark green #006400 → light gray #E5E5E5 gradient based on frequencyScore)
+- [x] T001 Install required dependencies: `simple-git` via npm in package.json
+- [x] T002 [P] Create TypeScript types file with all interfaces in lib/git/types.ts (RepositoryInput, TimeRangePreset, TimeRangeConfig, CommitRecord, FileCommitData, TreeNode)
+- [x] T003 [P] Create date helper utilities in lib/utils/date-helpers.ts (createTimeRangeConfig function for all presets)
+- [x] T004 [P] Create color scale utility in lib/treemap/color-scale.ts (dark green #006400 → light gray #E5E5E5 gradient based on frequencyScore)
 
 ---
 
