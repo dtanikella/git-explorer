@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import Home from '../app/page';
 
 describe('Homepage', () => {
-  it('renders "Hello World" text', () => {
+  it('renders "Git Repository Visualizer" text', () => {
     render(<Home />);
-    expect(screen.getByText(/hello world/i)).toBeInTheDocument();
+    expect(screen.getByText(/git repository visualizer/i)).toBeInTheDocument();
   });
 });

@@ -12,7 +12,34 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Additional common patterns
+    "node_modules/**",
+    "coverage/**",
+    "*.log",
+    ".env*",
   ]),
+  // Allow CommonJS require() in Jest config and test files
+  {
+    files: ["jest.config.js", "jest.setup.js", "**/__tests__/**/*.ts", "**/__tests__/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
+    },
+  },
+  // Allow any types in component files where type inference is complex
+  {
+    files: ["app/components/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  // Allow any types in test files for mocking
+  {
+    files: ["**/__tests__/**/*.ts", "**/__tests__/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -9,11 +9,15 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
+  testEnvironmentOptions: {
+    customExportConditions: [''],
+  },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
+    'lib/**/*.{js,jsx,ts,tsx}',
     '!app/**/*.d.ts',
     '!app/**/page.tsx',
     '!app/**/layout.tsx',
