@@ -7,7 +7,7 @@
 
 Build an interactive treemap visualization showing commit frequency for the top 500 most-changed files in a git repository. Users select a local repository via browser directory picker, and the system analyzes the last 2 weeks of commit history (initially hardcoded, with date range selection as an enhancement). The treemap uses size to represent total commit count and a color gradient (dark green → light gray) to indicate commit frequency in the recent period (last half of the time window), preserving the repository's folder hierarchy.
 
-**Technical Approach**: Next.js web application running locally (`npm run dev`) with server-side git analysis via `simple-git` library. Client uses File System Access API for directory selection, server processes git log with `--stat` and date filtering, filters to top 500 files, builds hierarchical tree structure, and renders treemap using `@visx/hierarchy` (React wrapper around d3-hierarchy).
+**Technical Approach**: Next.js web application running locally (`npm run dev`) with server-side git analysis via `simple-git` library. Client uses File System Access API for directory selection, server processes git log with `--name-only` and date filtering, filters to top 500 files, builds hierarchical tree structure, and renders treemap using `@visx/hierarchy` (React wrapper around d3-hierarchy).
 
 ## Technical Context
 
@@ -81,7 +81,7 @@ No violations of constitution principles. All dependencies justified, TDD workfl
 **Output**: [research.md](research.md)
 
 **Decisions Made**:
-1. ✅ Repository input via text field (absolute path) instead of File System Access API
+1. ✅ Repository input via browser directory picker (File System Access API) for intuitive folder selection
 2. ✅ simple-git with single `git.log()` call + `--name-only` for efficiency
 3. ✅ Recursive path splitting with Map-based tree construction
 4. ✅ d3 scaleLinear with RGB interpolation (dark green → light gray)
@@ -157,7 +157,7 @@ No violations of constitution principles. All dependencies justified, TDD workfl
 **Status**: ✅ **PASS - UX Prioritized**
 
 **Design elements supporting UX**:
-- ✅ **Intuitive input**: Text field for repo path (familiar pattern)
+- ✅ **Intuitive input**: Browser directory picker (native OS UI, familiar pattern)
 - ✅ **Responsive feedback**: LoadingState component specified
 - ✅ **Clear errors**: 5 error scenarios with user-friendly messages
 - ✅ **Empty states**: EmptyState component for no data

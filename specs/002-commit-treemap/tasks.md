@@ -4,7 +4,7 @@
 **Input**: Design documents from `/specs/002-commit-treemap/`
 **Prerequisites**: plan.md ✅, spec.md ✅, data-model.md ✅, contracts/ ✅, quickstart.md ✅
 
-**Tests**: Tests are NOT explicitly requested in the specification. Tasks focus on implementation only.
+**Tests**: Tests are REQUIRED per constitution Principle I (TDD). All implementation tasks must be preceded by test tasks that fail before code is written.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -33,12 +33,23 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Implement git log parser in lib/git/analyzer.ts (use simple-git to extract commits with --name-only, filter by date range, return CommitRecord[])
-- [ ] T006 Implement commit counter in lib/git/analyzer.ts (countCommitsByFile function: count unique SHAs per file, calculate totalCommitCount and recentCommitCount)
-- [ ] T007 Implement file filtering in lib/git/analyzer.ts (filterTopFiles function: sort by totalCommitCount, take top 500, alphabetical tiebreaker)
-- [ ] T008 Implement frequency score calculator in lib/git/analyzer.ts (calculateFrequencyScores function: normalize recentCommitCount across all files to 0-1 range)
-- [ ] T009 Implement tree builder in lib/git/tree-builder.ts (buildTreeFromFiles function: recursive path splitting, Map-based construction, aggregate parent values)
-- [ ] T010 Implement data transformer in lib/treemap/data-transformer.ts (applyColors function: apply color from frequencyScore to each TreeNode)
+### Tests for Foundational (TDD: Write FIRST, ensure FAIL)
+
+- [x] T005-TEST [P] Write unit tests for git log parser in __tests__/unit/git-analyzer.test.ts (test date filtering, --name-only parsing, empty repo handling)
+- [x] T006-TEST [P] Write unit tests for commit counter in __tests__/unit/git-analyzer.test.ts (test unique SHA counting, recent vs total counts, midpoint calculation)
+- [x] T007-TEST [P] Write unit tests for file filtering in __tests__/unit/git-analyzer.test.ts (test top 500 selection, alphabetical tiebreaker, <500 files case)
+- [x] T008-TEST [P] Write unit tests for frequency score calculator in __tests__/unit/git-analyzer.test.ts (test normalization, max=0 edge case, score range 0-1)
+- [x] T009-TEST [P] Write unit tests for tree builder in __tests__/unit/tree-builder.test.ts (test hierarchy construction, value aggregation, deep nesting)
+- [x] T010-TEST [P] Write unit tests for color application in __tests__/unit/data-transformer.test.ts (test color mapping from frequencyScore, file nodes only)
+
+### Implementation for Foundational
+
+- [x] T005 Implement git log parser in lib/git/analyzer.ts (use simple-git to extract commits with --name-only, filter by date range, return CommitRecord[])
+- [x] T006 Implement commit counter in lib/git/analyzer.ts (countCommitsByFile function: count unique SHAs per file, calculate totalCommitCount and recentCommitCount)
+- [x] T007 Implement file filtering in lib/git/analyzer.ts (filterTopFiles function: sort by totalCommitCount, take top 500, alphabetical tiebreaker)
+- [x] T008 Implement frequency score calculator in lib/git/analyzer.ts (calculateFrequencyScores function: normalize recentCommitCount across all files to 0-1 range)
+- [x] T009 Implement tree builder in lib/git/tree-builder.ts (buildTreeFromFiles function: recursive path splitting, Map-based construction, aggregate parent values)
+- [x] T010 Implement data transformer in lib/treemap/data-transformer.ts (applyColors function: apply color from frequencyScore to each TreeNode)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -46,18 +57,24 @@
 
 ## Phase 3: User Story 1 - Repository Selection and Validation (Priority: P1) 🎯 MVP
 
-**Goal**: Users can input a repository path and receive validation feedback
+**Goal**: Users can select a repository via browser directory picker and receive validation feedback
 
-**Independent Test**: Enter various paths in the text input (valid repo, non-repo folder, non-existent path) and verify appropriate feedback messages
+**Independent Test**: Click directory picker button, select various folders (valid repo, non-repo folder, permission-restricted) and verify appropriate feedback messages
+
+### Tests for User Story 1 (TDD: Write FIRST, ensure FAIL)
+
+- [x] T011-TEST [US1] Write component tests for RepositorySelector in __tests__/components/RepositorySelector.test.tsx (test directory picker trigger, validation feedback, loading states)
+- [x] T012-TEST [US1] Write component tests for LoadingState in __tests__/components/LoadingState.test.tsx (test spinner render, custom message prop)
+- [x] T013-TEST [US1] Write integration tests for API endpoint in __tests__/integration/git-analysis-api.test.ts (test request parsing, validation responses, error codes)
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Create RepositorySelector component in app/components/RepositorySelector.tsx (text input for absolute path, Analyze button, props: onRepositorySelected, isLoading, error, currentPath)
-- [ ] T012 [P] [US1] Create LoadingState component in app/components/LoadingState.tsx (centered spinner with message prop, default "Analyzing repository...")
-- [ ] T013 [US1] Implement POST /api/git-analysis/route.ts endpoint skeleton (parse request body, validate repoPath and timeRange, return structured response)
-- [ ] T014 [US1] Add repository validation logic in app/api/git-analysis/route.ts (check path exists, check .git folder exists, check read permissions)
-- [ ] T015 [US1] Add error responses for validation failures in app/api/git-analysis/route.ts (400 for invalid input, 403 for permissions, 404 for missing path, 500 for git not installed)
-- [ ] T016 [US1] Integrate RepositorySelector into app/page.tsx (state for repoPath, isLoading, error; handle form submission; display LoadingState during API call)
+- [x] T011 [P] [US1] Create RepositorySelector component in app/components/RepositorySelector.tsx (browser directory picker button using File System Access API, props: onRepositorySelected, isLoading, error, currentPath)
+- [x] T012 [P] [US1] Create LoadingState component in app/components/LoadingState.tsx (centered spinner with message prop, default "Analyzing repository...")
+- [x] T013 [US1] Implement client-side git analysis in lib/git/client-analyzer.ts (use isomorphic-git with File System Access API adapter)
+- [x] T014 [US1] Integrate client-side analysis into app/page.tsx (call analyzeClientRepository with directory handle, display results)
+- [ ] T015 [US1] Add error handling for unsupported browsers in app/components/RepositorySelector.tsx (fallback message for browsers without File System Access API)
+- [ ] T016 [US1] Add repository validation in client-analyzer.ts (check for .git directory, handle git errors gracefully)
 
 **Checkpoint**: User Story 1 complete - users can input repo path and see validation feedback
 
@@ -68,6 +85,11 @@
 **Goal**: Display treemap showing top 500 files from last 2 weeks with sizes proportional to commit counts
 
 **Independent Test**: Select a valid repository and verify treemap appears with rectangles representing files, sizes proportional to commit counts, folder hierarchy preserved
+
+### Tests for User Story 2 (TDD: Write FIRST, ensure FAIL)
+
+- [ ] T017-TEST [US2] Write integration tests for git analysis pipeline in __tests__/integration/git-analysis-api.test.ts (test end-to-end: request → TreeNode response, metadata validation)
+- [ ] T018-TEST [US2] Write component tests for TreemapChart in __tests__/components/TreemapChart.test.tsx (test SVG render, rect elements, visx integration, empty data handling)
 
 ### Implementation for User Story 2
 
@@ -261,7 +283,8 @@ T040 → T041
 | 7 | US5: Error Handling | P3 | T032-T036 | None |
 | 8 | Polish | - | T037-T041 | T037, T038, T039 |
 
-**Total Tasks**: 41
-**MVP Tasks (US1+US2)**: 23
-**Parallel Opportunities**: 14 tasks marked with [P]
+**Total Tasks**: 52 (41 implementation + 11 test tasks)
+**MVP Tasks (US1+US2)**: 31 (23 implementation + 8 test tasks)
+**Parallel Opportunities**: 20 tasks marked with [P] (includes test tasks)
+**TDD Workflow**: All test tasks must be completed and FAILING before implementation tasks begin
 ```

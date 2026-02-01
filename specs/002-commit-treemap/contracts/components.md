@@ -34,16 +34,17 @@ interface RepositorySelectorProps {
 ### Behavior
 
 **Interactions**:
-1. User types absolute path into text input
-2. User clicks "Analyze" button or presses Enter
-3. Component calls `onRepositorySelected(repoPath)`
-4. Parent component handles validation and API call
+1. User clicks "Select Repository Directory" button
+2. Browser opens directory picker dialog
+3. User selects a directory
+4. Component calls `onRepositorySelected(directoryName)`
+5. Component displays selected directory name
 
 **States**:
-- **Idle**: Input enabled, button enabled ("Analyze Repository")
-- **Loading**: Input disabled, button disabled, spinner shown ("Analyzing...")
-- **Error**: Input enabled, button enabled, error message displayed below in red
-- **Success**: Input enabled, button enabled, current path displayed below in green
+- **Idle**: Button enabled ("Select Repository Directory")
+- **Selecting**: Button disabled ("Selecting...")
+- **Error**: Button enabled, error message displayed below in red
+- **Success**: Button enabled, selected directory displayed below in green
 
 **Validation** (client-side, lightweight):
 - Path must not be empty
