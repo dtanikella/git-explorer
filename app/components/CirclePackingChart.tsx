@@ -107,7 +107,7 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
           onMouseLeave={handleGroupMouseLeave}
           onClick={handleGroupClick}
         >
-          {packData.descendants().map((node, index) => (
+          {packData.descendants().map((node) => (
             <CircleNode
               key={node.data.path}
               node={node}

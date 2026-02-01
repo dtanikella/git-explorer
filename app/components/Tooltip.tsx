@@ -1,4 +1,3 @@
-import { TooltipWithBounds } from '@visx/tooltip';
 import { FileNode } from '../../lib/types';
 
 interface TooltipProps {
@@ -19,22 +18,20 @@ export function Tooltip({ node, rootPath }: TooltipProps) {
     : node.path;
 
   return (
-    <TooltipWithBounds>
-      <div className="bg-black text-white p-2 rounded shadow-lg">
-        <div className="font-semibold">{node.name}</div>
-        <div className="text-sm text-gray-300">{relativePath}</div>
-        <div className="text-sm">
-          {node.type === 'file' ? (
-            <>
-              {formatSize(node.size)} • {node.extension}
-            </>
-          ) : (
-            <>
-              {formatSize(node.size)} • {node.children?.length || 0} children
-            </>
-          )}
-        </div>
+    <div className="bg-black text-white p-2 rounded shadow-lg">
+      <div className="font-semibold">{node.name}</div>
+      <div className="text-sm text-gray-300">{relativePath}</div>
+      <div className="text-sm">
+        {node.type === 'file' ? (
+          <>
+            {formatSize(node.size)} • {node.extension}
+          </>
+        ) : (
+          <>
+            {formatSize(node.size)} • {node.children?.length || 0} children
+          </>
+        )}
       </div>
-    </TooltipWithBounds>
+    </div>
   );
 }

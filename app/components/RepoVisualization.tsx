@@ -28,13 +28,14 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
 
   const [isDragging, setIsDragging] = React.useState(false);
 
-  const throttledDragMove = React.useRef(
+  const throttledDragMoveRef = React.useRef(
     throttle((handler: any, event: React.MouseEvent) => {
       handler(event);
     }, 16, { leading: true, trailing: true })
-  ).current;
+  );
 
   React.useEffect(() => {
+    const throttledDragMove = throttledDragMoveRef.current;
     return () => {
       throttledDragMove.cancel();
     };
@@ -58,6 +59,7 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
             height="100%"
             viewBox={`0 0 ${width} ${height}`}
             style={{ display: 'block' }}
+            onWheel={zoom.handleWheel}
           >
             <g transform={zoom.toString()} style={{ 
               transition: isDragging ? 'none' : 'transform 0.3s ease-out',
@@ -78,12 +80,12 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
               fill="transparent"
               width={width}
               height={height}
-              onWheel={zoom.handleWheel}
+              style={{ pointerEvents: isDragging ? 'auto' : 'none' }}
               onMouseDown={(e) => {
                 setIsDragging(true);
                 zoom.dragStart(e);
               }}
-              onMouseMove={(e) => throttledDragMove(zoom.dragMove, e)}
+              onMouseMove={(e) => throttledDragMoveRef.current(zoom.dragMove, e)}
               onMouseUp={(e) => {
                 setIsDragging(false);
                 zoom.dragEnd(e);
