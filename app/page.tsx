@@ -7,6 +7,8 @@ import { TreemapChart } from './components/TreemapChart';
 import { ColorLegend } from './components/ColorLegend';
 import { DateRangeSelector } from './components/DateRangeSelector';
 import { ErrorDisplay } from './components/ErrorDisplay';
+import { ViewToggle } from './components/ViewToggle';
+import ForceGraphChart from './components/ForceGraphChart';
 import { TreeNode, TimeRangePreset, AnalysisMetadata } from '@/lib/git/types';
 
 export default function Home() {
@@ -17,6 +19,7 @@ export default function Home() {
   const [metadata, setMetadata] = useState<AnalysisMetadata | null>(null);
   const [selectedRange, setSelectedRange] = useState<TimeRangePreset>('2w');
   const [windowSize, setWindowSize] = useState({ width: 800, height: 600 });
+  const [viewMode, setViewMode] = useState<'heatmap' | 'activity-graph'>('heatmap');
 
   useEffect(() => {
     const updateSize = () => {
@@ -139,6 +142,13 @@ export default function Home() {
               onRangeChange={handleRangeChange}
               disabled={isLoading}
             />
+            <div className="mt-4">
+              <ViewToggle
+                selected={viewMode}
+                onViewChange={setViewMode}
+                disabled={isLoading}
+              />
+            </div>
             <div className="mt-6">
               {metadata.filesDisplayed === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 bg-gray-50 border border-gray-200 rounded-lg">
@@ -166,12 +176,22 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  <TreemapChart
-                    data={treeData}
-                    width={windowSize.width}
-                    height={windowSize.height}
-                  />
-                  <ColorLegend className="mt-4" />
+                  {viewMode === 'heatmap' ? (
+                    <>
+                      <TreemapChart
+                        data={treeData}
+                        width={windowSize.width}
+                        height={windowSize.height}
+                      />
+                      <ColorLegend className="mt-4" />
+                    </>
+                  ) : (
+                    <ForceGraphChart
+                      data={treeData}
+                      width={windowSize.width}
+                      height={windowSize.height}
+                    />
+                  )}
                 </>
               )}
             </div>

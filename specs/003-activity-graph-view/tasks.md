@@ -58,15 +58,15 @@
 
 ### Tests for User Story 5 (TDD - Write FIRST)
 
-- [ ] T010 [P] [US5] Write component tests for ViewToggle in __tests__/components/ViewToggle.test.tsx
+- [x] T010 [P] [US5] Write component tests for ViewToggle in __tests__/components/ViewToggle.test.tsx
 - [ ] T011 [P] [US5] Write integration tests for view switching in __tests__/integration/view-switching.test.tsx
 
 ### Implementation for User Story 5
 
-- [ ] T012 [US5] Create ViewToggle component in app/components/ViewToggle.tsx
-- [ ] T013 [US5] Add viewMode state to page component in app/page.tsx
-- [ ] T014 [US5] Add ViewToggle to page layout in app/page.tsx
-- [ ] T015 [US5] Implement conditional rendering for TreemapChart vs placeholder in app/page.tsx
+- [x] T012 [US5] Create ViewToggle component in app/components/ViewToggle.tsx
+- [x] T013 [US5] Add viewMode state to page component in app/page.tsx
+- [x] T014 [US5] Add ViewToggle to page layout in app/page.tsx
+- [x] T015 [US5] Implement conditional rendering for TreemapChart vs placeholder in app/page.tsx
 - [ ] T016 [US5] Verify existing controls (RepositorySelector, DateRangeSelector) work with view toggle
 
 **Checkpoint**: View toggle functional, both views share same repository/date controls
@@ -81,23 +81,23 @@
 
 ### Tests for User Story 1 (TDD - Write FIRST)
 
-- [ ] T017 [P] [US1] Write component tests for ForceGraphChart rendering in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T018 [P] [US1] Write tests for force simulation initialization in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T019 [P] [US1] Write tests for bubble sizing in __tests__/components/ForceGraphChart.test.tsx
+- [x] T017 [P] [US1] Write component tests for ForceGraphChart rendering in __tests__/components/ForceGraphChart.test.tsx
+- [x] T018 [P] [US1] Write tests for force simulation initialization in __tests__/components/ForceGraphChart.test.tsx
+- [x] T019 [P] [US1] Write tests for bubble sizing in __tests__/components/ForceGraphChart.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] Create ForceGraphChart component skeleton in app/components/ForceGraphChart.tsx
-- [ ] T021 [US1] Implement data transformation from TreeNode to GraphNode array in ForceGraphChart
-- [ ] T022 [US1] Implement radius scaling using d3.scaleSqrt in ForceGraphChart
-- [ ] T023 [US1] Initialize d3.forceSimulation with collision, center, and charge forces in ForceGraphChart
-- [ ] T024 [US1] Implement 200-tick warmup before displaying nodes in ForceGraphChart
-- [ ] T025 [US1] Render SVG with circles for each file node in ForceGraphChart
-- [ ] T026 [US1] Set circle radius based on commitCount in ForceGraphChart
-- [ ] T027 [US1] Implement simulation tick handler with alpha threshold stop in ForceGraphChart
-- [ ] T028 [US1] Handle empty data case with "No data" message in ForceGraphChart
-- [ ] T029 [US1] Replace placeholder with ForceGraphChart in app/page.tsx conditional rendering
-- [ ] T029a [US1] Set ForceGraphChart dimensions to match TreemapChart viewport size in app/page.tsx
+- [x] T020 [US1] Create ForceGraphChart component skeleton in app/components/ForceGraphChart.tsx
+- [x] T021 [US1] Implement data transformation from TreeNode to GraphNode array in ForceGraphChart
+- [x] T022 [US1] Implement radius scaling using d3.scaleSqrt in ForceGraphChart
+- [x] T023 [US1] Initialize d3.forceSimulation with collision, center, and charge forces in ForceGraphChart
+- [x] T024 [US1] Implement 200-tick warmup before displaying nodes in ForceGraphChart
+- [x] T025 [US1] Render SVG with circles for each file node in ForceGraphChart
+- [x] T026 [US1] Set circle radius based on commitCount in ForceGraphChart
+- [x] T027 [US1] Implement simulation tick handler with alpha threshold stop in ForceGraphChart
+- [x] T028 [US1] Handle empty data case with "No data" message in ForceGraphChart
+- [x] T029 [US1] Replace placeholder with ForceGraphChart in app/page.tsx conditional rendering
+- [x] T029a [US1] Set ForceGraphChart dimensions to match TreemapChart viewport size in app/page.tsx
 
 **Checkpoint**: Activity Graph displays files as bubbles with correct sizing and force layout
 
