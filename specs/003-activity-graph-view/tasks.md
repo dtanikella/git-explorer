@@ -111,18 +111,18 @@
 
 ### Tests for User Story 3 (TDD - Write FIRST)
 
-- [ ] T030 [P] [US3] Write tests for .rb file coloring in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T031 [P] [US3] Write tests for .tsx file coloring in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T032 [P] [US3] Write tests for test file detection and coloring in __tests__/components/ForceGraphChart.test.tsx
+- [x] T030 [P] [US3] Write tests for .rb file coloring in __tests__/components/ForceGraphChart.test.tsx
+- [x] T031 [P] [US3] Write tests for .tsx file coloring in __tests__/components/ForceGraphChart.test.tsx
+- [x] T032 [P] [US3] Write tests for test file detection and coloring in __tests__/components/ForceGraphChart.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Apply getFileTypeColor() to each node during transformation in ForceGraphChart
-- [ ] T034 [US3] Set circle fill attribute using node.color in ForceGraphChart SVG rendering
-- [ ] T035 [US3] Update ColorLegend to accept mode prop in app/components/ColorLegend.tsx
-- [ ] T036 [US3] Implement discrete color swatches rendering in ColorLegend component
-- [ ] T037 [US3] Pass mode="discrete" and color definitions to ColorLegend in app/page.tsx when Activity Graph selected
-- [ ] T038 [US3] Write component tests for ColorLegend discrete mode in __tests__/components/ColorLegend.test.tsx
+- [x] T033 [US3] Apply getFileTypeColor() to each node during transformation in ForceGraphChart
+- [x] T034 [US3] Set circle fill attribute using node.color in ForceGraphChart SVG rendering
+- [x] T035 [US3] Update ColorLegend to accept mode prop in app/components/ColorLegend.tsx
+- [x] T036 [US3] Implement discrete color swatches rendering in ColorLegend component
+- [x] T037 [US3] Pass mode="discrete" and color definitions to ColorLegend in app/page.tsx when Activity Graph selected
+- [x] T038 [US3] Write component tests for ColorLegend discrete mode in __tests__/components/ColorLegend.test.tsx
 
 **Checkpoint**: Files colored by type, legend shows discrete color meanings
 
@@ -136,19 +136,19 @@
 
 ### Tests for User Story 4 (TDD - Write FIRST)
 
-- [ ] T039 [P] [US4] Write tests for zoom behavior initialization in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T040 [P] [US4] Write tests for zoom scale extent limits in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T041 [P] [US4] Write tests for reset zoom functionality in __tests__/components/ForceGraphChart.test.tsx
+- [x] T039 [P] [US4] Write tests for zoom behavior initialization in __tests__/components/ForceGraphChart.test.tsx
+- [x] T040 [P] [US4] Write tests for zoom scale extent limits in __tests__/components/ForceGraphChart.test.tsx
+- [x] T041 [P] [US4] Write tests for reset zoom functionality in __tests__/components/ForceGraphChart.test.tsx
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] Create SVG ref and zoom behavior ref in ForceGraphChart
-- [ ] T043 [US4] Initialize d3.zoom with scaleExtent [0.5, 5.0] in ForceGraphChart
-- [ ] T044 [US4] Attach zoom behavior to SVG element in ForceGraphChart useEffect
-- [ ] T045 [US4] Apply zoom transform to graph container group on zoom events in ForceGraphChart
-- [ ] T046 [US4] Implement double-click reset handler in ForceGraphChart
-- [ ] T047 [US4] Add cursor style changes for visual feedback in ForceGraphChart
-- [ ] T048 [US4] Clean up zoom behavior on component unmount in ForceGraphChart
+- [x] T042 [US4] Create SVG ref and zoom behavior ref in ForceGraphChart
+- [x] T043 [US4] Initialize d3.zoom with scaleExtent [0.5, 5.0] in ForceGraphChart
+- [x] T044 [US4] Attach zoom behavior to SVG element in ForceGraphChart useEffect
+- [x] T045 [US4] Apply zoom transform to graph container group on zoom events in ForceGraphChart
+- [x] T046 [US4] Implement double-click reset handler in ForceGraphChart
+- [x] T047 [US4] Add cursor style changes for visual feedback in ForceGraphChart
+- [x] T048 [US4] Clean up zoom behavior on component unmount in ForceGraphChart
 
 **Checkpoint**: Pan and zoom fully functional, smooth interactions at 30+ FPS
 
@@ -162,17 +162,17 @@
 
 ### Tests for User Story 2 (TDD - Write FIRST)
 
-- [ ] T049 [P] [US2] Write tests for view toggle state persistence in __tests__/integration/view-switching.test.tsx
-- [ ] T050 [P] [US2] Write tests for data sharing between views in __tests__/integration/view-switching.test.tsx
-- [ ] T051 [P] [US2] Write tests for control state persistence across toggle in __tests__/integration/view-switching.test.tsx
+- [x] T049 [P] [US2] Write tests for view toggle state persistence in __tests__/integration/view-switching.test.tsx
+- [x] T050 [P] [US2] Write tests for data sharing between views in __tests__/integration/view-switching.test.tsx
+- [x] T051 [P] [US2] Write tests for control state persistence across toggle in __tests__/integration/view-switching.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T052 [US2] Verify treeData is shared between TreemapChart and ForceGraphChart in app/page.tsx
-- [ ] T053 [US2] Verify repository selection updates both views in app/page.tsx
-- [ ] T054 [US2] Verify time range selection updates both views in app/page.tsx
-- [ ] T055 [US2] Add loading state handling for Activity Graph in app/page.tsx
-- [ ] T056 [US2] Verify ViewToggle disabled during loading in app/page.tsx
+- [x] T052 [US2] Verify treeData is shared between TreemapChart and ForceGraphChart in app/page.tsx
+- [x] T053 [US2] Verify repository selection updates both views in app/page.tsx
+- [x] T054 [US2] Verify time range selection updates both views in app/page.tsx
+- [x] T055 [US2] Add loading state handling for Activity Graph in app/page.tsx
+- [x] T056 [US2] Verify ViewToggle disabled during loading in app/page.tsx
 
 **Checkpoint**: Both views fully integrated, data and controls synchronized
 
@@ -182,19 +182,19 @@
 
 **Purpose**: Enhancements and refinements across all user stories
 
-- [ ] T057 [P] Add file name text labels to bubbles in ForceGraphChart (show when radius > 15px)
-- [ ] T058 [P] Implement text truncation with ellipsis for long filenames in ForceGraphChart
-- [ ] T059 [P] Add ARIA labels for accessibility in ViewToggle component
-- [ ] T060 [P] Add ARIA labels for accessibility in ForceGraphChart
-- [ ] T061 Optimize force simulation parameters for faster stabilization in ForceGraphChart
-- [ ] T062 Add edge case handling for 1-2 files in ForceGraphChart
-- [ ] T063 Add edge case handling for all files same commit count in ForceGraphChart
-- [ ] T064 Add responsive sizing updates on window resize in app/page.tsx
-- [ ] T065 Performance testing with 100 files to verify 2-second render target
-- [ ] T066 Verify all acceptance scenarios from spec.md
-- [ ] T067 Run full test suite with npm test
-- [ ] T068 Run quickstart.md validation steps
-- [ ] T069 Update README.md with Activity Graph feature documentation
+- [x] T057 [P] Add file name text labels to bubbles in ForceGraphChart (show when radius > 15px)
+- [x] T058 [P] Implement text truncation with ellipsis for long filenames in ForceGraphChart
+- [x] T059 [P] Add ARIA labels for accessibility in ViewToggle component
+- [x] T060 [P] Add ARIA labels for accessibility in ForceGraphChart
+- [x] T061 Optimize force simulation parameters for faster stabilization in ForceGraphChart
+- [x] T062 Add edge case handling for 1-2 files in ForceGraphChart
+- [x] T063 Add edge case handling for all files same commit count in ForceGraphChart
+- [x] T064 Add responsive sizing updates on window resize in app/page.tsx
+- [x] T065 Performance testing with 100 files to verify 2-second render target
+- [x] T066 Verify all acceptance scenarios from spec.md
+- [x] T067 Run full test suite with npm test
+- [x] T068 Run quickstart.md validation steps
+- [x] T069 Update README.md with Activity Graph feature documentation
 
 ---
 

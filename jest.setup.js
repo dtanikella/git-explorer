@@ -29,3 +29,19 @@ jest.mock('d3-scale', () => ({
     return scale;
   }),
 }));
+
+jest.mock('d3-zoom', () => ({
+  zoom: jest.fn(() => {
+    const zoomBehavior = jest.fn();
+    zoomBehavior.scaleExtent = jest.fn().mockReturnValue(zoomBehavior);
+    zoomBehavior.on = jest.fn().mockReturnValue(zoomBehavior);
+    return zoomBehavior;
+  }),
+  zoomIdentity: { toString: jest.fn().mockReturnValue('') },
+}));
+
+jest.mock('d3-selection', () => ({
+  select: jest.fn(() => ({
+    call: jest.fn(),
+  })),
+}));

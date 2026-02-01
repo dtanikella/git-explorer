@@ -186,11 +186,22 @@ export default function Home() {
                       <ColorLegend className="mt-4" />
                     </>
                   ) : (
-                    <ForceGraphChart
-                      data={treeData}
-                      width={windowSize.width}
-                      height={windowSize.height}
-                    />
+                    <>
+                      <ForceGraphChart
+                        data={treeData}
+                        width={windowSize.width}
+                        height={windowSize.height}
+                      />
+                      <ColorLegend 
+                        className="mt-4" 
+                        mode="discrete"
+                        discreteColors={[
+                          { label: 'Ruby (.rb)', color: '#E0115F' },
+                          { label: 'React (.tsx)', color: '#ADD8E6' },
+                          { label: 'Other/Test', color: '#808080' }
+                        ]}
+                      />
+                    </>
                   )}
                 </>
               )}
