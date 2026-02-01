@@ -47,36 +47,71 @@ export const CirclePackingChart: React.FC<CirclePackingChartProps> = ({
     return map;
   }, [data, coloringStrategy]);
 
-  // T040: Extract stable event handlers to prevent CircleNode re-renders
-  // These useCallback hooks ensure the same function references are passed down
-  const handleMouseEnter = useCallback((node: any, e: React.MouseEvent<SVGCircleElement>) => {
-    showTooltip?.({
-      tooltipData: node.data,
-      tooltipLeft: e.clientX,
-      tooltipTop: e.clientY,
-    });
-  }, [showTooltip]);
+  // Create node map for event delegation lookup
+  const nodeMap = useMemo(() => {
+    const map = new Map();
+    const traverse = (node: any) => {
+      map.set(node.data.path, node);
+      if (node.children) {
+        node.children.forEach((child: any) => traverse(child));
+      }
+    };
+    traverse(root);
+    return map;
+  }, [root]);
 
-  const handleMouseLeave = useCallback(() => {
+  // Event delegation handlers
+  const lastHoveredPath = React.useRef<string | null>(null);
+
+  const handleGroupMouseMove = useCallback((e: React.MouseEvent<SVGGElement>) => {
+    const target = e.target as SVGElement;
+    if (target.tagName === 'circle') {
+      const nodePath = target.getAttribute('data-node-path');
+      if (nodePath && nodePath !== lastHoveredPath.current) {
+        const node = nodeMap.get(nodePath);
+        if (node) {
+          lastHoveredPath.current = nodePath;
+          showTooltip?.({
+            tooltipData: node.data,
+            tooltipLeft: e.clientX,
+            tooltipTop: e.clientY,
+          });
+        }
+      }
+    }
+  }, [nodeMap, showTooltip]);
+
+  const handleGroupMouseLeave = useCallback(() => {
+    lastHoveredPath.current = null;
     hideTooltip?.();
   }, [hideTooltip]);
 
-  const handleClick = useCallback((node: any) => {
-    onClick?.(node);
-  }, [onClick]);
+  const handleGroupClick = useCallback((e: React.MouseEvent<SVGGElement>) => {
+    const target = e.target as SVGElement;
+    if (target.tagName === 'circle') {
+      const nodePath = target.getAttribute('data-node-path');
+      if (nodePath) {
+        const node = nodeMap.get(nodePath);
+        if (node) {
+          onClick?.(node);
+        }
+      }
+    }
+  }, [nodeMap, onClick]);
 
   return (
     <Pack root={root} size={[width, height]} padding={2}>
       {(packData) => (
-        <g>
+        <g 
+          onMouseMove={handleGroupMouseMove}
+          onMouseLeave={handleGroupMouseLeave}
+          onClick={handleGroupClick}
+        >
           {packData.descendants().map((node, index) => (
             <CircleNode
               key={node.data.path}
               node={node}
               fill={colorMap.get(node.data.path) || '#ccc'}
-              onMouseEnter={(e) => handleMouseEnter(node, e)}
-              onMouseLeave={handleMouseLeave}
-              onClick={() => handleClick(node)}
             />
           ))}
         </g>

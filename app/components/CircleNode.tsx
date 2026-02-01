@@ -15,18 +15,12 @@ interface CircleNodeProps {
     };
   };
   fill: string;
-  onMouseEnter?: (event: React.MouseEvent<SVGCircleElement>) => void;
-  onMouseLeave?: (event: React.MouseEvent<SVGCircleElement>) => void;
-  onClick?: (event: React.MouseEvent<SVGCircleElement>) => void;
 }
 
 // T041: Wrap CircleNode in React.memo
 export const CircleNode: React.FC<CircleNodeProps> = React.memo(({
   node,
   fill,
-  onMouseEnter,
-  onMouseLeave,
-  onClick,
 }) => {
   const isFolder = node.data.type === 'folder';
   
@@ -39,9 +33,8 @@ export const CircleNode: React.FC<CircleNodeProps> = React.memo(({
       fillOpacity={isFolder ? 0.3 : 1}
       stroke="#fff"
       strokeWidth={1}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onClick={onClick}
+      data-node-path={node.data.path} // For event delegation
+      data-node-type={node.data.type}
       style={{ cursor: 'pointer' }}
       aria-label={`${node.data.name} (${isFolder ? 'folder' : 'file'})`}
     />

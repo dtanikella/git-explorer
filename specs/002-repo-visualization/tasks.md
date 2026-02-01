@@ -153,6 +153,11 @@
 - [X] T040 [NFR-002] Extract stable event handlers in app/components/CirclePackingChart.tsx - useCallback for onMouseEnter, onMouseLeave, onClick
 - [X] T041 [NFR-004] Wrap CircleNode in React.memo in app/components/CircleNode.tsx - skip re-renders when props unchanged
 - [X] T042 Verify 60fps target - test with React DevTools Profiler on 1000+ node repo
+- [X] T053 [NFR-006] Disable CSS transitions during active drag in RepoVisualization.tsx - prevent style recalc on all circles during pan
+- [X] T054 [NFR-007] Throttle mouse move events in RepoVisualization.tsx - limit dragMove to 60fps using lodash.throttle
+- [X] T055 [NFR-008] Keep tooltip mounted in RepoVisualization.tsx - use visibility/opacity instead of mount/unmount to prevent DOM thrashing
+- [X] T056 [NFR-009] Add GPU acceleration hint in RepoVisualization.tsx - will-change: transform for hardware compositing
+- [X] T057 [NFR-010] Implement event delegation in CirclePackingChart.tsx - single parent listeners instead of 2000+ individual handlers
 
 **Checkpoint**: Performance optimization complete - smooth 60fps interactions
 
@@ -268,14 +273,14 @@ T007 lib/strategies/coloring.ts }
 
 | Metric | Count |
 |--------|-------|
-| Total Tasks | 57 |
+| Total Tasks | 62 |
 | Setup Tasks | 4 |
 | Foundational Tasks | 9 (4 tests + 5 impl) |
 | User Story 1 Tasks | 7 (1 test + 6 impl) |
 | User Story 2 Tasks | 8 (1 test + 7 impl) |
 | User Story 3 Tasks | 8 (1 test + 7 impl) |
 | User Story 4 Tasks | 6 (1 test + 5 impl) |
-| Performance Tasks | 5 |
+| Performance Tasks | 10 |
 | Polish Tasks | 5 |
 | Test Infrastructure Tasks | 5 |
 | Test Tasks | 8 |

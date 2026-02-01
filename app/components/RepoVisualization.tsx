@@ -4,6 +4,7 @@ import { Zoom } from '@visx/zoom';
 import { FileTree, SizingStrategy, ColoringStrategy } from '../../lib/types';
 import { CirclePackingChart } from './CirclePackingChart';
 import { Tooltip } from './Tooltip';
+import throttle from 'lodash.throttle';
 
 interface RepoVisualizationProps {
   data: FileTree;
@@ -25,6 +26,20 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
     hideTooltip,
   } = useTooltip<FileTree>();
 
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const throttledDragMove = React.useRef(
+    throttle((handler: any, event: React.MouseEvent) => {
+      handler(event);
+    }, 16, { leading: true, trailing: true })
+  ).current;
+
+  React.useEffect(() => {
+    return () => {
+      throttledDragMove.cancel();
+    };
+  }, []);
+
   const width = 800;
   const height = 600;
 
@@ -44,7 +59,10 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
             viewBox={`0 0 ${width} ${height}`}
             style={{ display: 'block' }}
           >
-            <g transform={zoom.toString()} style={{ transition: 'transform 0.1s ease-out' }}>
+            <g transform={zoom.toString()} style={{ 
+              transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+              willChange: 'transform'
+            }}>
               <CirclePackingChart
                 data={data}
                 width={width}
@@ -61,19 +79,39 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
               width={width}
               height={height}
               onWheel={zoom.handleWheel}
-              onMouseDown={zoom.dragStart}
-              onMouseMove={zoom.dragMove}
-              onMouseUp={zoom.dragEnd}
+              onMouseDown={(e) => {
+                setIsDragging(true);
+                zoom.dragStart(e);
+              }}
+              onMouseMove={(e) => throttledDragMove(zoom.dragMove, e)}
+              onMouseUp={(e) => {
+                setIsDragging(false);
+                zoom.dragEnd(e);
+              }}
+              onMouseLeave={(e) => {
+                // Handle case where mouse leaves SVG during drag
+                if (isDragging) {
+                  setIsDragging(false);
+                  zoom.dragEnd(e);
+                }
+              }}
               onDoubleClick={() => zoom.reset()}
             />
           </svg>
         )}
       </Zoom>
-      {tooltipOpen && tooltipData && (
-        <TooltipWithBounds left={tooltipLeft} top={tooltipTop}>
-          <Tooltip node={tooltipData} rootPath={data.path} />
-        </TooltipWithBounds>
-      )}
+      <TooltipWithBounds 
+        left={tooltipLeft ?? 0} 
+        top={tooltipTop ?? 0}
+        style={{
+          visibility: tooltipOpen && tooltipData ? 'visible' : 'hidden',
+          pointerEvents: 'none', // Prevent tooltip from blocking mouse events
+          transition: 'opacity 0.1s ease-out',
+          opacity: tooltipOpen && tooltipData ? 1 : 0,
+        }}
+      >
+        {tooltipData && <Tooltip node={tooltipData} rootPath={data.path} />}
+      </TooltipWithBounds>
     </div>
   );
 };
