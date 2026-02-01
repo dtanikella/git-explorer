@@ -63,22 +63,57 @@ export async function POST(request: NextRequest) {
       label: timeConfig.label
     });
 
-    // TEMPORARY: Try with a much larger time range to see if there are ANY commits
-    const testTimeConfig = {
-      ...timeConfig,
-      startDate: new Date('2020-01-01'), // Way back
-      endDate: new Date(),
-      label: 'All time (test)'
-    };
-    console.log('API: Testing with expanded time range');
-    const testCommits = await getCommits(repoPath, testTimeConfig);
-    console.log('API: Test with expanded range found commits:', testCommits.length);
+    let commits: any[];
+    try {
+      commits = await getCommits(repoPath, timeConfig);
+    } catch (gitError: any) {
+      console.error('API: Git operation failed:', gitError);
+      
+      // Check if it's a git binary not found error
+      if (gitError.message && (
+        gitError.message.includes('git') && 
+        (gitError.message.includes('not found') || 
+         gitError.message.includes('not installed') ||
+         gitError.message.includes('command not found'))
+      )) {
+        return NextResponse.json(
+          { success: false, error: 'Git is required. Please install git and try again.' },
+          { status: 500 }
+        );
+      }
+      
+      // Re-throw other git errors
+      throw gitError;
+    }
 
-    const commits = await getCommits(repoPath, timeConfig);
     console.log('API: After getCommits:', {
       commitCount: commits.length,
       sampleCommit: commits[0] ? { sha: commits[0].sha, fileCount: commits[0].files.length } : null
     });
+
+    // Handle case where no commits found in the selected time range
+    if (commits.length === 0) {
+      console.log('API: No commits found in the selected time range');
+      const analysisDuration = Date.now() - startTime;
+      return NextResponse.json({
+        success: true,
+        data: {
+          name: 'root',
+          path: '',
+          value: 0,
+          isFile: false,
+          children: []
+        },
+        metadata: {
+          totalFilesAnalyzed: 0,
+          filesDisplayed: 0,
+          timeRange: timeConfig.label,
+          analysisDurationMs: analysisDuration,
+          totalCommits: 0,
+        },
+      });
+    }
+
     const fileCommitData = countCommitsByFile(commits, timeConfig);
     const topFiles = filterTopFiles(fileCommitData);
     const scoredFiles = calculateFrequencyScores(topFiles);

@@ -112,10 +112,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Verify color scale application in lib/treemap/data-transformer.ts (ensure frequencyScore correctly maps to color gradient from #006400 to #E5E5E5)
-- [ ] T025 [US3] Update TreemapChart rendering to use node.color in app/components/TreemapChart.tsx (ensure rect fill comes from node.color property for files)
-- [ ] T026 [US3] Add color legend component in app/components/ColorLegend.tsx (display gradient bar with "Most active" and "Least active" labels)
-- [ ] T027 [US3] Integrate ColorLegend into app/page.tsx (display below or beside TreemapChart when data is loaded)
+- [x] T024 [US3] Verify color scale application in lib/treemap/data-transformer.ts (ensure frequencyScore correctly maps to color gradient from #006400 to #E5E5E5)
+- [x] T025 [US3] Update TreemapChart rendering to use node.color in app/components/TreemapChart.tsx (ensure rect fill comes from node.color property for files)
+- [x] T026 [US3] Add color legend component in app/components/ColorLegend.tsx (display gradient bar with "Most active" and "Least active" labels)
+- [x] T027 [US3] Integrate ColorLegend into app/page.tsx (display below or beside TreemapChart when data is loaded)
 
 **Checkpoint**: User Story 3 complete - users can visually distinguish hot vs cold files at a glance
 
@@ -129,10 +129,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] Create DateRangeSelector component in app/components/DateRangeSelector.tsx (radio buttons for 5 presets: 2w, 1m, 3m, 6m, 1y; props: selected, onRangeChange, disabled)
-- [ ] T029 [US4] Integrate DateRangeSelector into app/page.tsx (state for selectedRange, pass to API call, disable during loading)
-- [ ] T030 [US4] Update API call in app/page.tsx to include timeRange parameter (send selectedRange in request body)
-- [ ] T031 [US4] Add re-analysis logic in app/page.tsx (when range changes, trigger new API call without re-entering repo path)
+- [x] T028 [US4] Create DateRangeSelector component in app/components/DateRangeSelector.tsx (radio buttons for 5 presets: 2w, 1m, 3m, 6m, 1y; props: selected, onRangeChange, disabled)
+- [x] T029 [US4] Integrate DateRangeSelector into app/page.tsx (state for selectedRange, pass to API call, disable during loading)
+- [x] T030 [US4] Update API call in app/page.tsx to include timeRange parameter (send selectedRange in request body)
+- [x] T031 [US4] Add re-analysis logic in app/page.tsx (when range changes, trigger new API call without re-entering repo path)
 
 **Checkpoint**: User Story 4 complete - users can explore different time windows
 
@@ -146,11 +146,11 @@
 
 ### Implementation for User Story 5
 
-- [ ] T032 [US5] Create ErrorDisplay component in app/components/ErrorDisplay.tsx (display error message, retry button, select different repo button)
-- [ ] T033 [US5] Add "no commits in range" handling in app/api/git-analysis/route.ts (return empty tree with metadata indicating 0 files)
-- [ ] T034 [US5] Add empty state for no commits in app/page.tsx (display "No commits found in the selected time period" message)
-- [ ] T035 [US5] Integrate ErrorDisplay into app/page.tsx (replace inline error text, provide retry and reset actions)
-- [ ] T036 [US5] Add git binary detection in app/api/git-analysis/route.ts (catch simple-git error for missing git, return specific error message)
+- [x] T032 [US5] Create ErrorDisplay component in app/components/ErrorDisplay.tsx (display error message, retry button, select different repo button)
+- [x] T033 [US5] Add "no commits in range" handling in app/api/git-analysis/route.ts (return empty tree with metadata indicating 0 files)
+- [x] T034 [US5] Add empty state for no commits in app/page.tsx (display "No commits found in the selected time period" message)
+- [x] T035 [US5] Integrate ErrorDisplay into app/page.tsx (replace inline error text, provide retry and reset actions)
+- [x] T036 [US5] Add git binary detection in app/api/git-analysis/route.ts (catch simple-git error for missing git, return specific error message)
 
 **Checkpoint**: User Story 5 complete - users receive clear feedback for all error scenarios
 

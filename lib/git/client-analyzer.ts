@@ -16,7 +16,7 @@ function createFSAFS(dirHandle: FileSystemDirectoryHandle) {
       writeFile: async (path: string, data: string | Uint8Array) => {
         const fileHandle = await getFileHandle(dirHandle, path, true);
         const writable = await fileHandle.createWritable();
-        await writable.write(data);
+        await writable.write(data as FileSystemWriteChunkType);
         await writable.close();
       },
 
