@@ -262,10 +262,20 @@ export async function analyzeClientRepository(
   const fs = createFSAFS(dirHandle);
 
   try {
-    // Check if .git directory exists
+    // Check if .git directory exists by listing directory contents
+    let hasGitDir = false;
     try {
-      await fs.promises.readFile('.git/HEAD');
-    } catch {
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (name === '.git' && handle.kind === 'directory') {
+          hasGitDir = true;
+          break;
+        }
+      }
+    } catch (error) {
+      console.warn('Could not list directory contents:', error);
+    }
+
+    if (!hasGitDir) {
       throw new Error('The selected folder is not a git repository');
     }
 

@@ -74,7 +74,6 @@
 - [x] T013 [US1] Implement client-side git analysis in lib/git/client-analyzer.ts (use isomorphic-git with File System Access API adapter)
 - [x] T014 [US1] Integrate client-side analysis into app/page.tsx (call analyzeClientRepository with directory handle, display results)
 - [ ] T015 [US1] Add error handling for unsupported browsers in app/components/RepositorySelector.tsx (fallback message for browsers without File System Access API)
-- [ ] T016 [US1] Add repository validation in client-analyzer.ts (check for .git directory, handle git errors gracefully)
 
 **Checkpoint**: User Story 1 complete - users can input repo path and see validation feedback
 
@@ -88,18 +87,18 @@
 
 ### Tests for User Story 2 (TDD: Write FIRST, ensure FAIL)
 
-- [ ] T017-TEST [US2] Write integration tests for git analysis pipeline in __tests__/integration/git-analysis-api.test.ts (test end-to-end: request → TreeNode response, metadata validation)
-- [ ] T018-TEST [US2] Write component tests for TreemapChart in __tests__/components/TreemapChart.test.tsx (test SVG render, rect elements, visx integration, empty data handling)
+- [x] T017-TEST [US2] Write integration tests for git analysis pipeline in __tests__/integration/git-analysis-api.test.ts (test end-to-end: request → TreeNode response, metadata validation)
+- [x] T018-TEST [US2] Write component tests for TreemapChart in __tests__/components/TreemapChart.test.tsx (test SVG render, rect elements, visx integration, empty data handling)
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Wire up git analysis pipeline in app/api/git-analysis/route.ts (call analyzer → tree-builder → data-transformer, return TreeNode with metadata)
-- [ ] T018 [US2] Create TreemapChart component in app/components/TreemapChart.tsx (use @visx/hierarchy Treemap, props: data, width, height)
-- [ ] T019 [US2] Implement rectangle rendering in app/components/TreemapChart.tsx (render <rect> for each node, fill with node.color or #ccc, size from visx layout)
-- [ ] T020 [US2] Implement label rendering in app/components/TreemapChart.tsx (add <text> labels for nodes with width/height > 30px, display node.name)
-- [ ] T021 [US2] Add empty state handling in app/components/TreemapChart.tsx (display "No data to display" when data has no children)
-- [ ] T022 [US2] Add accessibility attributes in app/components/TreemapChart.tsx (role="img", aria-label on SVG, aria-label on each rect with file name and count)
-- [ ] T023 [US2] Integrate TreemapChart into app/page.tsx (store analysis result in state, render TreemapChart with responsive width/height after successful API call)
+- [x] T017 [US2] Wire up git analysis pipeline in app/api/git-analysis/route.ts (call analyzer → tree-builder → data-transformer, return TreeNode with metadata)
+- [x] T018 [US2] Create TreemapChart component in app/components/TreemapChart.tsx (use @visx/hierarchy Treemap, props: data, width, height)
+- [x] T019 [US2] Implement rectangle rendering in app/components/TreemapChart.tsx (render <rect> for each node, fill with node.color or #ccc, size from visx layout)
+- [x] T020 [US2] Implement label rendering in app/components/TreemapChart.tsx (add <text> labels for nodes with width/height > 30px, display node.name)
+- [x] T021 [US2] Add empty state handling in app/components/TreemapChart.tsx (display "No data to display" when data has no children)
+- [x] T022 [US2] Add accessibility attributes in app/components/TreemapChart.tsx (role="img", aria-label on SVG, aria-label on each rect with file name and count)
+- [x] T023 [US2] Integrate TreemapChart into app/page.tsx (store analysis result in state, render TreemapChart with responsive width/height after successful API call)
 
 **Checkpoint**: User Story 2 complete - users can see treemap visualization of their repository
 

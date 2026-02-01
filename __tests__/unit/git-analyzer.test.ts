@@ -9,6 +9,7 @@ import { TimeRangeConfig } from '@/lib/git/types';
 // Mock simple-git
 jest.mock('simple-git', () => jest.fn().mockReturnValue({
   log: jest.fn(),
+  raw: jest.fn(),
 }));
 
 const simpleGit = require('simple-git');
@@ -16,21 +17,9 @@ const simpleGit = require('simple-git');
 describe('getCommits', () => {
   it('parses git log output correctly', async () => {
     const mockGit = simpleGit('/fake/repo');
-    mockGit.log.mockResolvedValue({
-      all: [
-        {
-          hash: 'abc123',
-          date: '2026-01-20T10:00:00.000Z',
-          diff: { files: ['src/App.tsx', 'src/utils.ts'] },
-        },
-        {
-          hash: 'def456',
-          date: '2026-01-25T10:00:00.000Z',
-          diff: { files: ['src/App.tsx'] },
-        },
-      ],
-      latest: null,
-    });
+    mockGit.raw.mockResolvedValue(
+      'abc123|2026-01-20T10:00:00.000Z\nsrc/App.tsx\nsrc/utils.ts\n\ndef456|2026-01-25T10:00:00.000Z\nsrc/App.tsx'
+    );
 
     const timeRange: TimeRangeConfig = {
       startDate: new Date('2026-01-15T00:00:00.000Z'),
@@ -53,25 +42,20 @@ describe('getCommits', () => {
       date: new Date('2026-01-25T10:00:00.000Z'),
       files: ['src/App.tsx'],
     });
-    expect(mockGit.log).toHaveBeenCalledWith([
+    expect(mockGit.raw).toHaveBeenCalledWith([
+      'log',
       '--name-only',
       '--since=2026-01-15T00:00:00.000Z',
       '--until=2026-01-31T23:59:59.999Z',
+      '--pretty=format:%H|%aI',
     ]);
   });
 
   it('filters commits by date range', async () => {
     const mockGit = simpleGit('/fake/repo');
-    mockGit.log.mockResolvedValue({
-      all: [
-        {
-          hash: 'new456',
-          date: '2026-01-20T10:00:00.000Z',
-          diff: { files: ['file.txt'] },
-        },
-      ],
-      latest: null,
-    });
+    mockGit.raw.mockResolvedValue(
+      'new456|2026-01-20T10:00:00.000Z\nfile.txt'
+    );
 
     const timeRange: TimeRangeConfig = {
       startDate: new Date('2026-01-15T00:00:00.000Z'),
@@ -89,10 +73,7 @@ describe('getCommits', () => {
 
   it('handles empty repository', async () => {
     const mockGit = simpleGit('/fake/repo');
-    mockGit.log.mockResolvedValue({
-      all: [],
-      latest: null,
-    });
+    mockGit.raw.mockResolvedValue('');
 
     const timeRange: TimeRangeConfig = {
       startDate: new Date('2026-01-15T00:00:00.000Z'),

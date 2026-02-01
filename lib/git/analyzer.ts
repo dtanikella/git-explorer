@@ -5,21 +5,54 @@ export async function getCommits(
   repoPath: string,
   timeRange: TimeRangeConfig
 ): Promise<CommitRecord[]> {
+  console.log('getCommits: Starting with:', { repoPath, timeRange });
   const git = simpleGit(repoPath);
 
-  const logOptions = [
+  // Use raw output to properly parse files
+  const logOutput = await git.raw([
+    'log',
     '--name-only',
     `--since=${timeRange.startDate.toISOString()}`,
     `--until=${timeRange.endDate.toISOString()}`,
-  ];
+    '--pretty=format:%H|%aI',
+  ]);
 
-  const logResult = await git.log(logOptions);
+  console.log('getCommits: Raw git log output length:', logOutput.length);
+  console.log('getCommits: First 200 chars of output:', logOutput.substring(0, 200));
 
-  return logResult.all.map(commit => ({
-    sha: commit.hash,
-    date: new Date(commit.date),
-    files: commit.diff?.files || [],
-  }));
+  const commits: CommitRecord[] = [];
+  const lines = logOutput.split('\n');
+  let currentCommit: CommitRecord | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Check if this is a commit line (contains |)
+    if (trimmed.includes('|')) {
+      // Save previous commit
+      if (currentCommit) {
+        commits.push(currentCommit);
+      }
+      // Start new commit
+      const [sha, dateStr] = trimmed.split('|');
+      currentCommit = {
+        sha,
+        date: new Date(dateStr),
+        files: [],
+      };
+    } else if (currentCommit) {
+      // This is a file name
+      currentCommit.files.push(trimmed);
+    }
+  }
+
+  // Don't forget the last commit
+  if (currentCommit) {
+    commits.push(currentCommit);
+  }
+
+  return commits;
 }
 
 export function countCommitsByFile(
@@ -68,7 +101,7 @@ export function filterTopFiles(files: FileCommitData[]): FileCommitData[] {
       // Tiebreaker: alphabetical by filePath
       return a.filePath.localeCompare(b.filePath);
     })
-    .slice(0, 500);
+    .slice(0, 100);
 }
 
 export function calculateFrequencyScores(files: FileCommitData[]): FileCommitData[] {

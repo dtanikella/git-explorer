@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import RepositorySelector from '@/app/components/RepositorySelector';
 
 describe('RepositorySelector', () => {
@@ -16,7 +16,7 @@ describe('RepositorySelector', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Select repository directory' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select directory' })).toBeInTheDocument();
   });
 
   it('calls onRepositorySelected when directory is selected', async () => {
@@ -32,13 +32,13 @@ describe('RepositorySelector', () => {
       />
     );
 
-    const button = screen.getByRole('button', { name: 'Select repository directory' });
+    const button = screen.getByRole('button', { name: 'Select directory' });
     fireEvent.click(button);
 
     // Wait for the async operation
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    expect(mockOnRepositorySelected).toHaveBeenCalledWith(mockHandle);
+    expect(mockOnRepositorySelected).toHaveBeenCalledWith('test-repo');
   });
 
   it('disables button when isLoading is true', () => {
@@ -49,7 +49,7 @@ describe('RepositorySelector', () => {
       />
     );
 
-    const button = screen.getByRole('button', { name: 'Selecting repository' });
+    const button = screen.getByRole('button', { name: 'Analyzing repository' });
     expect(button).toBeDisabled();
   });
 
@@ -70,19 +70,31 @@ describe('RepositorySelector', () => {
     // @ts-ignore
     window.showDirectoryPicker = jest.fn().mockResolvedValue(mockHandle);
 
-    render(
+    const { rerender } = render(
       <RepositorySelector
         onRepositorySelected={mockOnRepositorySelected}
         isLoading={false}
       />
     );
 
-    const button = screen.getByRole('button', { name: 'Select repository directory' });
-    fireEvent.click(button);
+    const button = screen.getByRole('button', { name: 'Select directory' });
+    
+    await act(async () => {
+      fireEvent.click(button);
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // After selection, the parent would pass currentPath
+    rerender(
+      <RepositorySelector
+        onRepositorySelected={mockOnRepositorySelected}
+        isLoading={false}
+        currentPath="test-repo"
+      />
+    );
 
-    expect(screen.getByText('Selected: test-repo')).toBeInTheDocument();
+    expect(screen.getByText('Current: test-repo')).toBeInTheDocument();
   });
 
   it('shows current path when currentPath prop is provided', () => {
