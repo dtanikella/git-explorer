@@ -93,7 +93,7 @@ describe('CirclePackingChart', () => {
     );
 
     // Check that circles are rendered (mock returns 3 circles)
-    const circles = screen.getAllByRole('presentation'); // SVG circles might not have role, adjust as needed
+    const circles = document.querySelectorAll('circle');
     expect(circles).toHaveLength(3);
 
     // Check that colors are applied (this will depend on how CircleNode renders)

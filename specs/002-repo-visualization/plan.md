@@ -194,3 +194,20 @@ export const CircleNode = React.memo<CircleNodeProps>(({ node, fill, onMouseEnte
 | Color computations per interaction | O(n) | 0 (cached) |
 | CircleNode re-renders per interaction | 1000+ | 1-2 (only changed) |
 | Frame time (1000 nodes) | 25-40ms | <10ms |
+---
+
+## Phase 9: Test Infrastructure Fixes
+
+**Purpose**: Fix Jest configuration conflicts, import path errors, linting issues, and test setup problems
+
+**Independent Test**: All tests pass with `npm test` and no ESLint errors
+
+### Implementation for Test Infrastructure Fixes
+
+- [X] T048 Delete orphaned Jest configs - remove jest.api.config.js and jest.lib.config.js, keep only jest.config.js
+- [X] T049 Fix import path in RepoVisualization test - change from '../RepoVisualization' to '../../app/components/RepoVisualization'
+- [X] T050 Move global polyfills to jest.setup.js - relocate Request/Response polyfills from RepoVisualization.test.tsx
+- [X] T051 Update ESLint config - allow CommonJS require() in Jest config files and any types in component files
+- [X] T052 Remove unused test variables - delete unused input variables in PathInput.test.tsx
+
+**Checkpoint**: Test infrastructure fixed - all tests pass without linting errors

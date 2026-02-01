@@ -1,12 +1,42 @@
+import { buildTree } from '../../lib/file-tree';
+import { POST } from '../../app/api/file-tree/route';
 import { NextRequest } from 'next/server';
 
 // Mock the file-tree module
-jest.mock('../../../lib/file-tree', () => ({
+jest.mock('../../lib/file-tree', () => ({
   buildTree: jest.fn(),
 }));
 
-import { buildTree } from '../../../lib/file-tree';
-import { POST } from '../../../app/api/file-tree/route';
+// Mock NextResponse
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: (data: any, options?: any) => ({
+      status: options?.status || 200,
+      json: async () => data,
+    }),
+  },
+  NextRequest: class NextRequest {
+    constructor(url: string, options: any = {}) {
+      this.url = url;
+      this.method = options.method || 'GET';
+      this.headers = new Map(Object.entries(options.headers || {}));
+      this.body = options.body;
+    }
+
+    async json() {
+      return JSON.parse(this.body);
+    }
+
+    async text() {
+      return this.body;
+    }
+  },
+}));
+
+// Helper to create mock request
+const createMockRequest = (body: any) => ({
+  json: async () => body,
+} as any);
 
 describe('/api/file-tree POST', () => {
   const mockBuildTree = buildTree as jest.MockedFunction<typeof buildTree>;
@@ -38,11 +68,7 @@ describe('/api/file-tree POST', () => {
 
       mockBuildTree.mockResolvedValue(mockTree);
 
-      const request = new NextRequest('http://localhost:3000/api/file-tree', {
-        method: 'POST',
-        body: JSON.stringify({ path: '/test/repo' }),
-        headers: { 'content-type': 'application/json' },
-      });
+      const request = createMockRequest({ path: '/test/repo' });
 
       const response = await POST(request);
       const result = await response.json();

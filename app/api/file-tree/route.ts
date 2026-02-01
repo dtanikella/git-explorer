@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildTree } from '../../../lib/file-tree';
 import { FileNode } from '../../../lib/types';
 
-interface ApiResponse<T = any> {
+interface ApiResponse<T = FileNode> {
   success: boolean;
   data?: T;
   stats?: {

@@ -31,8 +31,7 @@ describe('Tooltip', () => {
     render(<Tooltip node={mockFileNode} rootPath="/test" />);
 
     expect(screen.getByTestId('tooltip')).toBeInTheDocument();
-    expect(screen.getByText('file.ts')).toBeInTheDocument();
-    expect(screen.getByText('file.ts')).toBeInTheDocument(); // relative path
+    expect(screen.getAllByText('file.ts')).toHaveLength(2); // name and relative path
     expect(screen.getByText('100 bytes • .ts')).toBeInTheDocument();
   });
 
@@ -40,8 +39,7 @@ describe('Tooltip', () => {
     render(<Tooltip node={mockFolderNode} rootPath="/test" />);
 
     expect(screen.getByTestId('tooltip')).toBeInTheDocument();
-    expect(screen.getByText('folder')).toBeInTheDocument();
-    expect(screen.getByText('folder')).toBeInTheDocument(); // relative path
+    expect(screen.getAllByText('folder')).toHaveLength(2); // name and relative path
     expect(screen.getByText('200 bytes • 1 children')).toBeInTheDocument();
   });
 });

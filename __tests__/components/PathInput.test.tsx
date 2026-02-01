@@ -11,8 +11,7 @@ describe('PathInput', () => {
   it('shows error for empty path on submit', async () => {
     render(<PathInput onSubmit={mockOnSubmit} />);
 
-    const input = screen.getByRole('textbox');
-    const submitButton = screen.getByRole('button', { name: /submit/i });
+    const submitButton = screen.getByRole('button', { name: /visualize repository/i });
 
     fireEvent.click(submitButton);
 
@@ -24,15 +23,18 @@ describe('PathInput', () => {
   });
 
   it('calls onSubmit with valid path and shows loading state', async () => {
-    render(<PathInput onSubmit={mockOnSubmit} loading={true} />);
+    render(<PathInput onSubmit={mockOnSubmit} />);
 
     const input = screen.getByRole('textbox');
-    const submitButton = screen.getByRole('button', { name: /submit/i });
+    const submitButton = screen.getByRole('button', { name: /visualize repository/i });
 
     fireEvent.change(input, { target: { value: '/some/path' } });
     fireEvent.click(submitButton);
 
     expect(mockOnSubmit).toHaveBeenCalledWith('/some/path');
+
+    // Re-render with loading state to check loading UI
+    render(<PathInput onSubmit={mockOnSubmit} loading={true} />);
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 

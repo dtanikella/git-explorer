@@ -47,3 +47,5 @@ export const CircleNode: React.FC<CircleNodeProps> = React.memo(({
     />
   );
 });
+
+CircleNode.displayName = 'CircleNode';
