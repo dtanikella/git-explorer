@@ -38,7 +38,12 @@ export const RepoVisualization: React.FC<RepoVisualizationProps> = ({
         initialTransformMatrix={{ scaleX: 1, scaleY: 1, translateX: 0, translateY: 0, skewX: 0, skewY: 0 }}
       >
         {(zoom) => (
-          <svg width={width} height={height}>
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${width} ${height}`}
+            style={{ display: 'block' }}
+          >
             <g transform={zoom.toString()} style={{ transition: 'transform 0.1s ease-out' }}>
               <CirclePackingChart
                 data={data}
