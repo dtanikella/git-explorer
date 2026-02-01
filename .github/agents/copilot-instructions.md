@@ -6,6 +6,8 @@ Auto-generated from all feature plans. Last updated: 2026-01-31
 - N/A (reads filesystem on-demand, no persistence) (002-repo-visualization)
 - TypeScript 5 / Node.js (Next.js 16.1.6, React 19.2.3) + `simple-git` (git operations), `@visx/hierarchy` (treemap), `@visx/scale` (color scales), `@visx/tooltip` (deferred - P4) (002-commit-treemap)
 - N/A (stateless, analyzes repositories on-demand) (002-commit-treemap)
+- TypeScript 5.x with React 19.2.3 + Next.js 16.1.6, d3-force (to be added), d3-zoom (to be added), @visx/hierarchy 3.12.0 (003-activity-graph-view)
+- N/A (client-side visualization of server-processed git data) (003-activity-graph-view)
 
 - TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x (002-repo-visualization)
 
@@ -25,10 +27,10 @@ npm test && npm run lint
 TypeScript 5.x (strict mode): Follow standard conventions
 
 ## Recent Changes
+- 003-activity-graph-view: Added TypeScript 5.x with React 19.2.3 + Next.js 16.1.6, d3-force (to be added), d3-zoom (to be added), @visx/hierarchy 3.12.0
 - 002-commit-treemap: Added TypeScript 5 / Node.js (Next.js 16.1.6, React 19.2.3) + `simple-git` (git operations), `@visx/hierarchy` (treemap), `@visx/scale` (color scales), `@visx/tooltip` (deferred - P4)
 - 002-repo-visualization: Added TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x
 
-- 002-repo-visualization: Added TypeScript 5.x (strict mode) + @visx/hierarchy (circle packing), @visx/zoom (pan/zoom), @visx/tooltip (hover), React 19.x
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
