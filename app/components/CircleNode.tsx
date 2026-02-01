@@ -20,7 +20,8 @@ interface CircleNodeProps {
   onClick?: (event: React.MouseEvent<SVGCircleElement>) => void;
 }
 
-export const CircleNode: React.FC<CircleNodeProps> = ({
+// T041: Wrap CircleNode in React.memo
+export const CircleNode: React.FC<CircleNodeProps> = React.memo(({
   node,
   fill,
   onMouseEnter,
@@ -42,6 +43,7 @@ export const CircleNode: React.FC<CircleNodeProps> = ({
       onMouseLeave={onMouseLeave}
       onClick={onClick}
       style={{ cursor: 'pointer' }}
+      aria-label={`${node.data.name} (${isFolder ? 'folder' : 'file'})`}
     />
   );
-};
+});

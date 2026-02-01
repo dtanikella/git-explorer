@@ -148,11 +148,11 @@
 
 ### Implementation for Performance Optimization
 
-- [ ] T038 [NFR-001] Memoize hierarchy computation in app/components/CirclePackingChart.tsx - wrap hierarchy().sum().sort() in useMemo with [data, sizingStrategy] deps
-- [ ] T039 [NFR-003] Pre-compute color map in app/components/CirclePackingChart.tsx - useMemo building Map<path, color> from tree traversal
-- [ ] T040 [NFR-002] Extract stable event handlers in app/components/CirclePackingChart.tsx - useCallback for onMouseEnter, onMouseLeave, onClick
-- [ ] T041 [NFR-004] Wrap CircleNode in React.memo in app/components/CircleNode.tsx - skip re-renders when props unchanged
-- [ ] T042 Verify 60fps target - test with React DevTools Profiler on 1000+ node repo
+- [X] T038 [NFR-001] Memoize hierarchy computation in app/components/CirclePackingChart.tsx - wrap hierarchy().sum().sort() in useMemo with [data, sizingStrategy] deps
+- [X] T039 [NFR-003] Pre-compute color map in app/components/CirclePackingChart.tsx - useMemo building Map<path, color> from tree traversal
+- [X] T040 [NFR-002] Extract stable event handlers in app/components/CirclePackingChart.tsx - useCallback for onMouseEnter, onMouseLeave, onClick
+- [X] T041 [NFR-004] Wrap CircleNode in React.memo in app/components/CircleNode.tsx - skip re-renders when props unchanged
+- [X] T042 Verify 60fps target - test with React DevTools Profiler on 1000+ node repo
 
 **Checkpoint**: Performance optimization complete - smooth 60fps interactions
 
@@ -162,11 +162,11 @@
 
 **Purpose**: Final improvements across all user stories
 
-- [ ] T043 [P] Add CSS transitions for smooth zoom/pan (60fps target per SC-006)
-- [ ] T044 [P] Verify extension color palette covers all 10+ file types per FR-019
-- [ ] T045 Run quickstart.md validation - test full flow with a real repository
-- [ ] T046 [P] Add aria-labels to circles for accessibility
-- [ ] T047 Code cleanup: remove console.logs, add comments to complex sections
+- [X] T043 [P] Add CSS transitions for smooth zoom/pan (60fps target per SC-006)
+- [X] T044 [P] Verify extension color palette covers all 10+ file types per FR-019
+- [X] T045 Run quickstart.md validation - test full flow with a real repository
+- [X] T046 [P] Add aria-labels to circles for accessibility
+- [X] T047 Code cleanup: remove console.logs, add comments to complex sections
 
 ---
 
