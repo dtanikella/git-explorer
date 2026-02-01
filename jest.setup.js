@@ -1,22 +1,27 @@
 import '@testing-library/jest-dom'
+import 'whatwg-fetch'
 
-// Polyfill for Next.js API route testing
-globalThis.Request = class Request {
-  constructor(input, init = {}) {
-    this.url = typeof input === 'string' ? input : input.url;
-    this.method = init.method || 'GET';
-    this.headers = new Map(Object.entries(init.headers || {}));
-    this.body = init.body;
-  }
+// Define Request globally before Next.js loads
+Object.defineProperty(global, 'Request', {
+  value: class Request {
+    constructor(input, init = {}) {
+      this.url = typeof input === 'string' ? input : input.url;
+      this.method = init.method || 'GET';
+      this.headers = new Map(Object.entries(init.headers || {}));
+      this.body = init.body;
+    }
 
-  async json() {
-    return JSON.parse(this.body);
-  }
+    async json() {
+      return JSON.parse(this.body);
+    }
 
-  async text() {
-    return this.body;
-  }
-};
+    async text() {
+      return this.body;
+    }
+  },
+  writable: true,
+  configurable: true,
+});
 
 globalThis.Response = class Response {
   constructor(body, init = {}) {

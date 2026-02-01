@@ -126,15 +126,15 @@
 
 ### Tests for User Story 4 (TDD - write tests FIRST, verify they FAIL)
 
-- [ ] T028a [US4] Write failing component test in __tests__/components/PathInput.test.tsx - verify empty path shows error, displays API error messages, shows loading state
+- [X] T028a [US4] Write failing component test in __tests__/components/PathInput.test.tsx - verify empty path shows error, displays API error messages, shows loading state
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] Create app/components/PathInput.tsx with text input, submit button, and error display
-- [ ] T029 [US4] Add client-side validation: empty path check before API call
-- [ ] T030 [US4] Display API error messages (PATH_NOT_FOUND, NOT_A_DIRECTORY, PERMISSION_DENIED) in PathInput
-- [ ] T031 [US4] Add loading state indicator during API call
-- [ ] T032 [US4] Handle empty repository case: display "Repository is empty" message
+- [X] T028 [US4] Create app/components/PathInput.tsx with text input, submit button, and error display
+- [X] T029 [US4] Add client-side validation: empty path check before API call
+- [X] T030 [US4] Display API error messages (PATH_NOT_FOUND, NOT_A_DIRECTORY, PERMISSION_DENIED) in PathInput
+- [X] T031 [US4] Add loading state indicator during API call
+- [X] T032 [US4] Handle empty repository case: display "Repository is empty" message
 
 **Checkpoint**: User Story 4 complete - error handling works
 
