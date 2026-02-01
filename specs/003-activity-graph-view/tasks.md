@@ -20,9 +20,9 @@
 
 **Purpose**: Install dependencies and prepare environment
 
-- [ ] T001 Install d3-force, d3-zoom, d3-scale packages via npm
-- [ ] T002 Install TypeScript type definitions @types/d3-force, @types/d3-zoom, @types/d3-scale
-- [ ] T003 Verify installation and run npm list to confirm d3 packages installed
+- [x] T001 Install d3-force, d3-zoom, d3-scale packages via npm
+- [x] T002 Install TypeScript type definitions @types/d3-force, @types/d3-zoom, @types/d3-scale
+- [x] T003 Verify installation and run npm list to confirm d3 packages installed
 
 **Checkpoint**: Dependencies installed, project ready for implementation
 
@@ -36,15 +36,15 @@
 
 ### Tests for Foundational (TDD - Write FIRST)
 
-- [ ] T004 [P] Write unit tests for getFileTypeColor() in __tests__/unit/file-type-colors.test.ts
-- [ ] T005 [P] Write unit tests for transformTreeToGraph() in __tests__/unit/data-transformer.test.ts
+- [x] T004 [P] Write unit tests for getFileTypeColor() in __tests__/unit/file-type-colors.test.ts
+- [x] T005 [P] Write unit tests for transformTreeToGraph() in __tests__/unit/data-transformer.test.ts
 
 ### Implementation for Foundational
 
-- [ ] T006 Implement getFileTypeColor() function in lib/treemap/file-type-colors.ts
-- [ ] T007 Export FILE_TYPE_COLORS and TEST_PATTERNS constants in lib/treemap/file-type-colors.ts
-- [ ] T008 Implement transformTreeToGraph() function in lib/treemap/data-transformer.ts
-- [ ] T009 Export GraphNode interface in lib/treemap/data-transformer.ts
+- [x] T006 Implement getFileTypeColor() function in lib/treemap/file-type-colors.ts
+- [x] T007 Export FILE_TYPE_COLORS and TEST_PATTERNS constants in lib/treemap/file-type-colors.ts
+- [x] T008 Implement transformTreeToGraph() function in lib/treemap/data-transformer.ts
+- [x] T009 Export GraphNode interface in lib/treemap/data-transformer.ts
 
 **Checkpoint**: Utilities tested and working - user story implementation can now begin in parallel
 
