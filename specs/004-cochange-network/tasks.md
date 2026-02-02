@@ -20,9 +20,9 @@
 
 **Purpose**: Verify dependencies - D3.js packages already installed from previous feature
 
-- [ ] T001 Verify d3-force, d3-zoom, d3-scale, d3-selection available via npm list
-- [ ] T002 Verify @types/d3-force, @types/d3-zoom, @types/d3-scale TypeScript types installed
-- [ ] T003 Review Observable force-directed graph example at https://observablehq.com/@d3/disjoint-force-directed-graph/2
+- [x] T001 Verify d3-force, d3-zoom, d3-scale, d3-selection available via npm list
+- [x] T002 Verify @types/d3-force, @types/d3-zoom, @types/d3-scale TypeScript types installed
+- [x] T003 Review Observable force-directed graph example at https://observablehq.com/@d3/disjoint-force-directed-graph/2
 
 **Checkpoint**: Dependencies confirmed, reference example understood
 

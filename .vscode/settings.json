@@ -12,7 +12,8 @@
         "npm install": true,
         "npm view": true,
         "npx jest": true,
-        "mkdir": true
+        "mkdir": true,
+        "npm list": true
     }
 }
 

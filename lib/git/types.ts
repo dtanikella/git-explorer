@@ -45,3 +45,21 @@ export interface TreeNode {
   color?: string;
   fileData?: FileCommitData;
 }
+
+export interface GraphNode {
+  id: string;
+  name?: string;
+  path?: string;
+  value?: number;
+}
+
+export interface GraphLink {
+  source: string | GraphNode;
+  target: string | GraphNode;
+  value: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
