@@ -1,3 +1,20 @@
+// Co-change graph types for force-directed graph
+export interface CoChangeNode {
+  id: string;         // file name or path
+  group: string;      // filetype (extension)
+  radius: number;     // frequency of commits
+}
+
+export interface CoChangeLink {
+  source: string;     // file A
+  target: string;     // file B
+  value: number;      // co-commit frequency
+}
+
+export interface CoChangeGraph {
+  nodes: CoChangeNode[];
+  links: CoChangeLink[];
+}
 // TypeScript interfaces for git treemap feature
 
 export interface RepositoryInput {
@@ -54,8 +71,8 @@ export interface GraphNode {
 }
 
 export interface GraphLink {
-  source: string | GraphNode;
-  target: string | GraphNode;
+  source: string;
+  target: string;
   value: number;
 }
 

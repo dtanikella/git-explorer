@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getCommits, countCommitsByFile, filterTopFiles, calculateFrequencyScores } from '@/lib/git/analyzer';
-import { buildTreeFromFiles } from '@/lib/git/tree-builder';
-import { applyColors } from '@/lib/treemap/data-transformer';
-import { createTimeRangeConfig } from '@/lib/utils/date-helpers';
-import { TimeRangePreset } from '@/lib/git/types';
+import { analyzeRepository } from '../../services/git-controller';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,12 +16,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!timeRange || !['2w', '1m', '3m', '6m', '1y'].includes(timeRange)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid time range' },
-        { status: 400 }
-      );
-    }
+    // Default timeRange to '2w' if not provided or invalid
+    const validRanges = ['2w', '1m', '3m', '6m', '1y'];
+    const finalTimeRange = validRanges.includes(timeRange) ? timeRange : '2w';
 
     // Repository validation
     try {
@@ -47,17 +40,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Perform git analysis
+    // Perform git analysis using service
     const startTime = Date.now();
-    const timeConfig = createTimeRangeConfig(timeRange as TimeRangePreset);
-
-    let commits: any[];
+    let graphData;
     try {
-      commits = await getCommits(repoPath, timeConfig);
+      graphData = await analyzeRepository(repoPath, finalTimeRange);
     } catch (gitError: any) {
       console.error('API: Git operation failed:', gitError);
-      
-      // Check if it's a git binary not found error
       if (gitError.message && (
         gitError.message.includes('git') && 
         (gitError.message.includes('not found') || 
@@ -69,50 +58,35 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      
-      // Re-throw other git errors
       throw gitError;
     }
 
-    // Handle case where no commits found in the selected time range
-    if (commits.length === 0) {
-      const analysisDuration = Date.now() - startTime;
+    const analysisDuration = Date.now() - startTime;
+
+    // Handle case where no nodes (no commits/files)
+    if (!graphData.nodes || graphData.nodes.length === 0) {
       return NextResponse.json({
         success: true,
-        data: {
-          name: 'root',
-          path: '',
-          value: 0,
-          isFile: false,
-          children: []
-        },
+        data: graphData,
         metadata: {
           totalFilesAnalyzed: 0,
           filesDisplayed: 0,
-          timeRange: timeConfig.label,
+          timeRange: finalTimeRange,
           analysisDurationMs: analysisDuration,
           totalCommits: 0,
         },
       });
     }
 
-    const fileCommitData = countCommitsByFile(commits, timeConfig);
-    const topFiles = filterTopFiles(fileCommitData);
-    const scoredFiles = calculateFrequencyScores(topFiles);
-    const treeData = buildTreeFromFiles(scoredFiles);
-    const coloredTree = applyColors(treeData);
-
-    const analysisDuration = Date.now() - startTime;
-
     return NextResponse.json({
       success: true,
-      data: coloredTree,
+      data: graphData,
       metadata: {
-        totalFilesAnalyzed: fileCommitData.length,
-        filesDisplayed: topFiles.length,
-        timeRange: timeConfig.label,
+        totalFilesAnalyzed: graphData.nodes.length,
+        filesDisplayed: graphData.nodes.length,
+        timeRange: finalTimeRange,
         analysisDurationMs: analysisDuration,
-        totalCommits: commits.length,
+        totalCommits: graphData.links.length,
       },
     });
   } catch (error) {

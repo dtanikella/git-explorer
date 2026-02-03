@@ -44,27 +44,27 @@
 
 ### Tests for User Story 1 (TDD - Write FIRST)
 
-- [ ] T004 [P] [US1] Write test for GraphData structure with nodes and links arrays in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T005 [P] [US1] Write test for rendering SVG line elements from links array in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T006 [P] [US1] Write test for links rendered beneath circles (z-order) in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T007 [P] [US1] Write test for continuous tick callback updating positions in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T008 [P] [US1] Write test for drag handlers setting fx/fy during drag in __tests__/components/ForceGraphChart.test.tsx
-- [ ] T009 [P] [US1] Write test for forceLink with distance function in __tests__/components/ForceGraphChart.test.tsx
+- [x] T004 [P] [US1] Write test for GraphData structure with nodes and links arrays in __tests__/components/ForceGraphChart.test.tsx
+- [x] T005 [P] [US1] Write test for rendering SVG line elements from links array in __tests__/components/ForceGraphChart.test.tsx
+- [x] T006 [P] [US1] Write test for links rendered beneath circles (z-order) in __tests__/components/ForceGraphChart.test.tsx
+- [x] T007 [P] [US1] Write test for continuous tick callback updating positions in __tests__/components/ForceGraphChart.test.tsx
+- [x] T008 [P] [US1] Write test for drag handlers setting fx/fy during drag in __tests__/components/ForceGraphChart.test.tsx
+- [x] T009 [P] [US1] Write test for forceLink with distance function in __tests__/components/ForceGraphChart.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Create hardcoded example GraphData in app/components/ForceGraphChart.tsx (matching Observable structure: nodes with id, links with source/target/value)
-- [ ] T011 [US1] Update ForceGraphChartProps interface to accept data: GraphData instead of data: TreeNode in app/components/ForceGraphChart.tsx
-- [ ] T012 [US1] Remove transformTreeToGraph call, use example data directly in app/components/ForceGraphChart.tsx
-- [ ] T013 [US1] Add forceLink to simulation configuration in app/components/ForceGraphChart.tsx with .id(d => d.id)
-- [ ] T014 [US1] Replace pre-computed layout with continuous simulation.on("tick", callback) pattern in app/components/ForceGraphChart.tsx
-- [ ] T015 [US1] Implement tick callback that updates state: setNodes([...nodes]) on each tick in app/components/ForceGraphChart.tsx
-- [ ] T016 [US1] Add requestAnimationFrame throttling to tick callback for 60fps limit in app/components/ForceGraphChart.tsx
-- [ ] T017 [US1] Render SVG <line> elements before <circle> elements in app/components/ForceGraphChart.tsx
-- [ ] T018 [US1] Set line x1/y1/x2/y2 from link.source.x/y and link.target.x/y in app/components/ForceGraphChart.tsx
-- [ ] T019 [US1] Update drag handlers: set node.fx/fy on dragstart, update during drag, clear on dragend in app/components/ForceGraphChart.tsx
-- [ ] T020 [US1] Remove maxTicks limit and alpha threshold stop from simulation in app/components/ForceGraphChart.tsx (let it run continuously)
-- [ ] T021 [US1] Test with example data: verify graph renders with connected nodes in browser at localhost:3000
+- [x] T010 [US1] Create hardcoded example GraphData in app/components/ForceGraphChart.tsx (matching Observable structure: nodes with id, links with source/target/value)
+- [x] T011 [US1] Update ForceGraphChartProps interface to accept data: GraphData instead of data: TreeNode in app/components/ForceGraphChart.tsx
+- [x] T012 [US1] Remove transformTreeToGraph call, use example data directly in app/components/ForceGraphChart.tsx
+- [x] T013 [US1] Add forceLink to simulation configuration in app/components/ForceGraphChart.tsx with .id(d => d.id)
+- [x] T014 [US1] Replace pre-computed layout with continuous simulation.on("tick", callback) pattern in app/components/ForceGraphChart.tsx
+- [x] T015 [US1] Implement tick callback that updates state: setNodes([...nodes]) on each tick in app/components/ForceGraphChart.tsx
+- [x] T016 [US1] Add requestAnimationFrame throttling to tick callback for 60fps limit in app/components/ForceGraphChart.tsx
+- [x] T017 [US1] Render SVG <line> elements before <circle> elements in app/components/ForceGraphChart.tsx
+- [x] T018 [US1] Set line x1/y1/x2/y2 from link.source.x/y and link.target.x/y in app/components/ForceGraphChart.tsx
+- [x] T019 [US1] Update drag handlers: set node.fx/fy on dragstart, update during drag, clear on dragend in app/components/ForceGraphChart.tsx
+- [x] T020 [US1] Remove maxTicks limit and alpha threshold stop from simulation in app/components/ForceGraphChart.tsx (let it run continuously)
+- [x] T021 [US1] Test with example data: verify graph renders with connected nodes in browser at localhost:3000
 
 **Checkpoint**: Network graph displays with example data, nodes draggable with links updating in real-time, regardless of actual repository input
 
