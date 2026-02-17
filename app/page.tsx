@@ -5,6 +5,8 @@ import RepositorySelector from './components/RepositorySelector';
 import DateRangeSelector from './components/DateRangeSelector';
 import { CoChangeGraph } from '@/lib/git/types';
 import ForceDirectedGraph from './components/force-directed-graph';
+import CirclePackingGraph from './components/circle-packing-graph';
+import FileOccurrenceTable from './components/FileOccurrenceTable';
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
@@ -102,9 +104,21 @@ export default function HomePage() {
           </div>
           {/* Graph area: take as much width as possible */}
           {graphData && (
-            <div style={{ width: '100%', minHeight: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc', padding: 0 }}>
-              <ForceDirectedGraph data={graphData} />
-            </div>
+            <>
+              <div style={{ width: '100%', minHeight: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc', padding: 0 }}>
+                <ForceDirectedGraph data={graphData} />
+              </div>
+              {/* Circle Packing Graph placeholder below ForceDirectedGraph */}
+              <div style={{ width: '100%', minHeight: 600, marginTop: 24 }}>
+                <CirclePackingGraph
+                  width={windowSize.width}
+                  height={windowSize.height}
+                  packingData={graphData?.packingData}
+                />
+              </div>
+              {/* File Occurrence Table below Circle Packing Graph */}
+              <FileOccurrenceTable graphData={graphData} />
+            </>
           )}
         </div>
       </main>

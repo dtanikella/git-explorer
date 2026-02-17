@@ -6,6 +6,17 @@ export async function analyzeRepository(repoPath: string, timeRange: TimeRangePr
   const timeConfig = createTimeRangeConfig(timeRange);
   const commits = await getCommits(repoPath, timeConfig);
 
+  const graphData = buildForceDirectedGraphData(commits);
+  const packingData = buildPackingGraphData(commits);
+
+
+  return {
+    ...graphData,
+    packingData: packingData,
+  };
+}
+
+function buildForceDirectedGraphData(commits: Array<{ files: string[] }>) {
   // Build file commit counts and file types
   const fileCommitCounts = new Map<string, number>();
   const fileTypes = new Map<string, string>();
@@ -50,4 +61,69 @@ export async function analyzeRepository(repoPath: string, timeRange: TimeRangePr
   });
 
   return { nodes, links };
+}
+
+// Build a hierarchical tree structure for circle packing, similar to flare-2.json
+export function buildPackingGraphData(commits: Array<{ files: string[] }>) {
+  // Helper to insert a file path into the tree
+  function insertPath(root: any, path: string, value: number) {
+    const parts = path.split('/');
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      let child = node.children.find((c: any) => c.name === part);
+      if (!child) {
+        child = { name: part, children: [] };
+        node.children.push(child);
+      }
+      node = child;
+    }
+    // At leaf, set value
+    if (!node.value) node.value = 0;
+    node.value += value;
+  }
+
+  // Count commits per file
+  const fileCommitCounts = new Map<string, number>();
+  for (const commit of commits) {
+    for (const file of commit.files) {
+      fileCommitCounts.set(file, (fileCommitCounts.get(file) || 0) + 1);
+    }
+  }
+
+  // Build tree
+  const tree = { name: 'root', children: [] };
+  for (const [file, count] of fileCommitCounts.entries()) {
+    insertPath(tree, file, count);
+  }
+
+  // Recursively clean up tree: remove empty children, sum values for folders
+  function finalize(node) {
+    if (node.children && node.children.length > 0) {
+      node.children = node.children.map(finalize);
+      node.value = node.children.reduce((sum, c) => sum + (c.value || 0), 0);
+      // Remove children if all are leaves with value
+      if (node.children.every((c) => !c.children || c.children.length === 0)) {
+        node.children = node.children.filter((c) => c.value);
+      }
+    }
+    return node;
+  }
+  return finalize(tree);
+}
+
+export function buildMultiLineGraphData(commits: Array<{ date: string, files: Array<{ file: string, additions: number, deletions: number }> }>) {
+  const result: Record<string, Array<{ timestamp: string, linesChanged: number }>> = {};
+  for (const commit of commits) {
+    const { date, files } = commit;
+    for (const fileStat of files) {
+      const { file, additions, deletions } = fileStat;
+      const linesChanged = additions + deletions;
+      if (!result[file]) {
+        result[file] = [];
+      }
+      result[file].push({ timestamp: date, linesChanged });
+    }
+  }
+  return result;
 }

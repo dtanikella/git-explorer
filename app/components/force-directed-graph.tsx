@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
 
 interface ForceDirectedGraphProps {
@@ -11,6 +11,11 @@ interface ForceDirectedGraphProps {
 export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
+  // Deep clone nodes and links to avoid D3 mutating React props
+  const clonedNodes = useMemo(() => data.nodes.map(n => ({ ...n })), [data.nodes]);
+  const clonedLinks = useMemo(() => data.links.map(l => ({ ...l })), [data.links]);
+
+
   useEffect(() => {
     if (!svgRef.current) return;
 
@@ -21,28 +26,51 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
+    // Compute min/max link value for scaling
+    const linkValues = clonedLinks.map((l: any) => l.value || 1);
+    const minValue = Math.min(...linkValues);
+    const maxValue = Math.max(...linkValues);
+
+    // Link distance: inversely proportional to value, clamped between 50 and 200
+    function getLinkDistance(d: any) {
+      if (maxValue === minValue) return 200; // fallback if all values are same
+      // Higher value = shorter distance
+      const norm = (d.value - minValue) / (maxValue - minValue);
+      return 200 - 150 * norm; // 200 (min value) to 50 (max value)
+    }
+
     // Simulation
-    const simulation = d3.forceSimulation(data.nodes)
-      .force('link', d3.forceLink(data.links).id((d: any) => d.id).distance(50))
-      .force('charge', d3.forceManyBody().strength(-50))
+    const simulation = d3.forceSimulation(clonedNodes)
+      .force('link', d3.forceLink(clonedLinks).id((d: any) => d.id).distance(getLinkDistance))
+      .force('charge', d3.forceManyBody().strength(-250))
       .force("x", d3.forceX())
       .force("y", d3.forceY());
 
     // Draw links
-    const link = svg.append('g')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', 0.6)
-      .selectAll('line')
-      .data(data.links)
-      .join('line')
-      .attr('stroke-width', (d: any) => Math.sqrt(d.value));
+    // Opacity proportional to cochange frequency (link value)
+    const linkOpacityScale = d3.scaleLinear()
+      .domain([minValue, maxValue])
+      .range([0.2, 1]);
 
-    const tooltip = d3.select("body")
+    const link = svg.append('g')
+      .attr('stroke', '#000000')
+      .selectAll('line')
+      .data(clonedLinks)
+      .join('line')
+      .attr('stroke-width', (d: any) => Math.sqrt(d.value))
+      .attr('stroke-opacity', (d: any) => linkOpacityScale(d.value));
+
+    // Debounced tooltip logic
+    let tooltip = d3.select("body").select("div.tooltip");
+    if (tooltip.empty()) {
+      tooltip = d3.select("body")
         .append("div")
         .attr("class", "tooltip")
         .style("position", "absolute")
         .style("visibility", "hidden")
-        .style("pointer-events", "none"); 
+        .style("pointer-events", "none");
+    }
+    let tooltipTimer: NodeJS.Timeout | null = null;
 
     // Draw nodes
     // Custom color logic by filetype
@@ -59,9 +87,17 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
       .attr('stroke', '#fff')
       .attr('stroke-width', 1.5)
       .selectAll('circle')
-      .data(data.nodes)
+      .data(clonedNodes)
       .join('circle')
-      .attr('r', (d: any) => d.radius ? 4 + d.radius : 8)
+      .attr('r', (d: any) => {
+        const name = d.filename || d.id || '';
+        // Test/spec files: match if filename contains test/spec/__tests__ or ends with .test. or .spec.
+        if (/test|spec|__tests__|\.test\.|\.spec\./i.test(name)) return 10;
+        if (name.endsWith('.rb')) return d.radius ? 7 * d.radius : 15;
+        if (name.endsWith('.tsx') || name.endsWith('.ts')) return d.radius ? 7 * d.radius : 15;
+        // All other files: exempt from 'r' rule, use 10
+        return 10;
+      })
       .attr('fill', getNodeColor)
       .call(drag(simulation));
 
@@ -79,20 +115,25 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
         .attr('cy', (d: any) => d.y);
     });
 
+
     node
-    .on("mouseenter", function(event, d) {
-      tooltip
-      .style("visibility", "visible")
-      .html(`<strong>${d.filename}</strong>`);
-    })
-    .on("mousemove", function(event) {
+      .on("mouseenter", function(event, d) {
+        if (tooltipTimer) clearTimeout(tooltipTimer);
+        tooltipTimer = setTimeout(() => {
+          tooltip
+            .style("visibility", "visible")
+            .html(`<strong>${d.filename}</strong>`);
+        }, 300);
+      })
+      .on("mousemove", function(event) {
         tooltip
-        .style("top", (event.pageY - 10) + "px")
-        .style("left", (event.pageX + 10) + "px");
-    })
-    .on("mouseleave", function() {
+          .style("top", (event.pageY - 10) + "px")
+          .style("left", (event.pageX + 10) + "px");
+      })
+      .on("mouseleave", function() {
+        if (tooltipTimer) clearTimeout(tooltipTimer);
         tooltip.style("visibility", "hidden");
-    });
+      });
 
 
     function drag(simulation: any) {
@@ -126,6 +167,9 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
 
     return () => {
       simulation.stop();
+      // Clean up tooltip to prevent memory leak
+      if (tooltipTimer) clearTimeout(tooltipTimer);
+      tooltip.remove();
     };
   }, [data]);
 
