@@ -143,7 +143,6 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         source: isLocal ? 'local' : 'package',
       };
       importNodeMap.set(specifier, importNode);
-      nodes.push(importNode);
       nodeMap.set(importId, importNode);
     }
     return importNode.id;
@@ -227,17 +226,8 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
             source: isLocal ? 'local' : 'package',
           };
           importNodeMap.set(specifier, importNode);
-          nodes.push(importNode);
           nodeMap.set(importId, importNode);
         }
-
-        const importEdge: ImportEdge = {
-          id: nextEdgeId(),
-          type: 'import',
-          source: fileId,
-          target: importNode.id,
-        };
-        edges.push(importEdge);
 
         if (isLocal) {
           pendingLocalImports.push({
@@ -270,16 +260,6 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         nodeMap.set(fnId, fnNode);
         fileNode.children.push(fnId);
         fnMap.set(fnName, fnId);
-
-        if (isExported) {
-          edges.push({
-            id: nextEdgeId(),
-            type: 'export',
-            source: fileId,
-            target: fnId,
-            isReexport: false,
-          } as ExportEdge);
-        }
       }
 
       // Class declarations
@@ -331,13 +311,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         fileNode.children.push(classId);
 
         if (isExported) {
-          edges.push({
-            id: nextEdgeId(),
-            type: 'export',
-            source: fileId,
-            target: classId,
-            isReexport: false,
-          } as ExportEdge);
+          // export edge removed (US1)
         }
       }
 
@@ -378,13 +352,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         fileNode.children.push(ifaceId);
 
         if (isExported) {
-          edges.push({
-            id: nextEdgeId(),
-            type: 'export',
-            source: fileId,
-            target: ifaceId,
-            isReexport: false,
-          } as ExportEdge);
+          // export edge removed (US1)
         }
       }
 
@@ -418,13 +386,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
             fnMap.set(fnName, fnId);
 
             if (isExported) {
-              edges.push({
-                id: nextEdgeId(),
-                type: 'export',
-                source: fileId,
-                target: fnId,
-                isReexport: false,
-              } as ExportEdge);
+              // export edge removed (US1)
             }
           }
         }
@@ -464,16 +426,11 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       reexportTarget = ensureFallbackImportNode(specifier, parentFolderId);
     }
 
-    edges.push({
-      id: nextEdgeId(),
-      type: 'export',
-      source: sourceFileId,
-      target: reexportTarget,
-      isReexport: true,
-    } as ExportEdge);
+    // re-export edge removed (US1)
+    void reexportTarget;
   }
 
-  // Resolve local import specifiers to their actual FileNodes
+  // Resolve local import specifiers (kept for potential future use; no edges emitted)
   const emittedResolutionEdges = new Set<string>();
   for (const { importNodeId, specifier, sourceFileName } of pendingLocalImports) {
     const resolvedModule = ts.resolveModuleName(
@@ -487,15 +444,8 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       const resolvedRelative = path.relative(repoPath, resolvedFile);
       const resolvedFileId = `file:${resolvedRelative}`;
       const edgeKey = `${importNodeId}→${resolvedFileId}`;
-      if (nodeMap.has(resolvedFileId) && !emittedResolutionEdges.has(edgeKey)) {
-        emittedResolutionEdges.add(edgeKey);
-        edges.push({
-          id: nextEdgeId(),
-          type: 'import',
-          source: importNodeId,
-          target: resolvedFileId,
-        });
-      }
+      // import resolution edges removed (US1)
+      emittedResolutionEdges.add(edgeKey);
     }
   }
 

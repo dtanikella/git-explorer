@@ -41,19 +41,19 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T002 [P] [US1] Add unit test: analyzer returns zero import-type edges in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T003 [P] [US1] Add unit test: analyzer returns zero export-type edges in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T004 [P] [US1] Add unit test: analyzer returns zero IMPORT-kind nodes in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T005 [P] [US1] Add unit test: analyzer returns only contains and call edge types in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T005b [P] [US1] Add unit test: analyzer still returns call edges after edge simplification (FR-003 preservation) in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T002 [P] [US1] Add unit test: analyzer returns zero import-type edges in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T003 [P] [US1] Add unit test: analyzer returns zero export-type edges in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T004 [P] [US1] Add unit test: analyzer returns zero IMPORT-kind nodes in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T005 [P] [US1] Add unit test: analyzer returns only contains and call edge types in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T005b [P] [US1] Add unit test: analyzer still returns call edges after edge simplification (FR-003 preservation) in `__tests__/unit/ts-analyzer.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Remove import edge emission from first-pass loop in `lib/ts/analyzer.ts` (remove `edges.push(importEdge)` calls)
-- [ ] T007 [US1] Remove export edge emission from first-pass loop in `lib/ts/analyzer.ts` (remove `edges.push({type:'export'...})` for functions, classes, interfaces)
-- [ ] T008 [US1] Remove re-export edge emission from pending re-exports processing in `lib/ts/analyzer.ts`
-- [ ] T009 [US1] Stop pushing ImportNode to `nodes[]` array in `lib/ts/analyzer.ts` (keep internal `importNodeMap` for call resolution)
-- [ ] T010 [US1] Update `contains-edges` rule to `{ linkDistance: 100, linkStrength: 0.6 }`, remove `import-edges` and `export-edges` from `defaultEdgeRules`, and remove `import-local` and `import-package` from `defaultNodeRules` in `lib/ts/default-rules.ts`
+- [x] T006 [US1] Remove import edge emission from first-pass loop in `lib/ts/analyzer.ts` (remove `edges.push(importEdge)` calls)
+- [x] T007 [US1] Remove export edge emission from first-pass loop in `lib/ts/analyzer.ts` (remove `edges.push({type:'export'...})` for functions, classes, interfaces)
+- [x] T008 [US1] Remove re-export edge emission from pending re-exports processing in `lib/ts/analyzer.ts`
+- [x] T009 [US1] Stop pushing ImportNode to `nodes[]` array in `lib/ts/analyzer.ts` (keep internal `importNodeMap` for call resolution)
+- [x] T010 [US1] Update `contains-edges` rule to `{ linkDistance: 100, linkStrength: 0.6 }`, remove `import-edges` and `export-edges` from `defaultEdgeRules`, and remove `import-local` and `import-package` from `defaultNodeRules` in `lib/ts/default-rules.ts`
 
 **Checkpoint**: Graph now shows only structural (contains) and call edges. No import/export edges or ImportNodes. All T002–T005b tests pass.
 

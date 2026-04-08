@@ -75,22 +75,6 @@ export const defaultNodeRules: NodeForceRule[] = [
     forces: { charge: -150, collideRadius: 12 },
     style: { color: '#8b5cf6', radius: 7 },
   },
-  {
-    id: 'import-local',
-    label: 'Local Imports',
-    enabled: true,
-    match: (n) => n.kind === 'IMPORT' && n.source === 'local',
-    forces: { charge: -50, collideRadius: 6 },
-    style: { color: '#94a3b8', radius: 4 },
-  },
-  {
-    id: 'import-package',
-    label: 'Package Imports',
-    enabled: true,
-    match: (n) => n.kind === 'IMPORT' && n.source === 'package',
-    forces: { charge: -50, collideRadius: 6, zone: 'right' },
-    style: { color: '#3b82f6', radius: 4 },
-  },
 ];
 
 export const defaultEdgeRules: EdgeForceRule[] = [
@@ -99,24 +83,8 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'Contains Edges',
     enabled: true,
     match: (e) => e.type === 'contains',
-    forces: { linkDistance: 60, linkStrength: 0.2 },
+    forces: { linkDistance: 100, linkStrength: 0.6 },
     style: { color: '#e5e7eb', width: 0.5 },
-  },
-  {
-    id: 'import-edges',
-    label: 'Import Edges',
-    enabled: true,
-    match: (e) => e.type === 'import',
-    forces: { linkDistance: 80, linkStrength: 0.6 },
-    style: { color: '#94a3b8', width: 1 },
-  },
-  {
-    id: 'export-edges',
-    label: 'Export Edges',
-    enabled: true,
-    match: (e) => e.type === 'export',
-    forces: { linkDistance: 60, linkStrength: 0.7 },
-    style: { color: '#6366f1', width: 1.5 },
   },
   {
     id: 'call-same-file',

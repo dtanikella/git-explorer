@@ -63,9 +63,6 @@ describe('analyzeTypeScriptRepo', () => {
       { name: 'b', type: 'number' },
     ]);
     expect(fns[0].kind === 'FUNCTION' && fns[0].returnType).toBe('number');
-
-    const exportEdges = result.edges.filter((e) => e.type === 'export');
-    expect(exportEdges).toHaveLength(1);
   });
 
   it('creates ClassNode for class declarations', () => {
@@ -107,7 +104,7 @@ describe('analyzeTypeScriptRepo', () => {
     expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].methodCount).toBe(1);
   });
 
-  it('creates ImportNode and ImportEdge for imports', () => {
+  it('does not create ImportNode or ImportEdge for imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
         import { readFile } from 'fs';
@@ -121,22 +118,10 @@ describe('analyzeTypeScriptRepo', () => {
     const result = analyzeTypeScriptRepo(repoDir);
 
     const imports = result.nodes.filter((n) => n.kind === 'IMPORT');
-    expect(imports.length).toBeGreaterThanOrEqual(2);
-
-    const packageImport = imports.find(
-      (n) => n.kind === 'IMPORT' && n.name === 'fs'
-    );
-    expect(packageImport).toBeDefined();
-    expect(packageImport!.kind === 'IMPORT' && packageImport!.source).toBe('package');
-
-    const localImport = imports.find(
-      (n) => n.kind === 'IMPORT' && n.name === './utils'
-    );
-    expect(localImport).toBeDefined();
-    expect(localImport!.kind === 'IMPORT' && localImport!.source).toBe('local');
+    expect(imports.length).toBe(0);
 
     const importEdges = result.edges.filter((e) => e.type === 'import');
-    expect(importEdges.length).toBeGreaterThanOrEqual(2);
+    expect(importEdges.length).toBe(0);
   });
 
   it('creates CallEdge for intra-file function calls', () => {
@@ -190,7 +175,7 @@ describe('analyzeTypeScriptRepo', () => {
     expect(callEdge).toBeDefined();
   });
 
-  it('creates ExportEdge with isReexport=true targeting the re-exported FileNode', () => {
+  it('does not create ExportEdge for re-exports', () => {
     repoDir = createTempRepo({
       'src/math.ts': `export function add(a: number, b: number): number { return a + b; }`,
       'src/index.ts': `export { add } from './math';`,
@@ -200,14 +185,7 @@ describe('analyzeTypeScriptRepo', () => {
     const reexportEdges = result.edges.filter(
       (e) => e.type === 'export' && (e as any).isReexport === true
     );
-    expect(reexportEdges.length).toBeGreaterThanOrEqual(1);
-
-    // Target must be a FileNode, not an ImportNode
-    const reexportEdge = reexportEdges[0];
-    const targetNode = result.nodes.find((n) => n.id === reexportEdge.target);
-    expect(targetNode).toBeDefined();
-    expect(targetNode!.kind).toBe('FILE');
-    expect((targetNode as any).name).toBe('math.ts');
+    expect(reexportEdges.length).toBe(0);
   });
 
   it('populates parent, children, and siblings on all nodes', () => {
@@ -337,7 +315,7 @@ describe('analyzeTypeScriptRepo', () => {
     expect(folderToFile).toBeDefined();
   });
 
-  it('emits ImportNode→FileNode edge for resolved local imports', () => {
+  it('does not emit ImportNode or resolution edges for local imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
         import { helper } from './utils';
@@ -356,18 +334,10 @@ describe('analyzeTypeScriptRepo', () => {
     const importNode = result.nodes.find(
       (n) => n.kind === 'IMPORT' && n.name === './utils'
     );
-    expect(importNode).toBeDefined();
+    expect(importNode).toBeUndefined();
 
-    const utilsFile = result.nodes.find(
-      (n) => n.kind === 'FILE' && n.name === 'utils.ts'
-    );
-    expect(utilsFile).toBeDefined();
-
-    // Exactly one ImportNode → FileNode resolution edge (deduplicated)
-    const resolutionEdges = result.edges.filter(
-      (e) => e.type === 'import' && e.source === importNode!.id && e.target === utilsFile!.id
-    );
-    expect(resolutionEdges).toHaveLength(1);
+    const importEdges = result.edges.filter((e) => e.type === 'import');
+    expect(importEdges.length).toBe(0);
   });
 
   it('emits call edges with callScope same-file for intra-file calls', () => {
@@ -385,5 +355,84 @@ describe('analyzeTypeScriptRepo', () => {
     for (const edge of callEdges) {
       expect((edge as import('@/lib/ts/types').CallEdge).callScope).toBe('same-file');
     }
+  });
+});
+
+describe('US1: Simplified Edge View', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempRepo(repoDir);
+  });
+
+  // T002
+  it('[T002] returns zero import-type edges', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFile } from 'fs';
+        import { helper } from './utils';
+        export const x = 1;
+      `,
+      'src/utils.ts': `export function helper() { return 1; }`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    expect(result.edges.filter((e) => e.type === 'import').length).toBe(0);
+  });
+
+  // T003
+  it('[T003] returns zero export-type edges', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `
+        export function helper() { return 1; }
+        export class MyClass {}
+        export interface MyInterface { id: string; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    expect(result.edges.filter((e) => e.type === 'export').length).toBe(0);
+  });
+
+  // T004
+  it('[T004] returns zero IMPORT-kind nodes', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFile } from 'fs';
+        import { helper } from './utils';
+        export const x = 1;
+      `,
+      'src/utils.ts': `export function helper() { return 1; }`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    expect(result.nodes.filter((n) => n.kind === 'IMPORT').length).toBe(0);
+  });
+
+  // T005
+  it('[T005] edges contain only contains and call types', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFile } from 'fs';
+        import { helper } from './utils';
+        export const x = 1;
+      `,
+      'src/utils.ts': `
+        export function helper(): number { return 1; }
+        function double(x: number): number { return x * 2; }
+        export function quadruple(x: number): number { return double(double(x)); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    expect(result.edges.every((e) => e.type === 'contains' || e.type === 'call')).toBe(true);
+  });
+
+  // T005b
+  it('[T005b] still emits call edges after edge simplification', () => {
+    repoDir = createTempRepo({
+      'src/math.ts': `
+        function double(x: number): number { return x * 2; }
+        export function quadruple(x: number): number { return double(double(x)); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    expect(result.edges.filter((e) => e.type === 'call').length).toBeGreaterThan(0);
   });
 });
