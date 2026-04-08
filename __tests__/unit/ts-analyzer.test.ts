@@ -320,7 +320,7 @@ describe('analyzeTypeScriptRepo', () => {
     const result = analyzeTypeScriptRepo(repoDir);
 
     const containsEdges = result.edges.filter((e) => e.type === 'contains');
-    expect(containsEdges.length).toBeGreaterThanOrEqual(2); // root→src, src→utils, utils→helpers.ts
+    expect(containsEdges.length).toBeGreaterThanOrEqual(3); // root→src, src→utils, utils→helpers.ts
 
     const utilsFolder = result.nodes.find(
       (n) => n.kind === 'FOLDER' && n.name === 'utils'

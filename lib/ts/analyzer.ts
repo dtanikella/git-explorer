@@ -538,7 +538,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       type: 'contains',
       source: node.parent,
       target: node.id,
-    } as ContainsEdge);
+    });
   }
 
   return { nodes, edges };
