@@ -1,13 +1,39 @@
 import { NodeForceRule, EdgeForceRule } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
+  // Test files — must precede general file rules so first-match-wins gives test styling
+  {
+    id: 'file-test',
+    label: 'Test Files',
+    enabled: true,
+    match: (n) =>
+      n.kind === 'FILE' &&
+      (n.path.includes('.test.ts') ||
+        n.path.includes('.test.tsx') ||
+        n.path.includes('.spec.ts') ||
+        n.path.includes('.spec.tsx') ||
+        n.path.split('/').includes('__tests__')),
+    forces: { charge: -80, collideRadius: 6 },
+    style: { color: '#e5e7eb', radius: 3 },
+  },
+  // Children of test files — must precede general function/class/interface rules
+  {
+    id: 'test-children',
+    label: 'Test File Children',
+    enabled: true,
+    match: (n) =>
+      (n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE') &&
+      !!n.inTestFile,
+    forces: { charge: -40, collideRadius: 4 },
+    style: { color: '#e5e7eb', radius: 2 },
+  },
   {
     id: 'folder-nodes',
     label: 'Folders',
     enabled: true,
     match: (n) => n.kind === 'FOLDER',
     forces: { charge: -400, collideRadius: 30, zone: 'center' },
-    style: { color: '#6366f1', radius: 14 },
+    style: { color: '#d1d5db', radius: 12 },
   },
   {
     id: 'file-tsx',
@@ -15,7 +41,7 @@ export const defaultNodeRules: NodeForceRule[] = [
     enabled: true,
     match: (n) => n.kind === 'FILE' && n.fileType === 'tsx',
     forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#3b82f6', radius: 8 },
+    style: { color: '#9ca3af', radius: 8 },
   },
   {
     id: 'file-ts',
@@ -23,7 +49,7 @@ export const defaultNodeRules: NodeForceRule[] = [
     enabled: true,
     match: (n) => n.kind === 'FILE' && n.fileType === 'ts',
     forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#2563eb', radius: 8 },
+    style: { color: '#9ca3af', radius: 8 },
   },
   {
     id: 'function-nodes',
@@ -68,6 +94,14 @@ export const defaultNodeRules: NodeForceRule[] = [
 ];
 
 export const defaultEdgeRules: EdgeForceRule[] = [
+  {
+    id: 'contains-edges',
+    label: 'Contains Edges',
+    enabled: true,
+    match: (e) => e.type === 'contains',
+    forces: { linkDistance: 60, linkStrength: 0.2 },
+    style: { color: '#e5e7eb', width: 0.5 },
+  },
   {
     id: 'import-edges',
     label: 'Import Edges',

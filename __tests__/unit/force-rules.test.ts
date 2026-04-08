@@ -239,7 +239,7 @@ describe('default rules integration', () => {
     expect(forces.charge).toBe(-200);
     expect(forces.collideRadius).toBe(15);
     const style = evaluateNodeStyle(fileNode, defaultNodeRules);
-    expect(style.color).toBe('#2563eb');
+    expect(style.color).toBe('#9ca3af');
     expect(style.radius).toBe(8);
   });
 
@@ -249,8 +249,8 @@ describe('default rules integration', () => {
     expect(forces.charge).toBe(-400);
     expect(forces.zone).toBe('center');
     const style = evaluateNodeStyle(folderNode, defaultNodeRules);
-    expect(style.color).toBe('#6366f1');
-    expect(style.radius).toBe(14);
+    expect(style.color).toBe('#d1d5db');
+    expect(style.radius).toBe(12);
   });
 
   it('evaluates default edge rules for an import edge', () => {
