@@ -104,10 +104,9 @@ describe('analyzeTypeScriptRepo', () => {
     expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].methodCount).toBe(1);
   });
 
-  it('does not create ImportNode or ImportEdge for imports', () => {
+  it('does not create ImportNode or ImportEdge for local imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
-        import { readFile } from 'fs';
         import { helper } from './utils';
         export const x = 1;
       `,
@@ -117,8 +116,8 @@ describe('analyzeTypeScriptRepo', () => {
     });
     const result = analyzeTypeScriptRepo(repoDir);
 
-    const imports = result.nodes.filter((n) => n.kind === 'IMPORT');
-    expect(imports.length).toBe(0);
+    const localImports = result.nodes.filter((n) => n.kind === 'IMPORT' && n.name === './utils');
+    expect(localImports.length).toBe(0);
 
     const importEdges = result.edges.filter((e) => e.type === 'import');
     expect(importEdges.length).toBe(0);
@@ -366,10 +365,9 @@ describe('US1: Simplified Edge View', () => {
   });
 
   // T002
-  it('[T002] returns zero import-type edges', () => {
+  it('[T002] returns zero import-type edges for local imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
-        import { readFile } from 'fs';
         import { helper } from './utils';
         export const x = 1;
       `,
@@ -393,10 +391,9 @@ describe('US1: Simplified Edge View', () => {
   });
 
   // T004
-  it('[T004] returns zero IMPORT-kind nodes', () => {
+  it('[T004] returns zero IMPORT-kind nodes for local imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
-        import { readFile } from 'fs';
         import { helper } from './utils';
         export const x = 1;
       `,
@@ -407,10 +404,9 @@ describe('US1: Simplified Edge View', () => {
   });
 
   // T005
-  it('[T005] edges contain only contains and call types', () => {
+  it('[T005] edges contain only contains, call, and uses types', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
-        import { readFile } from 'fs';
         import { helper } from './utils';
         export const x = 1;
       `,
@@ -421,7 +417,7 @@ describe('US1: Simplified Edge View', () => {
       `,
     });
     const result = analyzeTypeScriptRepo(repoDir);
-    expect(result.edges.every((e) => e.type === 'contains' || e.type === 'call')).toBe(true);
+    expect(result.edges.every((e) => e.type === 'contains' || e.type === 'call' || e.type === 'uses')).toBe(true);
   });
 
   // T005b
@@ -508,5 +504,207 @@ describe('US2: Hide Test Files', () => {
         (n.id.includes('.test.') || n.id.includes('.spec.') || n.id.includes('__tests__'))
     );
     expect(testFileNodes.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Cross-File Edges', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempRepo(repoDir);
+  });
+
+  it('emits cross-file call edge for named import function call', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): number { return 1; }`,
+      'src/index.ts': `
+        import { helper } from './utils';
+        export function main(): number { return helper(); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const mainFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'main');
+    const helperFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'helper');
+    expect(mainFn).toBeDefined();
+    expect(helperFn).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === mainFn!.id && e.target === helperFn!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('cross-file');
+  });
+
+  it('emits cross-file call edge for renamed import', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): number { return 1; }`,
+      'src/index.ts': `
+        import { helper as h } from './utils';
+        export function main(): number { return h(); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const mainFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'main');
+    const helperFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'helper');
+    expect(mainFn).toBeDefined();
+    expect(helperFn).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === mainFn!.id && e.target === helperFn!.id
+    );
+    expect(callEdge).toBeDefined();
+  });
+
+  it('emits uses edge for cross-file type reference in function param', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `export interface Config { host: string; port: number; }`,
+      'src/index.ts': `
+        import { Config } from './types';
+        export function init(config: Config): void {}
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const initFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'init');
+    const configIface = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Config');
+    expect(initFn).toBeDefined();
+    expect(configIface).toBeDefined();
+
+    const usesEdge = result.edges.find(
+      (e) => e.type === 'uses' && e.source === initFn!.id && e.target === configIface!.id
+    );
+    expect(usesEdge).toBeDefined();
+    expect((usesEdge as import('@/lib/ts/types').UsesEdge).usageKind).toBe('type-reference');
+  });
+
+  it('emits uses edge for cross-file return type reference', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `export interface Result { value: number; }`,
+      'src/index.ts': `
+        import { Result } from './types';
+        export function compute(): Result { return { value: 42 }; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const computeFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'compute');
+    const resultIface = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Result');
+    expect(computeFn).toBeDefined();
+    expect(resultIface).toBeDefined();
+
+    const usesEdge = result.edges.find(
+      (e) => e.type === 'uses' && e.source === computeFn!.id && e.target === resultIface!.id
+    );
+    expect(usesEdge).toBeDefined();
+  });
+
+  it('emits uses edge with usageKind extends for cross-file class extends', () => {
+    repoDir = createTempRepo({
+      'src/base.ts': `export class BaseService { start(): void {} }`,
+      'src/app.ts': `
+        import { BaseService } from './base';
+        export class AppService extends BaseService {}
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const appService = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'AppService');
+    const baseService = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'BaseService');
+    expect(appService).toBeDefined();
+    expect(baseService).toBeDefined();
+
+    const usesEdge = result.edges.find(
+      (e) => e.type === 'uses' && e.source === appService!.id && e.target === baseService!.id
+    );
+    expect(usesEdge).toBeDefined();
+    expect((usesEdge as import('@/lib/ts/types').UsesEdge).usageKind).toBe('extends');
+  });
+
+  it('emits uses edge with usageKind implements for cross-file class implements', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `export interface Runnable { run(): void; }`,
+      'src/app.ts': `
+        import { Runnable } from './types';
+        export class AppService implements Runnable { run(): void {} }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const appService = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'AppService');
+    const runnable = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Runnable');
+    expect(appService).toBeDefined();
+    expect(runnable).toBeDefined();
+
+    const usesEdge = result.edges.find(
+      (e) => e.type === 'uses' && e.source === appService!.id && e.target === runnable!.id
+    );
+    expect(usesEdge).toBeDefined();
+    expect((usesEdge as import('@/lib/ts/types').UsesEdge).usageKind).toBe('implements');
+  });
+
+  it('emits uses edge for cross-file interface extends', () => {
+    repoDir = createTempRepo({
+      'src/base.ts': `export interface Base { id: string; }`,
+      'src/extended.ts': `
+        import { Base } from './base';
+        export interface Extended extends Base { name: string; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const extended = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Extended');
+    const base = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Base');
+    expect(extended).toBeDefined();
+    expect(base).toBeDefined();
+
+    const usesEdge = result.edges.find(
+      (e) => e.type === 'uses' && e.source === extended!.id && e.target === base!.id
+    );
+    expect(usesEdge).toBeDefined();
+    expect((usesEdge as import('@/lib/ts/types').UsesEdge).usageKind).toBe('extends');
+  });
+
+  it('emits cross-file call edge for namespace import', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): number { return 1; }`,
+      'src/index.ts': `
+        import * as utils from './utils';
+        export function main(): number { return utils.helper(); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const mainFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'main');
+    const helperFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'helper');
+    expect(mainFn).toBeDefined();
+    expect(helperFn).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === mainFn!.id && e.target === helperFn!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('cross-file');
+  });
+
+  it('deduplicates uses edges per source+target+usageKind', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `export interface Config { host: string; port: number; }`,
+      'src/index.ts': `
+        import { Config } from './types';
+        export function init(config: Config): Config { return config; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const initFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'init');
+    const configIface = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Config');
+
+    const usesEdges = result.edges.filter(
+      (e) => e.type === 'uses' && e.source === initFn!.id && e.target === configIface!.id
+    );
+    // param type + return type should be deduplicated to one type-reference edge
+    expect(usesEdges).toHaveLength(1);
   });
 });

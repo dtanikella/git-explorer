@@ -13,8 +13,17 @@ import {
   ImportEdge,
   ExportEdge,
   CallEdge,
+  UsesEdge,
   Param,
 } from './types';
+
+interface ImportBinding {
+  sourceFilePath: string;
+  localName: string;
+  originalName: string;
+  specifier: string;
+  isNamespace: boolean;
+}
 
 export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFiles?: boolean }): TsGraphData {
   const hideTestFiles = options?.hideTestFiles ?? true;
@@ -179,6 +188,9 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     sourceFileName: string;
   }> = [];
 
+  // Collect import bindings (named/default/namespace) for cross-file symbol resolution
+  const importBindings: ImportBinding[] = [];
+
   // First pass: emit file/folder nodes and declarations
   for (const sourceFile of sourceFiles) {
     if (hideTestFiles && isTestFile(sourceFile.fileName)) continue;
@@ -253,6 +265,45 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
             specifier,
             sourceFileName: filePath,
           });
+
+          // Collect import bindings for cross-file symbol resolution
+          const importClause = node.importClause;
+          if (importClause) {
+            // Default import: import Foo from './foo'
+            if (importClause.name) {
+              importBindings.push({
+                sourceFilePath: filePath,
+                localName: importClause.name.text,
+                originalName: 'default',
+                specifier,
+                isNamespace: false,
+              });
+            }
+            const namedBindings = importClause.namedBindings;
+            if (namedBindings) {
+              if (ts.isNamespaceImport(namedBindings)) {
+                // Namespace import: import * as ns from './foo'
+                importBindings.push({
+                  sourceFilePath: filePath,
+                  localName: namedBindings.name.text,
+                  originalName: '*',
+                  specifier,
+                  isNamespace: true,
+                });
+              } else if (ts.isNamedImports(namedBindings)) {
+                // Named imports: import { foo, bar as baz } from './foo'
+                for (const el of namedBindings.elements) {
+                  importBindings.push({
+                    sourceFilePath: filePath,
+                    localName: el.name.text,
+                    originalName: el.propertyName ? el.propertyName.text : el.name.text,
+                    specifier,
+                    isNamespace: false,
+                  });
+                }
+              }
+            }
+          }
         }
       }
 
@@ -467,18 +518,165 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }
   }
 
-  // Second pass: call edges (intra-file function calls)
+  // Build cross-file symbol resolution map:
+  // For each local import binding, resolve specifier → target file → target declaration node
+  // Result: crossFileSymbolMap.get(sourceFilePath).get(localName) → targetNodeId
+  const crossFileSymbolMap = new Map<string, Map<string, string>>();
+  // Track namespace prefixes separately: nsMap.get(sourceFilePath).get(nsName) → resolved target file path
+  const namespaceMap = new Map<string, Map<string, string>>();
+
+  for (const binding of importBindings) {
+    const resolvedModule = ts.resolveModuleName(
+      binding.specifier,
+      binding.sourceFilePath,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+    const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
+    if (!resolvedFile || !resolvedFile.startsWith(repoPath)) continue;
+
+    const resolvedRelative = path.relative(repoPath, resolvedFile);
+
+    if (binding.isNamespace) {
+      // Namespace import: store mapping from namespace name → resolved file path
+      if (!namespaceMap.has(binding.sourceFilePath)) {
+        namespaceMap.set(binding.sourceFilePath, new Map());
+      }
+      namespaceMap.get(binding.sourceFilePath)!.set(binding.localName, resolvedFile);
+      continue;
+    }
+
+    // Try to find the target declaration node by matching originalName against known node ID patterns
+    const candidateIds = [
+      `fn:${resolvedRelative}:${binding.originalName}`,
+      `iface:${resolvedRelative}:${binding.originalName}`,
+      `class:${resolvedRelative}:${binding.originalName}`,
+    ];
+
+    let targetNodeId: string | undefined;
+    for (const candidateId of candidateIds) {
+      if (nodeMap.has(candidateId)) {
+        targetNodeId = candidateId;
+        break;
+      }
+    }
+
+    if (targetNodeId) {
+      if (!crossFileSymbolMap.has(binding.sourceFilePath)) {
+        crossFileSymbolMap.set(binding.sourceFilePath, new Map());
+      }
+      crossFileSymbolMap.get(binding.sourceFilePath)!.set(binding.localName, targetNodeId);
+    }
+  }
+
+  // Helper: resolve a name (or ns.name) to a cross-file target node ID
+  function resolveCrossFileSymbol(filePath: string, name: string): string | undefined {
+    // Direct named import match
+    const fileSymbols = crossFileSymbolMap.get(filePath);
+    if (fileSymbols?.has(name)) return fileSymbols.get(name);
+
+    // Namespace import match: ns.foo → resolve ns to target file, then look up foo
+    const dotIdx = name.indexOf('.');
+    if (dotIdx > 0) {
+      const nsName = name.substring(0, dotIdx);
+      const memberName = name.substring(dotIdx + 1);
+      const nsTargetFile = namespaceMap.get(filePath)?.get(nsName);
+      if (nsTargetFile) {
+        const targetRelative = path.relative(repoPath, nsTargetFile);
+        const candidateIds = [
+          `fn:${targetRelative}:${memberName}`,
+          `iface:${targetRelative}:${memberName}`,
+          `class:${targetRelative}:${memberName}`,
+        ];
+        for (const candidateId of candidateIds) {
+          if (nodeMap.has(candidateId)) return candidateId;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  // Second pass: call edges (intra-file + cross-file) and uses edges
+  const usesEdgeSet = new Set<string>();
+
   for (const sourceFile of sourceFiles) {
     const filePath = sourceFile.fileName;
     const fnMap = fileFunctionMap.get(filePath);
-    if (!fnMap || fnMap.size === 0) continue;
 
-    function walkForCalls(node: ts.Node, enclosingFnId: string | null): void {
+    // Helper to emit a uses edge (deduplicated by source+target+usageKind)
+    function emitUsesEdge(sourceId: string, targetId: string, usageKind: 'type-reference' | 'extends' | 'implements'): void {
+      const usesKey = `${sourceId}→${targetId}:${usageKind}`;
+      if (!usesEdgeSet.has(usesKey)) {
+        usesEdgeSet.add(usesKey);
+        edges.push({
+          id: nextEdgeId(),
+          type: 'uses',
+          source: sourceId,
+          target: targetId,
+          usageKind,
+        } as UsesEdge);
+      }
+    }
+
+    // Walk type references in a type node and emit uses edges for cross-file types
+    function walkTypeForRefs(typeNode: ts.TypeNode | undefined, enclosingDeclId: string): void {
+      if (!typeNode) return;
+      if (ts.isTypeReferenceNode(typeNode)) {
+        const typeName = typeNode.typeName.getText(sourceFile);
+        const targetId = resolveCrossFileSymbol(filePath, typeName);
+        if (targetId) {
+          emitUsesEdge(enclosingDeclId, targetId, 'type-reference');
+        }
+        // Also check type arguments (generics)
+        if (typeNode.typeArguments) {
+          for (const ta of typeNode.typeArguments) {
+            walkTypeForRefs(ta, enclosingDeclId);
+          }
+        }
+        return;
+      }
+      if (ts.isUnionTypeNode(typeNode) || ts.isIntersectionTypeNode(typeNode)) {
+        for (const t of typeNode.types) {
+          walkTypeForRefs(t, enclosingDeclId);
+        }
+        return;
+      }
+      if (ts.isArrayTypeNode(typeNode)) {
+        walkTypeForRefs(typeNode.elementType, enclosingDeclId);
+        return;
+      }
+      if (ts.isTupleTypeNode(typeNode)) {
+        for (const el of typeNode.elements) {
+          walkTypeForRefs(el, enclosingDeclId);
+        }
+        return;
+      }
+    }
+
+    // Walk function signatures for type references
+    function walkFunctionSignatureForRefs(
+      params: ts.NodeArray<ts.ParameterDeclaration>,
+      returnType: ts.TypeNode | undefined,
+      enclosingDeclId: string,
+    ): void {
+      for (const param of params) {
+        walkTypeForRefs(param.type, enclosingDeclId);
+      }
+      walkTypeForRefs(returnType, enclosingDeclId);
+    }
+
+    function walkForCallsAndRefs(node: ts.Node, enclosingFnId: string | null): void {
+      const relativePath = path.relative(repoPath, filePath);
+
       // FunctionDeclaration
       if (ts.isFunctionDeclaration(node) && node.name) {
-        const fnId = fnMap!.get(node.name.text) ?? null;
+        const fnId = fnMap?.get(node.name.text) ?? null;
+        if (fnId) {
+          walkFunctionSignatureForRefs(node.parameters, node.type, fnId);
+        }
         if (node.body) {
-          ts.forEachChild(node.body, (child) => walkForCalls(child, fnId));
+          ts.forEachChild(node.body, (child) => walkForCallsAndRefs(child, fnId));
         }
         return;
       }
@@ -490,39 +688,103 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         node.initializer &&
         (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
       ) {
-        const fnId = fnMap!.get(node.name.text) ?? null;
+        const fnId = fnMap?.get(node.name.text) ?? null;
+        if (fnId) {
+          walkFunctionSignatureForRefs(node.initializer.parameters, node.initializer.type, fnId);
+        }
         const body = node.initializer.body;
         if (body && ts.isBlock(body)) {
-          ts.forEachChild(body, (child) => walkForCalls(child, fnId));
+          ts.forEachChild(body, (child) => walkForCallsAndRefs(child, fnId));
         } else if (body) {
-          // Concise arrow body: single expression
-          walkForCalls(body, fnId);
+          walkForCallsAndRefs(body, fnId);
         }
         return;
       }
 
+      // Class declarations: extends and implements heritage
+      if (ts.isClassDeclaration(node) && node.name) {
+        const classId = `class:${relativePath}:${node.name.text}`;
+        if (nodeMap.has(classId)) {
+          for (const clause of node.heritageClauses ?? []) {
+            const usageKind = clause.token === ts.SyntaxKind.ExtendsKeyword ? 'extends' : 'implements';
+            for (const typeExpr of clause.types) {
+              const name = typeExpr.expression.getText(sourceFile);
+              const targetId = resolveCrossFileSymbol(filePath, name);
+              if (targetId) {
+                emitUsesEdge(classId, targetId, usageKind as 'extends' | 'implements');
+              }
+            }
+          }
+          // Walk class member types
+          for (const member of node.members) {
+            if (ts.isPropertyDeclaration(member) && member.type) {
+              walkTypeForRefs(member.type, classId);
+            }
+            if (ts.isMethodDeclaration(member) && member.name) {
+              walkFunctionSignatureForRefs(member.parameters, member.type, classId);
+            }
+          }
+        }
+        return;
+      }
+
+      // Interface declarations: extends heritage
+      if (ts.isInterfaceDeclaration(node)) {
+        const ifaceId = `iface:${relativePath}:${node.name.text}`;
+        if (nodeMap.has(ifaceId)) {
+          for (const clause of node.heritageClauses ?? []) {
+            for (const typeExpr of clause.types) {
+              const name = typeExpr.expression.getText(sourceFile);
+              const targetId = resolveCrossFileSymbol(filePath, name);
+              if (targetId) {
+                emitUsesEdge(ifaceId, targetId, 'extends');
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      // Call expressions: resolve both intra-file and cross-file
       if (ts.isCallExpression(node) && enclosingFnId) {
         const calleeName = node.expression.getText(sourceFile);
-        const targetId = fnMap!.get(calleeName);
-        if (targetId && targetId !== enclosingFnId) {
-          const callKey = `${enclosingFnId}:${targetId}`;
+        // Try intra-file first
+        const localTargetId = fnMap?.get(calleeName);
+        if (localTargetId && localTargetId !== enclosingFnId) {
+          const callKey = `${enclosingFnId}:${localTargetId}`;
           if (!callEdgeSet.has(callKey)) {
             callEdgeSet.add(callKey);
             edges.push({
               id: nextEdgeId(),
               type: 'call',
               source: enclosingFnId,
-              target: targetId,
-              callScope: getCallScope(enclosingFnId, targetId),
+              target: localTargetId,
+              callScope: getCallScope(enclosingFnId, localTargetId),
             } as CallEdge);
+          }
+        } else if (!localTargetId) {
+          // Try cross-file resolution
+          const crossTargetId = resolveCrossFileSymbol(filePath, calleeName);
+          if (crossTargetId && crossTargetId !== enclosingFnId) {
+            const callKey = `${enclosingFnId}:${crossTargetId}`;
+            if (!callEdgeSet.has(callKey)) {
+              callEdgeSet.add(callKey);
+              edges.push({
+                id: nextEdgeId(),
+                type: 'call',
+                source: enclosingFnId,
+                target: crossTargetId,
+                callScope: 'cross-file',
+              } as CallEdge);
+            }
           }
         }
       }
 
-      ts.forEachChild(node, (child) => walkForCalls(child, enclosingFnId));
+      ts.forEachChild(node, (child) => walkForCallsAndRefs(child, enclosingFnId));
     }
 
-    ts.forEachChild(sourceFile, (node) => walkForCalls(node, null));
+    ts.forEachChild(sourceFile, (node) => walkForCallsAndRefs(node, null));
   }
 
   // Third pass: populate parent→children for folder/file hierarchy

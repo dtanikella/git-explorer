@@ -1,4 +1,4 @@
-import { NodeForceRule, EdgeForceRule, CallEdge, ContainsEdge } from './types';
+import { NodeForceRule, EdgeForceRule, CallEdge, ContainsEdge, UsesEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
   {
@@ -83,5 +83,37 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'same-file',
     forces: { linkDistance: 30, linkStrength: 1.0 },
     style: { color: '#374151', width: 1 },
+  },
+  {
+    id: 'call-cross-file',
+    label: 'Cross-File Calls',
+    enabled: true,
+    match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'cross-file',
+    forces: { linkDistance: 150, linkStrength: 0.3 },
+    style: { color: '#10b981', width: 1.5 },
+  },
+  {
+    id: 'uses-type-ref',
+    label: 'Type References',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'type-reference',
+    forces: { linkDistance: 160, linkStrength: 0.2 },
+    style: { color: '#8b5cf6', width: 1 },
+  },
+  {
+    id: 'uses-extends',
+    label: 'Extends',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'extends',
+    forces: { linkDistance: 120, linkStrength: 0.4 },
+    style: { color: '#f59e0b', width: 1.5 },
+  },
+  {
+    id: 'uses-implements',
+    label: 'Implements',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'implements',
+    forces: { linkDistance: 120, linkStrength: 0.4 },
+    style: { color: '#ec4899', width: 1.5 },
   },
 ];
