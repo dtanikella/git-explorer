@@ -33,86 +33,58 @@ export const EDGE_STYLE_DEFAULTS: ResolvedEdgeStyle = {
   width: 1,
 };
 
-export function evaluateNodeForces(
-  node: TsNode,
-  rules: NodeForceRule[]
-): ResolvedNodeForces {
-  const result = { ...NODE_FORCE_DEFAULTS };
+// Generic first-match-wins evaluator: iterates rules top-down, fills each
+// property of the result once from the first rule that matches and defines it.
+function evaluate<TInput, TRule extends { enabled: boolean; match: (input: TInput) => boolean }, TSubObj extends object, TResult extends TSubObj>(
+  input: TInput,
+  rules: TRule[],
+  getSubObj: (rule: TRule) => TSubObj | undefined,
+  defaults: TResult
+): TResult {
+  const result = { ...defaults } as TResult;
   const resolved = new Set<string>();
 
   for (const rule of rules) {
-    if (!rule.enabled || !rule.forces || !rule.match(node)) continue;
-    const forces = rule.forces;
-    for (const key of Object.keys(forces) as (keyof typeof forces)[]) {
-      if (!resolved.has(key) && forces[key] !== undefined) {
-        (result as any)[key] = forces[key];
-        resolved.add(key);
+    if (!rule.enabled) continue;
+    const sub = getSubObj(rule);
+    if (!sub) continue;
+    if (!rule.match(input)) continue;
+
+    for (const key of Object.keys(sub) as (keyof TSubObj)[]) {
+      if (!resolved.has(key as string) && sub[key] !== undefined) {
+        (result as Record<string, unknown>)[key as string] = sub[key];
+        resolved.add(key as string);
       }
     }
   }
 
   return result;
+}
+
+export function evaluateNodeForces(
+  node: TsNode,
+  rules: NodeForceRule[]
+): ResolvedNodeForces {
+  return evaluate(node, rules, (r) => r.forces, NODE_FORCE_DEFAULTS);
 }
 
 export function evaluateNodeStyle(
   node: TsNode,
   rules: NodeForceRule[]
 ): ResolvedNodeStyle {
-  const result = { ...NODE_STYLE_DEFAULTS };
-  const resolved = new Set<string>();
-
-  for (const rule of rules) {
-    if (!rule.enabled || !rule.style || !rule.match(node)) continue;
-    const style = rule.style;
-    for (const key of Object.keys(style) as (keyof typeof style)[]) {
-      if (!resolved.has(key) && style[key] !== undefined) {
-        (result as any)[key] = style[key];
-        resolved.add(key);
-      }
-    }
-  }
-
-  return result;
+  return evaluate(node, rules, (r) => r.style, NODE_STYLE_DEFAULTS);
 }
 
 export function evaluateEdgeForces(
   edge: TsEdge,
   rules: EdgeForceRule[]
 ): ResolvedEdgeForces {
-  const result = { ...EDGE_FORCE_DEFAULTS };
-  const resolved = new Set<string>();
-
-  for (const rule of rules) {
-    if (!rule.enabled || !rule.forces || !rule.match(edge)) continue;
-    const forces = rule.forces;
-    for (const key of Object.keys(forces) as (keyof typeof forces)[]) {
-      if (!resolved.has(key) && forces[key] !== undefined) {
-        (result as any)[key] = forces[key];
-        resolved.add(key);
-      }
-    }
-  }
-
-  return result;
+  return evaluate(edge, rules, (r) => r.forces, EDGE_FORCE_DEFAULTS);
 }
 
 export function evaluateEdgeStyle(
   edge: TsEdge,
   rules: EdgeForceRule[]
 ): ResolvedEdgeStyle {
-  const result = { ...EDGE_STYLE_DEFAULTS };
-  const resolved = new Set<string>();
-
-  for (const rule of rules) {
-    if (!rule.enabled || !rule.style || !rule.match(edge)) continue;
-    const style = rule.style;
-    for (const key of Object.keys(style) as (keyof typeof style)[]) {
-      if (!resolved.has(key) && style[key] !== undefined) {
-        (result as any)[key] = style[key];
-        resolved.add(key);
-      }
-    }
-  }
-
-  return result;
+  return evaluate(edge, rules, (r) => r.style, EDGE_STYLE_DEFAULTS);
 }

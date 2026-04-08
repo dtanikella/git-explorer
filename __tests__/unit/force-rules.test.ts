@@ -197,3 +197,36 @@ describe('evaluateEdgeStyle', () => {
     expect(result.width).toBe(EDGE_STYLE_DEFAULTS.width);
   });
 });
+
+describe('edge cases', () => {
+  it('evaluateNodeForces ignores a matching enabled rule with no forces sub-object', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'No forces defined',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        // no forces property
+        style: { color: '#aabbcc' },
+      },
+    ];
+    const result = evaluateNodeForces(node, rules);
+    expect(result).toEqual(NODE_FORCE_DEFAULTS);
+  });
+
+  it('evaluateNodeStyle skips disabled rules', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Disabled style',
+        enabled: false,
+        match: (n) => n.kind === 'FILE',
+        style: { color: '#ff0000' },
+      },
+    ];
+    const result = evaluateNodeStyle(node, rules);
+    expect(result).toEqual(NODE_STYLE_DEFAULTS);
+  });
+});
