@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
@@ -273,7 +274,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     return () => {
       simulation.stop();
     };
-  }, [simNodes, simEdges]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [simNodes, simEdges]);
 
   // Effect 2: visual attribute update — runs when rules change, no simulation rebuild
   useEffect(() => {
