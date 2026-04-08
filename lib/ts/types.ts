@@ -15,6 +15,7 @@ export interface TsNodeBase {
   parent: string | null;
   children: string[];
   siblings: string[];
+  inTestFile?: boolean;
 }
 
 export interface FolderNode extends TsNodeBase {
@@ -68,7 +69,7 @@ export type TsNode = FolderNode | FileNode | FunctionNode | ClassNode | Interfac
 
 export interface TsEdgeBase {
   id: string;
-  type: 'import' | 'export' | 'call';
+  type: 'import' | 'export' | 'call' | 'contains';
   source: string;
   target: string;
 }
@@ -86,7 +87,11 @@ export interface CallEdge extends TsEdgeBase {
   type: 'call';
 }
 
-export type TsEdge = ImportEdge | ExportEdge | CallEdge;
+export interface ContainsEdge extends TsEdgeBase {
+  type: 'contains';
+}
+
+export type TsEdge = ImportEdge | ExportEdge | CallEdge | ContainsEdge;
 
 // --- Graph Data ---
 

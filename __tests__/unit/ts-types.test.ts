@@ -10,6 +10,7 @@ import {
   ImportEdge,
   ExportEdge,
   CallEdge,
+  ContainsEdge,
 } from '@/lib/ts/types';
 
 describe('TsNode type discrimination', () => {
@@ -156,5 +157,15 @@ describe('TsEdge type discrimination', () => {
       target: 'fn-helper',
     };
     expect(edge.type).toBe('call');
+  });
+
+  it('discriminates ContainsEdge by type', () => {
+    const edge: TsEdge = {
+      id: 'edge-4',
+      type: 'contains',
+      source: 'folder-src',
+      target: 'file-app',
+    };
+    expect(edge.type).toBe('contains');
   });
 });
