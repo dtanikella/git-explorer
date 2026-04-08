@@ -34,11 +34,43 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
 
 export default function TsGraph({ repoPath }: TsGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLBodyElement, unknown> | null>(null);
+  const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
+  const nodeSelectionRef = useRef<d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown> | null>(null);
+  const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null);
+
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
   const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
+
+  // Refs to snapshot current rules for use inside Effect 1 without stale closure warnings
+  const nodeRulesRef = useRef(nodeRules);
+  const edgeRulesRef = useRef(edgeRules);
+  useEffect(() => { nodeRulesRef.current = nodeRules; }, [nodeRules]);
+  useEffect(() => { edgeRulesRef.current = edgeRules; }, [edgeRules]);
+
+  // Tooltip lifecycle effect — mount/unmount only
+  useEffect(() => {
+    const tip = d3
+      .select('body')
+      .append('div')
+      .style('position', 'absolute')
+      .style('visibility', 'hidden')
+      .style('pointer-events', 'none')
+      .style('background', '#1f2937')
+      .style('color', '#f9fafb')
+      .style('padding', '6px 10px')
+      .style('border-radius', '4px')
+      .style('font-size', '12px')
+      .style('z-index', '1000');
+    tooltipRef.current = tip;
+    return () => {
+      tip.remove();
+      tooltipRef.current = null;
+    };
+  }, []); // mount/unmount only
 
   useEffect(() => {
     if (!repoPath) return;
@@ -79,6 +111,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     [graphData]
   );
 
+  // Effect 1: simulation setup — runs only when simNodes or simEdges change
   useEffect(() => {
     if (!svgRef.current || simNodes.length === 0) return;
 
@@ -96,6 +129,9 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       center: { x: width / 2, y: height / 2 },
     };
 
+    const currentNodeRules = nodeRulesRef.current;
+    const currentEdgeRules = edgeRulesRef.current;
+
     const simulation = d3
       .forceSimulation<SimNode>(simNodes)
       .force(
@@ -103,32 +139,32 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         d3
           .forceLink<SimNode, SimEdge>(simEdges)
           .id((d) => d.id)
-          .distance((d) => evaluateEdgeForces(d.data, edgeRules).linkDistance)
-          .strength((d) => evaluateEdgeForces(d.data, edgeRules).linkStrength)
+          .distance((d) => evaluateEdgeForces(d.data, currentEdgeRules).linkDistance)
+          .strength((d) => evaluateEdgeForces(d.data, currentEdgeRules).linkStrength)
       )
       .force(
         'charge',
         d3.forceManyBody<SimNode>().strength((d) =>
-          evaluateNodeForces(d.data, nodeRules).charge
+          evaluateNodeForces(d.data, currentNodeRules).charge
         )
       )
       .force(
         'collide',
         d3.forceCollide<SimNode>().radius((d) =>
-          evaluateNodeForces(d.data, nodeRules).collideRadius
+          evaluateNodeForces(d.data, currentNodeRules).collideRadius
         )
       )
       .force(
         'x',
         d3.forceX<SimNode>()
           .x((d) => {
-            const forces = evaluateNodeForces(d.data, nodeRules);
+            const forces = evaluateNodeForces(d.data, currentNodeRules);
             if (forces.fx !== null) return forces.fx;
             if (forces.zone && zoneMap[forces.zone]) return zoneMap[forces.zone].x;
             return width / 2;
           })
           .strength((d) => {
-            const forces = evaluateNodeForces(d.data, nodeRules);
+            const forces = evaluateNodeForces(d.data, currentNodeRules);
             return forces.zone || forces.fx !== null ? 0.3 : forces.centerStrength;
           })
       )
@@ -136,13 +172,13 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         'y',
         d3.forceY<SimNode>()
           .y((d) => {
-            const forces = evaluateNodeForces(d.data, nodeRules);
+            const forces = evaluateNodeForces(d.data, currentNodeRules);
             if (forces.fy !== null) return forces.fy;
             if (forces.zone && zoneMap[forces.zone]) return zoneMap[forces.zone].y;
             return height / 2;
           })
           .strength((d) => {
-            const forces = evaluateNodeForces(d.data, nodeRules);
+            const forces = evaluateNodeForces(d.data, currentNodeRules);
             return forces.zone || forces.fy !== null ? 0.3 : forces.centerStrength;
           })
       );
@@ -154,52 +190,43 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .selectAll('line')
       .data(simEdges)
       .join('line')
-      .attr('stroke', (d) => evaluateEdgeStyle(d.data, edgeRules).color)
-      .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, edgeRules).width)
-      .attr('stroke-opacity', 0.6);
-
-    let tooltip = d3.select('body').select<HTMLDivElement>('div.ts-graph-tooltip');
-    if (tooltip.empty()) {
-      tooltip = d3
-        .select('body')
-        .append('div')
-        .attr('class', 'ts-graph-tooltip')
-        .style('position', 'absolute')
-        .style('visibility', 'hidden')
-        .style('pointer-events', 'none')
-        .style('background', '#1f2937')
-        .style('color', '#f9fafb')
-        .style('padding', '6px 10px')
-        .style('border-radius', '4px')
-        .style('font-size', '12px')
-        .style('z-index', '1000');
-    }
+      .attr('stroke', (d) => evaluateEdgeStyle(d.data, currentEdgeRules).color)
+      .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, currentEdgeRules).width)
+      .attr('stroke-opacity', 0.6) as d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown>;
 
     const node = g
       .append('g')
       .selectAll('circle')
       .data(simNodes)
       .join('circle')
-      .attr('r', (d) => evaluateNodeStyle(d.data, nodeRules).radius)
-      .attr('fill', (d) => evaluateNodeStyle(d.data, nodeRules).color)
+      .attr('r', (d) => evaluateNodeStyle(d.data, currentNodeRules).radius)
+      .attr('fill', (d) => evaluateNodeStyle(d.data, currentNodeRules).color)
       .attr('stroke', '#fff')
       .attr('stroke-width', 1)
-      .call(drag(simulation));
+      .call(drag(simulation)) as d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>;
+
+    // Store selections and simulation in refs for Effect 2
+    linkSelectionRef.current = link;
+    nodeSelectionRef.current = node;
+    simulationRef.current = simulation;
 
     node
       .on('mouseenter', (event, d) => {
-        const label = 'name' in d.data ? (d.data as any).name : d.id;
-        tooltip
+        if (!tooltipRef.current) return;
+        const label = 'name' in d.data ? (d.data as { name: string }).name : d.id;
+        tooltipRef.current
           .style('visibility', 'visible')
           .html(`<strong>${d.data.kind}</strong>: ${label}`);
       })
       .on('mousemove', (event) => {
-        tooltip
+        if (!tooltipRef.current) return;
+        tooltipRef.current
           .style('top', event.pageY - 10 + 'px')
           .style('left', event.pageX + 10 + 'px');
       })
       .on('mouseleave', () => {
-        tooltip.style('visibility', 'hidden');
+        if (!tooltipRef.current) return;
+        tooltipRef.current.style('visibility', 'hidden');
       });
 
     simulation.on('tick', () => {
@@ -245,9 +272,26 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     return () => {
       simulation.stop();
-      tooltip.remove();
     };
-  }, [simNodes, simEdges, nodeRules, edgeRules]);
+  }, [simNodes, simEdges]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Effect 2: visual attribute update — runs when rules change, no simulation rebuild
+  useEffect(() => {
+    if (!linkSelectionRef.current || !nodeSelectionRef.current) return;
+
+    linkSelectionRef.current
+      .attr('stroke', (d) => evaluateEdgeStyle(d.data, edgeRules).color)
+      .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, edgeRules).width);
+
+    nodeSelectionRef.current
+      .attr('r', (d) => evaluateNodeStyle(d.data, nodeRules).radius)
+      .attr('fill', (d) => evaluateNodeStyle(d.data, nodeRules).color);
+
+    // Reheat simulation slightly for force changes
+    if (simulationRef.current) {
+      simulationRef.current.alpha(0.3).restart();
+    }
+  }, [nodeRules, edgeRules]);
 
   if (loading) {
     return (
