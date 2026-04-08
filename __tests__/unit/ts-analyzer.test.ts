@@ -312,4 +312,28 @@ describe('analyzeTypeScriptRepo', () => {
     expect(normalFn).toBeDefined();
     expect(normalFn!.inTestFile).toBeFalsy();
   });
+
+  it('emits contains edges from folders to child folders and files', () => {
+    repoDir = createTempRepo({
+      'src/utils/helpers.ts': 'export const x = 1;',
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const containsEdges = result.edges.filter((e) => e.type === 'contains');
+    expect(containsEdges.length).toBeGreaterThanOrEqual(2); // root→src, src→utils, utils→helpers.ts
+
+    const utilsFolder = result.nodes.find(
+      (n) => n.kind === 'FOLDER' && n.name === 'utils'
+    );
+    const helpersFile = result.nodes.find(
+      (n) => n.kind === 'FILE' && n.name === 'helpers.ts'
+    );
+    expect(utilsFolder).toBeDefined();
+    expect(helpersFile).toBeDefined();
+
+    const folderToFile = containsEdges.find(
+      (e) => e.source === utilsFolder!.id && e.target === helpersFile!.id
+    );
+    expect(folderToFile).toBeDefined();
+  });
 });

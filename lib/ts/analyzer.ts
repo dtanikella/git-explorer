@@ -13,6 +13,7 @@ import {
   ImportEdge,
   ExportEdge,
   CallEdge,
+  ContainsEdge,
   Param,
 } from './types';
 
@@ -524,6 +525,20 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         node.siblings = siblingIds.filter((s) => s !== id);
       }
     }
+  }
+
+  // Fifth pass: emit contains edges for FOLDER → child-FOLDER and FOLDER → FILE
+  for (const node of nodes) {
+    if (!node.parent) continue;
+    const parentNode = nodeMap.get(node.parent);
+    if (!parentNode || parentNode.kind !== 'FOLDER') continue;
+    if (node.kind !== 'FOLDER' && node.kind !== 'FILE') continue;
+    edges.push({
+      id: nextEdgeId(),
+      type: 'contains',
+      source: node.parent,
+      target: node.id,
+    } as ContainsEdge);
   }
 
   return { nodes, edges };
