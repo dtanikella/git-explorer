@@ -19,7 +19,7 @@
 
 **Purpose**: No new project initialization needed — all changes fit within existing structure. This phase handles only test infrastructure setup.
 
-- [ ] T001 Verify existing test suite passes by running `npm test`
+- [x] T001 Verify existing test suite passes by running `npm test`
 
 ---
 
@@ -116,9 +116,9 @@
 
 **Purpose**: Final validation and cleanup
 
-- [ ] T030 [P] Remove `file-test` and `test-children` node rules from `defaultNodeRules` in `lib/ts/default-rules.ts` (test file nodes no longer emitted by default; rules are dead code)
-- [ ] T031 [US2] Add empty-state handling in `app/components/ts-graph/TsGraph.tsx`: when analyzer returns zero nodes with `hideTestFiles: true`, display a message indicating no non-test files were found
-- [ ] T032 Run full test suite with `npm test` and verify all tests pass
+- [x] T030 [P] Remove `file-test` and `test-children` node rules from `defaultNodeRules` in `lib/ts/default-rules.ts` (test file nodes no longer emitted by default; rules are dead code)
+- [x] T031 [US2] Add empty-state handling in `app/components/ts-graph/TsGraph.tsx`: when analyzer returns zero nodes with `hideTestFiles: true`, display a message indicating no non-test files were found
+- [x] T032 Run full test suite with `npm test` and verify all tests pass
 - [ ] T033 Run quickstart.md validation: start dev server with `npm run dev`, load a TypeScript repo, verify simplified edges and toggle behavior
 
 ---

@@ -261,11 +261,13 @@ describe('default rules integration', () => {
     expect(style.radius).toBe(12);
   });
 
-  it('evaluates default edge rules for an import edge', () => {
+  it('evaluates default edge rules for an import edge (falls through to defaults — import-edges rule removed)', () => {
     const edge = makeImportEdge();
     const forces = evaluateEdgeForces(edge, defaultEdgeRules);
-    expect(forces.linkDistance).toBe(80);
-    expect(forces.linkStrength).toBe(0.6);
+    // import-edges rule was removed in US1; import edges are no longer emitted.
+    // No rule matches, so the function returns the built-in defaults.
+    expect(forces.linkDistance).toBe(100);
+    expect(forces.linkStrength).toBe(0.5);
   });
 
   it('evaluates default edge rules for a same-file call edge', () => {

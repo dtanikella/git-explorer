@@ -1,32 +1,6 @@
 import { NodeForceRule, EdgeForceRule, CallEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
-  // Test files — must precede general file rules so first-match-wins gives test styling
-  {
-    id: 'file-test',
-    label: 'Test Files',
-    enabled: true,
-    match: (n) =>
-      n.kind === 'FILE' &&
-      (n.path.includes('.test.ts') ||
-        n.path.includes('.test.tsx') ||
-        n.path.includes('.spec.ts') ||
-        n.path.includes('.spec.tsx') ||
-        n.path.split('/').includes('__tests__')),
-    forces: { charge: -80, collideRadius: 6 },
-    style: { color: '#e5e7eb', radius: 3 },
-  },
-  // Children of test files — must precede general function/class/interface rules
-  {
-    id: 'test-children',
-    label: 'Test File Children',
-    enabled: true,
-    match: (n) =>
-      (n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE') &&
-      !!n.inTestFile,
-    forces: { charge: -40, collideRadius: 4 },
-    style: { color: '#e5e7eb', radius: 2 },
-  },
   {
     id: 'folder-nodes',
     label: 'Folders',
