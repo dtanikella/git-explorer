@@ -112,9 +112,38 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     return `folder:${relFinal}`;
   }
 
+  function ensureFallbackImportNode(specifier: string, parentFolderId: string): string {
+    let importNode = importNodeMap.get(specifier);
+    if (!importNode) {
+      const importId = `import:${specifier}`;
+      const isLocal = isLocalImport(specifier);
+      importNode = {
+        id: importId,
+        kind: 'IMPORT',
+        parent: isLocal ? parentFolderId : null,
+        children: [],
+        siblings: [],
+        name: specifier,
+        source: isLocal ? 'local' : 'package',
+      };
+      importNodeMap.set(specifier, importNode);
+      nodes.push(importNode);
+      nodeMap.set(importId, importNode);
+    }
+    return importNode.id;
+  }
+
   const sourceFiles = program.getSourceFiles().filter(
     (sf) => !sf.isDeclarationFile && sf.fileName.startsWith(repoPath)
   );
+
+  // Collect re-exports for deferred edge emission (need all FileNodes in nodeMap first)
+  const pendingReexports: Array<{
+    sourceFileId: string;
+    specifier: string;
+    sourceFileName: string;
+    parentFolderId: string;
+  }> = [];
 
   // First pass: emit file/folder nodes and declarations
   for (const sourceFile of sourceFiles) {
@@ -353,78 +382,47 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         }
       }
 
-      // Re-exports
+      // Re-exports: defer edge emission until all FileNodes exist
       if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
         const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
-
-        // Try to resolve the specifier to a FileNode in the repo
-        const resolvedModule = ts.resolveModuleName(
+        pendingReexports.push({
+          sourceFileId: fileId,
           specifier,
-          sourceFile.fileName,
-          program.getCompilerOptions(),
-          ts.sys
-        );
-        const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
-
-        let reexportTarget: string;
-        if (resolvedFile && resolvedFile.startsWith(repoPath)) {
-          const resolvedRelative = path.relative(repoPath, resolvedFile);
-          const resolvedFileId = `file:${resolvedRelative}`;
-          const resolvedFileNode = nodeMap.get(resolvedFileId);
-          if (resolvedFileNode) {
-            reexportTarget = resolvedFileNode.id;
-          } else {
-            // Fall back to ImportNode
-            let importNode = importNodeMap.get(specifier);
-            if (!importNode) {
-              const importId = `import:${specifier}`;
-              const isLocal = isLocalImport(specifier);
-              importNode = {
-                id: importId,
-                kind: 'IMPORT',
-                parent: isLocal ? parentFolderId : null,
-                children: [],
-                siblings: [],
-                name: specifier,
-                source: isLocal ? 'local' : 'package',
-              };
-              importNodeMap.set(specifier, importNode);
-              nodes.push(importNode);
-              nodeMap.set(importId, importNode);
-            }
-            reexportTarget = importNode.id;
-          }
-        } else {
-          // Package re-export: fall back to ImportNode
-          let importNode = importNodeMap.get(specifier);
-          if (!importNode) {
-            const importId = `import:${specifier}`;
-            const isLocal = isLocalImport(specifier);
-            importNode = {
-              id: importId,
-              kind: 'IMPORT',
-              parent: isLocal ? parentFolderId : null,
-              children: [],
-              siblings: [],
-              name: specifier,
-              source: isLocal ? 'local' : 'package',
-            };
-            importNodeMap.set(specifier, importNode);
-            nodes.push(importNode);
-            nodeMap.set(importId, importNode);
-          }
-          reexportTarget = importNode.id;
-        }
-
-        edges.push({
-          id: nextEdgeId(),
-          type: 'export',
-          source: fileId,
-          target: reexportTarget,
-          isReexport: true,
-        } as ExportEdge);
+          sourceFileName: filePath,
+          parentFolderId,
+        });
       }
     });
+  }
+
+  // Emit re-export edges now that all FileNodes are in nodeMap
+  for (const { sourceFileId, specifier, sourceFileName, parentFolderId } of pendingReexports) {
+    const resolvedModule = ts.resolveModuleName(
+      specifier,
+      sourceFileName,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+    const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
+
+    let reexportTarget: string;
+
+    if (resolvedFile && resolvedFile.startsWith(repoPath)) {
+      const resolvedRelative = path.relative(repoPath, resolvedFile);
+      const resolvedFileId = `file:${resolvedRelative}`;
+      const targetNode = nodeMap.get(resolvedFileId);
+      reexportTarget = targetNode ? resolvedFileId : ensureFallbackImportNode(specifier, parentFolderId);
+    } else {
+      reexportTarget = ensureFallbackImportNode(specifier, parentFolderId);
+    }
+
+    edges.push({
+      id: nextEdgeId(),
+      type: 'export',
+      source: sourceFileId,
+      target: reexportTarget,
+      isReexport: true,
+    } as ExportEdge);
   }
 
   // Second pass: call edges (intra-file function calls)

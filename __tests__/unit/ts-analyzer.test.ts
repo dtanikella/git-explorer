@@ -190,6 +190,26 @@ describe('analyzeTypeScriptRepo', () => {
     expect(callEdge).toBeDefined();
   });
 
+  it('creates ExportEdge with isReexport=true targeting the re-exported FileNode', () => {
+    repoDir = createTempRepo({
+      'src/math.ts': `export function add(a: number, b: number): number { return a + b; }`,
+      'src/index.ts': `export { add } from './math';`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const reexportEdges = result.edges.filter(
+      (e) => e.type === 'export' && (e as any).isReexport === true
+    );
+    expect(reexportEdges.length).toBeGreaterThanOrEqual(1);
+
+    // Target must be a FileNode, not an ImportNode
+    const reexportEdge = reexportEdges[0];
+    const targetNode = result.nodes.find((n) => n.id === reexportEdge.target);
+    expect(targetNode).toBeDefined();
+    expect(targetNode!.kind).toBe('FILE');
+    expect((targetNode as any).name).toBe('math.ts');
+  });
+
   it('populates parent, children, and siblings on all nodes', () => {
     repoDir = createTempRepo({
       'src/a.ts': 'export const a = 1;',
