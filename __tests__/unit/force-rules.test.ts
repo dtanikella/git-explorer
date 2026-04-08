@@ -17,6 +17,7 @@ import {
   ImportEdge,
   EdgeForceRule,
 } from '@/lib/ts/types';
+import { defaultNodeRules, defaultEdgeRules } from '@/lib/ts/default-rules';
 
 const makeFileNode = (overrides?: Partial<FileNode>): FileNode => ({
   id: 'file-1',
@@ -228,5 +229,34 @@ describe('edge cases', () => {
     ];
     const result = evaluateNodeStyle(node, rules);
     expect(result).toEqual(NODE_STYLE_DEFAULTS);
+  });
+});
+
+describe('default rules integration', () => {
+  it('evaluates default node rules for a TS FILE node', () => {
+    const fileNode = makeFileNode({ fileType: 'ts' });
+    const forces = evaluateNodeForces(fileNode, defaultNodeRules);
+    expect(forces.charge).toBe(-200);
+    expect(forces.collideRadius).toBe(15);
+    const style = evaluateNodeStyle(fileNode, defaultNodeRules);
+    expect(style.color).toBe('#2563eb');
+    expect(style.radius).toBe(8);
+  });
+
+  it('evaluates default node rules for a FOLDER node', () => {
+    const folderNode = makeFolderNode();
+    const forces = evaluateNodeForces(folderNode, defaultNodeRules);
+    expect(forces.charge).toBe(-400);
+    expect(forces.zone).toBe('center');
+    const style = evaluateNodeStyle(folderNode, defaultNodeRules);
+    expect(style.color).toBe('#6366f1');
+    expect(style.radius).toBe(14);
+  });
+
+  it('evaluates default edge rules for an import edge', () => {
+    const edge = makeImportEdge();
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(80);
+    expect(forces.linkStrength).toBe(0.6);
   });
 });
