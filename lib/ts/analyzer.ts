@@ -67,7 +67,7 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
   }
 
   function isLocalImport(specifier: string): boolean {
-    return specifier.startsWith('.') || specifier.startsWith('/');
+    return specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('@/');
   }
 
   function extractParams(params: ts.NodeArray<ts.ParameterDeclaration>, sourceFile: ts.SourceFile): Param[] {
@@ -229,6 +229,22 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
           };
           importNodeMap.set(specifier, importNode);
           nodeMap.set(importId, importNode);
+          if (!isLocal) {
+            nodes.push(importNode);
+          }
+        }
+
+        if (!isLocal) {
+          const importEdgeKey = `${fileId}→${importNode.id}`;
+          if (!callEdgeSet.has(importEdgeKey)) {
+            callEdgeSet.add(importEdgeKey);
+            edges.push({
+              id: nextEdgeId(),
+              type: 'import',
+              source: fileId,
+              target: importNode.id,
+            } as ImportEdge);
+          }
         }
 
         if (isLocal) {
