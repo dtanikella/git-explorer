@@ -110,6 +110,10 @@ describe('POST /api/ts-analysis', () => {
     expect(response.status).toBe(200);
     expect(result.success).toBe(true);
     expect(result.data).toEqual(mockData);
+    expect(result.metadata).toBeDefined();
+    expect(result.metadata.nodeCount).toBe(1);
+    expect(result.metadata.edgeCount).toBe(0);
+    expect(typeof result.metadata.analysisDurationMs).toBe('number');
   });
 
   it('returns 500 on analyzer error', async () => {

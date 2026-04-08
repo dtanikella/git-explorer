@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const startTime = Date.now();
-    const data = analyzeTypeScriptRepo(repoPath);
+    const data = await analyzeTypeScriptRepo(repoPath);
     const analysisDurationMs = Date.now() - startTime;
 
     return NextResponse.json({
