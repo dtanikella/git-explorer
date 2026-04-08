@@ -15,6 +15,7 @@ import {
   NodeForceRule,
   TsEdge,
   ImportEdge,
+  CallEdge,
   EdgeForceRule,
 } from '@/lib/ts/types';
 import { defaultNodeRules, defaultEdgeRules } from '@/lib/ts/default-rules';
@@ -48,6 +49,15 @@ const makeImportEdge = (overrides?: Partial<ImportEdge>): ImportEdge => ({
   type: 'import',
   source: 'file-1',
   target: 'import-1',
+  ...overrides,
+});
+
+const makeCallEdge = (overrides?: Partial<CallEdge>): CallEdge => ({
+  id: 'edge-call-1',
+  type: 'call',
+  source: 'fn-a',
+  target: 'fn-b',
+  callScope: 'same-file',
   ...overrides,
 });
 
@@ -258,5 +268,32 @@ describe('default rules integration', () => {
     const forces = evaluateEdgeForces(edge, defaultEdgeRules);
     expect(forces.linkDistance).toBe(80);
     expect(forces.linkStrength).toBe(0.6);
+  });
+
+  it('evaluates default edge rules for a same-file call edge', () => {
+    const edge = makeCallEdge({ callScope: 'same-file' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(30);
+    expect(forces.linkStrength).toBe(1.0);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#374151');
+  });
+
+  it('evaluates default edge rules for a cross-file call edge', () => {
+    const edge = makeCallEdge({ callScope: 'cross-file' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(60);
+    expect(forces.linkStrength).toBe(0.6);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#111827');
+  });
+
+  it('evaluates default edge rules for an external call edge', () => {
+    const edge = makeCallEdge({ callScope: 'external' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(100);
+    expect(forces.linkStrength).toBe(0.3);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#3b82f6');
   });
 });

@@ -1,4 +1,4 @@
-import { NodeForceRule, EdgeForceRule } from './types';
+import { NodeForceRule, EdgeForceRule, CallEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
   // Test files — must precede general file rules so first-match-wins gives test styling
@@ -89,7 +89,7 @@ export const defaultNodeRules: NodeForceRule[] = [
     enabled: true,
     match: (n) => n.kind === 'IMPORT' && n.source === 'package',
     forces: { charge: -50, collideRadius: 6, zone: 'right' },
-    style: { color: '#64748b', radius: 4 },
+    style: { color: '#3b82f6', radius: 4 },
   },
 ];
 
@@ -119,11 +119,27 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     style: { color: '#6366f1', width: 1.5 },
   },
   {
-    id: 'call-edges',
-    label: 'Call Edges',
+    id: 'call-same-file',
+    label: 'Same-File Calls',
     enabled: true,
-    match: (e) => e.type === 'call',
-    forces: { linkDistance: 40, linkStrength: 0.8 },
-    style: { color: '#10b981', width: 1 },
+    match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'same-file',
+    forces: { linkDistance: 30, linkStrength: 1.0 },
+    style: { color: '#374151', width: 1 },
+  },
+  {
+    id: 'call-cross-file',
+    label: 'Cross-File Calls',
+    enabled: true,
+    match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'cross-file',
+    forces: { linkDistance: 60, linkStrength: 0.6 },
+    style: { color: '#111827', width: 1 },
+  },
+  {
+    id: 'call-external',
+    label: 'External Calls',
+    enabled: true,
+    match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'external',
+    forces: { linkDistance: 100, linkStrength: 0.3 },
+    style: { color: '#3b82f6', width: 1 },
   },
 ];
