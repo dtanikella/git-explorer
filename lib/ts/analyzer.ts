@@ -47,6 +47,9 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     return `edge-${edgeIdCounter++}`;
   }
 
+  // NOTE: The second pass currently only resolves calls within the same file
+  // (fnMap is per-file), so 'external' and 'cross-file' are reserved for when
+  // the call walker is extended to resolve cross-file and imported call targets.
   function getCallScope(
     sourceFnId: string,
     targetFnId: string

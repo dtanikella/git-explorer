@@ -9,11 +9,9 @@ import {
   EDGE_STYLE_DEFAULTS,
 } from '@/lib/ts/force-rules';
 import {
-  TsNode,
   FileNode,
   FolderNode,
   NodeForceRule,
-  TsEdge,
   ImportEdge,
   CallEdge,
   EdgeForceRule,
