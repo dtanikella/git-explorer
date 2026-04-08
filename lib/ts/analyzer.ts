@@ -13,7 +13,6 @@ import {
   ImportEdge,
   ExportEdge,
   CallEdge,
-  ContainsEdge,
   Param,
 } from './types';
 
