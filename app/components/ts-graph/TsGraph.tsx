@@ -43,6 +43,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hideTestFiles, setHideTestFiles] = useState(true);
   const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
   const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
 
@@ -81,7 +82,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     fetch('/api/ts-analysis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath }),
+      body: JSON.stringify({ repoPath, hideTestFiles }),
     })
       .then((res) => res.json())
       .then((result) => {
@@ -95,7 +96,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         setError(err.message || 'Network error');
       })
       .finally(() => setLoading(false));
-  }, [repoPath]);
+  }, [repoPath, hideTestFiles]);
 
   const simNodes: SimNode[] = useMemo(
     () => graphData?.nodes.map((n) => ({ id: n.id, data: { ...n } })) ?? [],
@@ -315,6 +316,14 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   return (
     <div style={{ display: 'flex', width: '100%', height: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
       <div style={{ flex: 1, position: 'relative' }}>
+        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={hideTestFiles}
+            onChange={(e) => setHideTestFiles(e.target.checked)}
+          />
+          {' '}Hide test files
+        </label>
         <svg
           ref={svgRef}
           width="100%"

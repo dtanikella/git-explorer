@@ -97,16 +97,16 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T023 [P] [US3] Add component test: "Hide test files" checkbox renders and is checked by default in `__tests__/components/TsGraph.test.tsx`
-- [ ] T024 [P] [US3] Add component test: unchecking toggle triggers a new fetch with `hideTestFiles: false` in request body in `__tests__/components/TsGraph.test.tsx`
-- [ ] T025 [P] [US3] Add component test: re-checking toggle triggers a new fetch with `hideTestFiles: true` in request body in `__tests__/components/TsGraph.test.tsx`
+- [x] T023 [P] [US3] Add component test: "Hide test files" checkbox renders and is checked by default in `__tests__/components/TsGraph.test.tsx`
+- [x] T024 [P] [US3] Add component test: unchecking toggle triggers a new fetch with `hideTestFiles: false` in request body in `__tests__/components/TsGraph.test.tsx`
+- [x] T025 [P] [US3] Add component test: re-checking toggle triggers a new fetch with `hideTestFiles: true` in request body in `__tests__/components/TsGraph.test.tsx`
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Add `hideTestFiles` state (`useState(true)`) to TsGraph component in `app/components/ts-graph/TsGraph.tsx`
-- [ ] T027 [US3] Include `hideTestFiles` in the fetch request body in the data-fetching effect in `app/components/ts-graph/TsGraph.tsx`
-- [ ] T028 [US3] Add `hideTestFiles` to the effect dependency array so toggle change triggers re-fetch in `app/components/ts-graph/TsGraph.tsx`
-- [ ] T029 [US3] Render "Hide test files" checkbox toggle above the graph SVG in `app/components/ts-graph/TsGraph.tsx`
+- [x] T026 [US3] Add `hideTestFiles` state (`useState(true)`) to TsGraph component in `app/components/ts-graph/TsGraph.tsx`
+- [x] T027 [US3] Include `hideTestFiles` in the fetch request body in the data-fetching effect in `app/components/ts-graph/TsGraph.tsx`
+- [x] T028 [US3] Add `hideTestFiles` to the effect dependency array so toggle change triggers re-fetch in `app/components/ts-graph/TsGraph.tsx`
+- [x] T029 [US3] Render "Hide test files" checkbox toggle above the graph SVG in `app/components/ts-graph/TsGraph.tsx`
 
 **Checkpoint**: Toggle is visible, defaults to checked. Unchecking triggers re-analysis; test files appear. Checking hides them again. All T023–T025 tests pass.
 
