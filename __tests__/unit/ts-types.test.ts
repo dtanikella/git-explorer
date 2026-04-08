@@ -153,10 +153,12 @@ describe('TsEdge type discrimination', () => {
     const edge: TsEdge = {
       id: 'edge-3',
       type: 'call',
-      source: 'fn-main',
-      target: 'fn-helper',
+      source: 'fn-a',
+      target: 'fn-b',
+      callScope: 'same-file',
     };
     expect(edge.type).toBe('call');
+    expect((edge as CallEdge).callScope).toBe('same-file');
   });
 
   it('discriminates ContainsEdge by type', () => {

@@ -85,6 +85,7 @@ export interface ExportEdge extends TsEdgeBase {
 
 export interface CallEdge extends TsEdgeBase {
   type: 'call';
+  callScope: 'same-file' | 'cross-file' | 'external';
 }
 
 export interface ContainsEdge extends TsEdgeBase {
