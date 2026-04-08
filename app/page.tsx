@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import DateRangeSelector from './components/DateRangeSelector';
 import { CoChangeGraph } from '@/lib/git/types';
+import TsGraph from './components/ts-graph/TsGraph';
 import ForceDirectedGraph from './components/force-directed-graph';
 import CirclePackingGraph from './components/circle-packing-graph';
 import FileOccurrenceTable from './components/FileOccurrenceTable';
@@ -80,6 +81,13 @@ export default function HomePage() {
             </div>
           </div>
           {/* Graph area: take as much width as possible */}
+          {/* TypeScript Repository Graph — shown when repoPath is set */}
+          {repoPath && (
+            <div style={{ width: '100%', marginBottom: 24 }}>
+              <TsGraph repoPath={repoPath} />
+            </div>
+          )}
+          {/* Co-change visualizations — shown when git analysis data is available */}
           {graphData && (
             <>
               <div style={{ width: '100%', minHeight: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc', padding: 0 }}>
