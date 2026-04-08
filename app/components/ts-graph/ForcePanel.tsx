@@ -5,6 +5,8 @@ interface ForcePanelProps {
   edgeRules: EdgeForceRule[];
   onNodeRulesChange: (rules: NodeForceRule[]) => void;
   onEdgeRulesChange: (rules: EdgeForceRule[]) => void;
+  hideTestFiles: boolean;
+  onHideTestFilesChange: (value: boolean) => void;
 }
 
 export default function ForcePanel({
@@ -12,6 +14,8 @@ export default function ForcePanel({
   edgeRules,
   onNodeRulesChange,
   onEdgeRulesChange,
+  hideTestFiles,
+  onHideTestFilesChange,
 }: ForcePanelProps) {
   function toggleNodeRule(id: string) {
     onNodeRulesChange(
@@ -69,6 +73,14 @@ export default function ForcePanel({
         background: '#fafafa',
       }}
     >
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={hideTestFiles}
+          onChange={(e) => onHideTestFilesChange(e.target.checked)}
+        />
+        Hide test files
+      </label>
       <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
         Node Rules
       </h3>

@@ -538,18 +538,28 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }
   }
 
-  // Fifth pass: emit contains edges for FOLDER → child-FOLDER and FOLDER → FILE
+  // Fifth pass: emit contains edges for FOLDER → child-FOLDER, FOLDER → FILE, and FILE → children
   for (const node of nodes) {
     if (!node.parent) continue;
     const parentNode = nodeMap.get(node.parent);
-    if (!parentNode || parentNode.kind !== 'FOLDER') continue;
-    if (node.kind !== 'FOLDER' && node.kind !== 'FILE') continue;
-    edges.push({
-      id: nextEdgeId(),
-      type: 'contains',
-      source: node.parent,
-      target: node.id,
-    });
+    if (!parentNode) continue;
+    if (parentNode.kind === 'FOLDER' && (node.kind === 'FOLDER' || node.kind === 'FILE')) {
+      edges.push({
+        id: nextEdgeId(),
+        type: 'contains',
+        containsScope: 'folder',
+        source: node.parent,
+        target: node.id,
+      });
+    } else if (parentNode.kind === 'FILE' && (node.kind === 'FUNCTION' || node.kind === 'CLASS' || node.kind === 'INTERFACE')) {
+      edges.push({
+        id: nextEdgeId(),
+        type: 'contains',
+        containsScope: 'file',
+        source: node.parent,
+        target: node.id,
+      });
+    }
   }
 
   // Prune empty folders (folders with no contains-edge children)

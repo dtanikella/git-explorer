@@ -315,18 +315,8 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
   if (graphData.nodes.length === 0) {
     return (
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <label style={{ fontSize: 13, color: '#374151', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={hideTestFiles}
-            onChange={(e) => setHideTestFiles(e.target.checked)}
-          />
-          {' '}Hide test files
-        </label>
-        <div style={{ textAlign: 'center', color: '#6b7280' }}>
-          No non-test files found. Uncheck &ldquo;Hide test files&rdquo; to include test files in the graph.
-        </div>
+      <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
+        No non-test files found. Uncheck &ldquo;Hide test files&rdquo; in the panel to include test files in the graph.
       </div>
     );
   }
@@ -334,14 +324,6 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   return (
     <div style={{ display: 'flex', width: '100%', height: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
       <div style={{ flex: 1, position: 'relative' }}>
-        <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={hideTestFiles}
-            onChange={(e) => setHideTestFiles(e.target.checked)}
-          />
-          {' '}Hide test files
-        </label>
         <svg
           ref={svgRef}
           width="100%"
@@ -355,6 +337,8 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         edgeRules={edgeRules}
         onNodeRulesChange={setNodeRules}
         onEdgeRulesChange={setEdgeRules}
+        hideTestFiles={hideTestFiles}
+        onHideTestFilesChange={setHideTestFiles}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { NodeForceRule, EdgeForceRule, CallEdge } from './types';
+import { NodeForceRule, EdgeForceRule, CallEdge, ContainsEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
   {
@@ -54,11 +54,19 @@ export const defaultNodeRules: NodeForceRule[] = [
 export const defaultEdgeRules: EdgeForceRule[] = [
   {
     id: 'contains-edges',
-    label: 'Contains Edges',
+    label: 'Folder Contains',
     enabled: true,
-    match: (e) => e.type === 'contains',
+    match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'folder',
     forces: { linkDistance: 100, linkStrength: 0.6 },
     style: { color: '#e5e7eb', width: 0.5 },
+  },
+  {
+    id: 'file-contains-edges',
+    label: 'File Contains',
+    enabled: true,
+    match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'file',
+    forces: { linkDistance: 100, linkStrength: 0.8 },
+    style: { color: '#374151', width: 1 },
   },
   {
     id: 'call-same-file',

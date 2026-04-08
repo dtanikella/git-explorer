@@ -90,6 +90,7 @@ export interface CallEdge extends TsEdgeBase {
 
 export interface ContainsEdge extends TsEdgeBase {
   type: 'contains';
+  containsScope: 'folder' | 'file';
 }
 
 export type TsEdge = ImportEdge | ExportEdge | CallEdge | ContainsEdge;
