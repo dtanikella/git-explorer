@@ -25,7 +25,7 @@ lib/ts/
   default-rules.ts     ← baseline ruleset shipped with the component
 ```
 
-`TsGraph` is added as a new section in `app/page.tsx`, below the existing `CirclePackingGraph`, following the same pattern as `ForceDirectedGraph` and `CirclePackingGraph`.
+`TsGraph` is added as the first visualization section in `app/page.tsx`, above the existing `ForceDirectedGraph` and `CirclePackingGraph`.
 
 ---
 
@@ -280,7 +280,7 @@ Validates that `repoPath` exists and contains a `tsconfig.json`. Calls `analyzer
 
 ## Page Integration
 
-`TsGraph` is added to `app/page.tsx` as a new section below `CirclePackingGraph`, rendered when `graphData` is available. It makes its own `POST /api/ts-analysis` call using the same `repoPath`.
+`TsGraph` is added to `app/page.tsx` as the first visualization section, above `ForceDirectedGraph` and `CirclePackingGraph`, rendered when `repoPath` is set. It makes its own `POST /api/ts-analysis` call using the same `repoPath`.
 
 ---
 
