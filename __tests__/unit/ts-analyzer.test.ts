@@ -165,6 +165,31 @@ describe('analyzeTypeScriptRepo', () => {
     expect(callEdge).toBeDefined();
   });
 
+  it('creates FunctionNode and CallEdge for arrow functions', () => {
+    repoDir = createTempRepo({
+      'src/arrows.ts': `
+        const greet = (name: string): string => 'Hello ' + name;
+        export const run = (): string => greet('world');
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const fns = result.nodes.filter((n) => n.kind === 'FUNCTION');
+    expect(fns.length).toBeGreaterThanOrEqual(2);
+
+    const greetFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'greet');
+    const runFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'run');
+    expect(greetFn).toBeDefined();
+    expect(runFn).toBeDefined();
+
+    const callEdges = result.edges.filter((e) => e.type === 'call');
+    expect(callEdges.length).toBeGreaterThanOrEqual(1);
+    const callEdge = callEdges.find(
+      (e) => e.source === runFn!.id && e.target === greetFn!.id
+    );
+    expect(callEdge).toBeDefined();
+  });
+
   it('populates parent, children, and siblings on all nodes', () => {
     repoDir = createTempRepo({
       'src/a.ts': 'export const a = 1;',

@@ -52,7 +52,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
 
   function extractParams(params: ts.NodeArray<ts.ParameterDeclaration>, sourceFile: ts.SourceFile): Param[] {
     return params.map((p) => ({
-      name: (p.name as ts.Identifier).text,
+      name: ts.isIdentifier(p.name) ? p.name.text : p.name.getText(sourceFile),
       type: p.type ? p.type.getText(sourceFile) : 'any',
     }));
   }
@@ -312,31 +312,115 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         }
       }
 
+      // Variable declarations: const fn = () => {} or const fn = function() {}
+      if (ts.isVariableStatement(node)) {
+        for (const decl of node.declarationList.declarations) {
+          if (
+            ts.isIdentifier(decl.name) &&
+            decl.initializer &&
+            (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
+          ) {
+            const fnName = decl.name.text;
+            const fnId = `fn:${relativePath}:${fnName}`;
+            const isExported = !!(
+              ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export
+            );
+            const fnNode: FunctionNode = {
+              id: fnId,
+              kind: 'FUNCTION',
+              parent: fileId,
+              children: [],
+              siblings: [],
+              name: fnName,
+              params: extractParams(decl.initializer.parameters, sourceFile),
+              returnType: decl.initializer.type ? decl.initializer.type.getText(sourceFile) : null,
+            };
+            nodes.push(fnNode);
+            nodeMap.set(fnId, fnNode);
+            fileNode.children.push(fnId);
+            fnMap.set(fnName, fnId);
+
+            if (isExported) {
+              edges.push({
+                id: nextEdgeId(),
+                type: 'export',
+                source: fileId,
+                target: fnId,
+                isReexport: false,
+              } as ExportEdge);
+            }
+          }
+        }
+      }
+
       // Re-exports
       if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
         const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
-        let importNode = importNodeMap.get(specifier);
-        if (!importNode) {
-          const importId = `import:${specifier}`;
-          const isLocal = isLocalImport(specifier);
-          importNode = {
-            id: importId,
-            kind: 'IMPORT',
-            parent: isLocal ? parentFolderId : null,
-            children: [],
-            siblings: [],
-            name: specifier,
-            source: isLocal ? 'local' : 'package',
-          };
-          importNodeMap.set(specifier, importNode);
-          nodes.push(importNode);
-          nodeMap.set(importId, importNode);
+
+        // Try to resolve the specifier to a FileNode in the repo
+        const resolvedModule = ts.resolveModuleName(
+          specifier,
+          sourceFile.fileName,
+          program.getCompilerOptions(),
+          ts.sys
+        );
+        const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
+
+        let reexportTarget: string;
+        if (resolvedFile && resolvedFile.startsWith(repoPath)) {
+          const resolvedRelative = path.relative(repoPath, resolvedFile);
+          const resolvedFileId = `file:${resolvedRelative}`;
+          const resolvedFileNode = nodeMap.get(resolvedFileId);
+          if (resolvedFileNode) {
+            reexportTarget = resolvedFileNode.id;
+          } else {
+            // Fall back to ImportNode
+            let importNode = importNodeMap.get(specifier);
+            if (!importNode) {
+              const importId = `import:${specifier}`;
+              const isLocal = isLocalImport(specifier);
+              importNode = {
+                id: importId,
+                kind: 'IMPORT',
+                parent: isLocal ? parentFolderId : null,
+                children: [],
+                siblings: [],
+                name: specifier,
+                source: isLocal ? 'local' : 'package',
+              };
+              importNodeMap.set(specifier, importNode);
+              nodes.push(importNode);
+              nodeMap.set(importId, importNode);
+            }
+            reexportTarget = importNode.id;
+          }
+        } else {
+          // Package re-export: fall back to ImportNode
+          let importNode = importNodeMap.get(specifier);
+          if (!importNode) {
+            const importId = `import:${specifier}`;
+            const isLocal = isLocalImport(specifier);
+            importNode = {
+              id: importId,
+              kind: 'IMPORT',
+              parent: isLocal ? parentFolderId : null,
+              children: [],
+              siblings: [],
+              name: specifier,
+              source: isLocal ? 'local' : 'package',
+            };
+            importNodeMap.set(specifier, importNode);
+            nodes.push(importNode);
+            nodeMap.set(importId, importNode);
+          }
+          reexportTarget = importNode.id;
         }
+
         edges.push({
           id: nextEdgeId(),
           type: 'export',
           source: fileId,
-          target: importNode.id,
+          target: reexportTarget,
           isReexport: true,
         } as ExportEdge);
       }
@@ -350,10 +434,29 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     if (!fnMap || fnMap.size === 0) continue;
 
     function walkForCalls(node: ts.Node, enclosingFnId: string | null): void {
+      // FunctionDeclaration
       if (ts.isFunctionDeclaration(node) && node.name) {
         const fnId = fnMap!.get(node.name.text) ?? null;
         if (node.body) {
           ts.forEachChild(node.body, (child) => walkForCalls(child, fnId));
+        }
+        return;
+      }
+
+      // VariableDeclaration with arrow function or function expression
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+      ) {
+        const fnId = fnMap!.get(node.name.text) ?? null;
+        const body = node.initializer.body;
+        if (body && ts.isBlock(body)) {
+          ts.forEachChild(body, (child) => walkForCalls(child, fnId));
+        } else if (body) {
+          // Concise arrow body: single expression
+          walkForCalls(body, fnId);
         }
         return;
       }
