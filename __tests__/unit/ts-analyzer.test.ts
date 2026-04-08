@@ -369,4 +369,21 @@ describe('analyzeTypeScriptRepo', () => {
     );
     expect(resolutionEdges).toHaveLength(1);
   });
+
+  it('emits call edges with callScope same-file for intra-file calls', () => {
+    repoDir = createTempRepo({
+      'src/math.ts': `
+        export function add(a: number, b: number): number { return a + b; }
+        export function double(x: number): number { return add(x, x); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const callEdges = result.edges.filter((e) => e.type === 'call');
+    expect(callEdges.length).toBeGreaterThan(0);
+
+    for (const edge of callEdges) {
+      expect((edge as import('@/lib/ts/types').CallEdge).callScope).toBe('same-file');
+    }
+  });
 });

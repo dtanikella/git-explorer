@@ -47,6 +47,21 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     return `edge-${edgeIdCounter++}`;
   }
 
+  function getCallScope(
+    sourceFnId: string,
+    targetFnId: string
+  ): 'same-file' | 'cross-file' | 'external' {
+    const targetNode = nodeMap.get(targetFnId);
+    if (targetNode?.kind === 'IMPORT' && (targetNode as ImportNode).source === 'package') {
+      return 'external';
+    }
+    const sourceNode = nodeMap.get(sourceFnId);
+    if (sourceNode && targetNode && sourceNode.parent === targetNode.parent) {
+      return 'same-file';
+    }
+    return 'cross-file';
+  }
+
   function isLocalImport(specifier: string): boolean {
     return specifier.startsWith('.') || specifier.startsWith('/');
   }
@@ -527,6 +542,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
               type: 'call',
               source: enclosingFnId,
               target: targetId,
+              callScope: getCallScope(enclosingFnId, targetId),
             } as CallEdge);
           }
         }
