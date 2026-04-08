@@ -131,6 +131,17 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     return importNode.id;
   }
 
+  function isTestFile(filePath: string): boolean {
+    const parts = filePath.split(path.sep);
+    return (
+      parts.includes('__tests__') ||
+      filePath.includes('.test.ts') ||
+      filePath.includes('.test.tsx') ||
+      filePath.includes('.spec.ts') ||
+      filePath.includes('.spec.tsx')
+    );
+  }
+
   const sourceFiles = program.getSourceFiles().filter(
     (sf) => !sf.isDeclarationFile && sf.fileName.startsWith(repoPath)
   );
@@ -153,6 +164,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
 
     const parentFolderId = ensureFolderChain(dirPath);
 
+    const isTest = isTestFile(filePath);
     const fileId = `file:${relativePath}`;
     const fileNode: FileNode = {
       id: fileId,
@@ -163,6 +175,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       name: fileName,
       path: filePath,
       fileType: ext,
+      inTestFile: isTest,
     };
     nodes.push(fileNode);
     nodeMap.set(fileId, fileNode);
@@ -218,6 +231,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
           name: fnName,
           params: extractParams(node.parameters, sourceFile),
           returnType: node.type ? node.type.getText(sourceFile) : null,
+          inTestFile: isTest,
         };
         nodes.push(fnNode);
         nodeMap.set(fnId, fnNode);
@@ -277,6 +291,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
           implements: implementsClause?.types.map((t) => t.expression.getText(sourceFile)) ?? [],
           decorators,
           constructorParams,
+          inTestFile: isTest,
         };
         nodes.push(classNode);
         nodeMap.set(classId, classNode);
@@ -323,6 +338,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
           propertyCount,
           methodCount,
           extends: extendsClause?.types.map((t) => t.expression.getText(sourceFile)) ?? [],
+          inTestFile: isTest,
         };
         nodes.push(ifaceNode);
         nodeMap.set(ifaceId, ifaceNode);
@@ -361,6 +377,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
               name: fnName,
               params: extractParams(decl.initializer.parameters, sourceFile),
               returnType: decl.initializer.type ? decl.initializer.type.getText(sourceFile) : null,
+              inTestFile: isTest,
             };
             nodes.push(fnNode);
             nodeMap.set(fnId, fnNode);

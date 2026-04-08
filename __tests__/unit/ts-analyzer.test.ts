@@ -276,4 +276,40 @@ describe('analyzeTypeScriptRepo', () => {
     expect(extended).toBeDefined();
     expect(extended!.kind === 'INTERFACE' && extended!.extends).toContain('Base');
   });
+
+  it('sets inTestFile on FileNode and child nodes inside a test file', () => {
+    repoDir = createTempRepo({
+      'src/utils.test.ts': `
+        export function testHelper(): void {}
+      `,
+      'src/regular.ts': `
+        export function normalFn(): void {}
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const testFile = result.nodes.find(
+      (n) => n.kind === 'FILE' && n.name === 'utils.test.ts'
+    );
+    expect(testFile).toBeDefined();
+    expect(testFile!.inTestFile).toBe(true);
+
+    const testHelper = result.nodes.find(
+      (n) => n.kind === 'FUNCTION' && n.name === 'testHelper'
+    );
+    expect(testHelper).toBeDefined();
+    expect(testHelper!.inTestFile).toBe(true);
+
+    const normalFile = result.nodes.find(
+      (n) => n.kind === 'FILE' && n.name === 'regular.ts'
+    );
+    expect(normalFile).toBeDefined();
+    expect(normalFile!.inTestFile).toBeFalsy();
+
+    const normalFn = result.nodes.find(
+      (n) => n.kind === 'FUNCTION' && n.name === 'normalFn'
+    );
+    expect(normalFn).toBeDefined();
+    expect(normalFn!.inTestFile).toBeFalsy();
+  });
 });
