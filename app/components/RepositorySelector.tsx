@@ -35,20 +35,15 @@ export default function RepositorySelector({
 
   const handleFileSelect = async () => {
     if (isLoading) return;
-
-    // Fallback: try to use directory picker if available
-    if ('showDirectoryPicker' in window) {
-      try {
-        // @ts-ignore - File System Access API
-        const handle = await window.showDirectoryPicker();
-        onRepositorySelected(handle.name);
-      } catch (error) {
-        if ((error as any).name !== 'AbortError') {
-          onError?.('Failed to select directory. Please enter path manually.');
-        }
+    try {
+      const res = await fetch('/api/browse-directory');
+      const json = await res.json();
+      if (json.success && json.path) {
+        setInputPath(json.path);
+        onRepositorySelected(json.path);
       }
-    } else {
-      onError?.('Directory picker not supported. Please enter path manually.');
+    } catch {
+      onError?.('Failed to open folder picker.');
     }
   };
 
