@@ -313,7 +313,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   if (!graphData) return null;
 
   return (
-    <div style={{ display: 'flex', width: '100%', minHeight: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
+    <div style={{ display: 'flex', width: '100%', height: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
       <div style={{ flex: 1, position: 'relative' }}>
         <svg
           ref={svgRef}
