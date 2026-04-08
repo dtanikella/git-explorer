@@ -155,6 +155,13 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     parentFolderId: string;
   }> = [];
 
+  // Collect local imports for deferred edge emission (need all FileNodes in nodeMap first)
+  const pendingLocalImports: Array<{
+    importNodeId: string;
+    specifier: string;
+    sourceFileName: string;
+  }> = [];
+
   // First pass: emit file/folder nodes and declarations
   for (const sourceFile of sourceFiles) {
     const filePath = sourceFile.fileName;
@@ -214,6 +221,14 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
           target: importNode.id,
         };
         edges.push(importEdge);
+
+        if (isLocal) {
+          pendingLocalImports.push({
+            importNodeId: importNode.id,
+            specifier,
+            sourceFileName: filePath,
+          });
+        }
       }
 
       // Function declarations
@@ -439,6 +454,29 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       target: reexportTarget,
       isReexport: true,
     } as ExportEdge);
+  }
+
+  // Resolve local import specifiers to their actual FileNodes
+  for (const { importNodeId, specifier, sourceFileName } of pendingLocalImports) {
+    const resolvedModule = ts.resolveModuleName(
+      specifier,
+      sourceFileName,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+    const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
+    if (resolvedFile && resolvedFile.startsWith(repoPath)) {
+      const resolvedRelative = path.relative(repoPath, resolvedFile);
+      const resolvedFileId = `file:${resolvedRelative}`;
+      if (nodeMap.has(resolvedFileId)) {
+        edges.push({
+          id: nextEdgeId(),
+          type: 'import',
+          source: importNodeId,
+          target: resolvedFileId,
+        });
+      }
+    }
   }
 
   // Second pass: call edges (intra-file function calls)

@@ -336,4 +336,33 @@ describe('analyzeTypeScriptRepo', () => {
     );
     expect(folderToFile).toBeDefined();
   });
+
+  it('emits ImportNode→FileNode edge for resolved local imports', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { helper } from './utils';
+        export const x = helper();
+      `,
+      'src/utils.ts': `
+        export function helper(): number { return 1; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const importNode = result.nodes.find(
+      (n) => n.kind === 'IMPORT' && n.name === './utils'
+    );
+    expect(importNode).toBeDefined();
+
+    const utilsFile = result.nodes.find(
+      (n) => n.kind === 'FILE' && n.name === 'utils.ts'
+    );
+    expect(utilsFile).toBeDefined();
+
+    // ImportNode → FileNode resolution edge
+    const resolutionEdge = result.edges.find(
+      (e) => e.type === 'import' && e.source === importNode!.id && e.target === utilsFile!.id
+    );
+    expect(resolutionEdge).toBeDefined();
+  });
 });
