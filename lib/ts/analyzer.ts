@@ -457,6 +457,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
   }
 
   // Resolve local import specifiers to their actual FileNodes
+  const emittedResolutionEdges = new Set<string>();
   for (const { importNodeId, specifier, sourceFileName } of pendingLocalImports) {
     const resolvedModule = ts.resolveModuleName(
       specifier,
@@ -468,7 +469,9 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     if (resolvedFile && resolvedFile.startsWith(repoPath)) {
       const resolvedRelative = path.relative(repoPath, resolvedFile);
       const resolvedFileId = `file:${resolvedRelative}`;
-      if (nodeMap.has(resolvedFileId)) {
+      const edgeKey = `${importNodeId}→${resolvedFileId}`;
+      if (nodeMap.has(resolvedFileId) && !emittedResolutionEdges.has(edgeKey)) {
+        emittedResolutionEdges.add(edgeKey);
         edges.push({
           id: nextEdgeId(),
           type: 'import',

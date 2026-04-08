@@ -343,6 +343,10 @@ describe('analyzeTypeScriptRepo', () => {
         import { helper } from './utils';
         export const x = helper();
       `,
+      'src/other.ts': `
+        import { helper } from './utils';
+        export const y = helper();
+      `,
       'src/utils.ts': `
         export function helper(): number { return 1; }
       `,
@@ -359,10 +363,10 @@ describe('analyzeTypeScriptRepo', () => {
     );
     expect(utilsFile).toBeDefined();
 
-    // ImportNode → FileNode resolution edge
-    const resolutionEdge = result.edges.find(
+    // Exactly one ImportNode → FileNode resolution edge (deduplicated)
+    const resolutionEdges = result.edges.filter(
       (e) => e.type === 'import' && e.source === importNode!.id && e.target === utilsFile!.id
     );
-    expect(resolutionEdge).toBeDefined();
+    expect(resolutionEdges).toHaveLength(1);
   });
 });
