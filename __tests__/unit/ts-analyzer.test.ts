@@ -1,0 +1,188 @@
+import { analyzeTypeScriptRepo } from '@/lib/ts/analyzer';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+function createTempRepo(files: Record<string, string>): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-analyzer-test-'));
+  fs.writeFileSync(
+    path.join(dir, 'tsconfig.json'),
+    JSON.stringify({
+      compilerOptions: { target: 'ES2020', module: 'commonjs', strict: true },
+      include: ['**/*.ts', '**/*.tsx'],
+    })
+  );
+  for (const [filePath, content] of Object.entries(files)) {
+    const fullPath = path.join(dir, filePath);
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, content);
+  }
+  return dir;
+}
+
+function cleanupTempRepo(dir: string) {
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+describe('analyzeTypeScriptRepo', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempRepo(repoDir);
+  });
+
+  it('creates FileNode and FolderNode for a single file', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': 'export const x = 1;',
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const folders = result.nodes.filter((n) => n.kind === 'FOLDER');
+    const files = result.nodes.filter((n) => n.kind === 'FILE');
+    expect(folders.length).toBeGreaterThanOrEqual(1);
+    expect(files).toHaveLength(1);
+    expect(files[0].kind === 'FILE' && files[0].name).toBe('index.ts');
+    expect(files[0].kind === 'FILE' && files[0].fileType).toBe('ts');
+  });
+
+  it('creates FunctionNode for exported function declarations', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `
+        export function add(a: number, b: number): number {
+          return a + b;
+        }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const fns = result.nodes.filter((n) => n.kind === 'FUNCTION');
+    expect(fns).toHaveLength(1);
+    expect(fns[0].kind === 'FUNCTION' && fns[0].name).toBe('add');
+    expect(fns[0].kind === 'FUNCTION' && fns[0].params).toEqual([
+      { name: 'a', type: 'number' },
+      { name: 'b', type: 'number' },
+    ]);
+    expect(fns[0].kind === 'FUNCTION' && fns[0].returnType).toBe('number');
+
+    const exportEdges = result.edges.filter((e) => e.type === 'export');
+    expect(exportEdges).toHaveLength(1);
+  });
+
+  it('creates ClassNode for class declarations', () => {
+    repoDir = createTempRepo({
+      'src/service.ts': `
+        export class MyService {
+          constructor(private name: string) {}
+          greet(): string { return this.name; }
+        }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const classes = result.nodes.filter((n) => n.kind === 'CLASS');
+    expect(classes).toHaveLength(1);
+    expect(classes[0].kind === 'CLASS' && classes[0].name).toBe('MyService');
+    expect(classes[0].kind === 'CLASS' && classes[0].constructorParams).toEqual([
+      { name: 'name', type: 'string' },
+    ]);
+  });
+
+  it('creates InterfaceNode for interface declarations', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `
+        export interface Config {
+          host: string;
+          port: number;
+          start(): void;
+        }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const ifaces = result.nodes.filter((n) => n.kind === 'INTERFACE');
+    expect(ifaces).toHaveLength(1);
+    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].name).toBe('Config');
+    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].isExported).toBe(true);
+    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].propertyCount).toBe(2);
+    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].methodCount).toBe(1);
+  });
+
+  it('creates ImportNode and ImportEdge for imports', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFile } from 'fs';
+        import { helper } from './utils';
+        export const x = 1;
+      `,
+      'src/utils.ts': `
+        export function helper() { return 1; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const imports = result.nodes.filter((n) => n.kind === 'IMPORT');
+    expect(imports.length).toBeGreaterThanOrEqual(2);
+
+    const packageImport = imports.find(
+      (n) => n.kind === 'IMPORT' && n.name === 'fs'
+    );
+    expect(packageImport).toBeDefined();
+    expect(packageImport!.kind === 'IMPORT' && packageImport!.source).toBe('package');
+
+    const localImport = imports.find(
+      (n) => n.kind === 'IMPORT' && n.name === './utils'
+    );
+    expect(localImport).toBeDefined();
+    expect(localImport!.kind === 'IMPORT' && localImport!.source).toBe('local');
+
+    const importEdges = result.edges.filter((e) => e.type === 'import');
+    expect(importEdges.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('creates CallEdge for intra-file function calls', () => {
+    repoDir = createTempRepo({
+      'src/math.ts': `
+        function double(x: number): number { return x * 2; }
+        export function quadruple(x: number): number { return double(double(x)); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const callEdges = result.edges.filter((e) => e.type === 'call');
+    expect(callEdges.length).toBeGreaterThanOrEqual(1);
+
+    const quadFn = result.nodes.find(
+      (n) => n.kind === 'FUNCTION' && n.name === 'quadruple'
+    );
+    const doubleFn = result.nodes.find(
+      (n) => n.kind === 'FUNCTION' && n.name === 'double'
+    );
+    expect(quadFn).toBeDefined();
+    expect(doubleFn).toBeDefined();
+    const callEdge = callEdges.find(
+      (e) => e.source === quadFn!.id && e.target === doubleFn!.id
+    );
+    expect(callEdge).toBeDefined();
+  });
+
+  it('populates parent, children, and siblings on all nodes', () => {
+    repoDir = createTempRepo({
+      'src/a.ts': 'export const a = 1;',
+      'src/b.ts': 'export const b = 2;',
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const srcFolder = result.nodes.find(
+      (n) => n.kind === 'FOLDER' && n.name === 'src'
+    );
+    expect(srcFolder).toBeDefined();
+    expect(srcFolder!.children.length).toBe(2);
+
+    const fileA = result.nodes.find(
+      (n) => n.kind === 'FILE' && n.name === 'a.ts'
+    );
+    expect(fileA).toBeDefined();
+    expect(fileA!.parent).toBe(srcFolder!.id);
+    expect(fileA!.siblings).toHaveLength(1);
+  });
+});
