@@ -16,7 +16,8 @@ import {
   Param,
 } from './types';
 
-export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
+export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFiles?: boolean }): TsGraphData {
+  const hideTestFiles = options?.hideTestFiles ?? true;
   const configPath = ts.findConfigFile(repoPath, ts.sys.fileExists, 'tsconfig.json');
   if (!configPath) {
     throw new Error('tsconfig.json not found in ' + repoPath);
@@ -34,8 +35,8 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     noEmit: true,
   });
 
-  const nodes: TsNode[] = [];
-  const edges: TsEdge[] = [];
+  let nodes: TsNode[] = [];
+  let edges: TsEdge[] = [];
   const nodeMap = new Map<string, TsNode>();
   const folderMap = new Map<string, FolderNode>();
   const importNodeMap = new Map<string, ImportNode>();
@@ -180,6 +181,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
 
   // First pass: emit file/folder nodes and declarations
   for (const sourceFile of sourceFiles) {
+    if (hideTestFiles && isTestFile(sourceFile.fileName)) continue;
     const filePath = sourceFile.fileName;
     const relativePath = path.relative(repoPath, filePath);
     const dirPath = path.dirname(filePath);
@@ -548,6 +550,24 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
       source: node.parent,
       target: node.id,
     });
+  }
+
+  // Prune empty folders (folders with no contains-edge children)
+  if (hideTestFiles) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const sourceFolderIds = new Set(edges.filter((e) => e.type === 'contains').map((e) => e.source));
+      const emptyFolderIds = nodes
+        .filter((n) => n.kind === 'FOLDER' && !sourceFolderIds.has(n.id))
+        .map((n) => n.id);
+      if (emptyFolderIds.length > 0) {
+        const emptySet = new Set(emptyFolderIds);
+        nodes = nodes.filter((n) => !emptySet.has(n.id));
+        edges = edges.filter((e) => !emptySet.has(e.source) && !emptySet.has(e.target));
+        changed = true;
+      }
+    }
   }
 
   return { nodes, edges };

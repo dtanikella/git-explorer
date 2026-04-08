@@ -132,4 +132,84 @@ describe('POST /api/ts-analysis', () => {
     expect(response.status).toBe(500);
     expect(result.success).toBe(false);
   });
+
+  // T017
+  it('[T017] hideTestFiles:true is passed to analyzer and response excludes test nodes', async () => {
+    const mockRequest = {
+      json: jest.fn().mockResolvedValue({ repoPath: '/some/repo', hideTestFiles: true }),
+    } as unknown as NextRequest;
+
+    mockAccess.mockResolvedValue(undefined);
+
+    const mockData = {
+      nodes: [
+        {
+          id: 'file:src/index.ts',
+          kind: 'FILE',
+          parent: 'folder:src',
+          children: [],
+          siblings: [],
+          name: 'index.ts',
+          path: '/some/repo/src/index.ts',
+          fileType: 'ts',
+        },
+      ],
+      edges: [],
+    };
+    mockAnalyzeTypeScriptRepo.mockReturnValue(mockData);
+
+    const response = await POST(mockRequest);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result.success).toBe(true);
+    expect(mockAnalyzeTypeScriptRepo).toHaveBeenCalledWith('/some/repo', { hideTestFiles: true });
+
+    const testFileNodes = result.data.nodes.filter(
+      (n: { kind: string; id: string }) =>
+        n.kind === 'FILE' &&
+        (n.id.includes('.test.') || n.id.includes('.spec.') || n.id.includes('__tests__'))
+    );
+    expect(testFileNodes.length).toBe(0);
+  });
+
+  // T018
+  it('[T018] hideTestFiles:false is passed to analyzer and response includes test nodes', async () => {
+    const mockRequest = {
+      json: jest.fn().mockResolvedValue({ repoPath: '/some/repo', hideTestFiles: false }),
+    } as unknown as NextRequest;
+
+    mockAccess.mockResolvedValue(undefined);
+
+    const mockData = {
+      nodes: [
+        {
+          id: 'file:src/utils.test.ts',
+          kind: 'FILE',
+          parent: 'folder:src',
+          children: [],
+          siblings: [],
+          name: 'utils.test.ts',
+          path: '/some/repo/src/utils.test.ts',
+          fileType: 'ts',
+        },
+      ],
+      edges: [],
+    };
+    mockAnalyzeTypeScriptRepo.mockReturnValue(mockData);
+
+    const response = await POST(mockRequest);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result.success).toBe(true);
+    expect(mockAnalyzeTypeScriptRepo).toHaveBeenCalledWith('/some/repo', { hideTestFiles: false });
+
+    const testFileNodes = result.data.nodes.filter(
+      (n: { kind: string; id: string }) =>
+        n.kind === 'FILE' &&
+        (n.id.includes('.test.') || n.id.includes('.spec.') || n.id.includes('__tests__'))
+    );
+    expect(testFileNodes.length).toBeGreaterThan(0);
+  });
 });

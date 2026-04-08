@@ -69,19 +69,19 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` returns zero FILE nodes matching test patterns in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T014 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` returns zero FUNCTION/CLASS/INTERFACE nodes with `inTestFile: true` in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T015 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` prunes folders containing only test files in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T016 [P] [US2] Add unit test: analyzer with `hideTestFiles: false` includes test file nodes in `__tests__/unit/ts-analyzer.test.ts`
-- [ ] T017 [P] [US2] Add integration test: `POST /api/ts-analysis` with `hideTestFiles: true` excludes test nodes in `__tests__/integration/ts-analysis-api.test.ts`
-- [ ] T018 [P] [US2] Add integration test: `POST /api/ts-analysis` with `hideTestFiles: false` includes test nodes in `__tests__/integration/ts-analysis-api.test.ts`
+- [x] T013 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` returns zero FILE nodes matching test patterns in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T014 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` returns zero FUNCTION/CLASS/INTERFACE nodes with `inTestFile: true` in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T015 [P] [US2] Add unit test: analyzer with `hideTestFiles: true` prunes folders containing only test files in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T016 [P] [US2] Add unit test: analyzer with `hideTestFiles: false` includes test file nodes in `__tests__/unit/ts-analyzer.test.ts`
+- [x] T017 [P] [US2] Add integration test: `POST /api/ts-analysis` with `hideTestFiles: true` excludes test nodes in `__tests__/integration/ts-analysis-api.test.ts`
+- [x] T018 [P] [US2] Add integration test: `POST /api/ts-analysis` with `hideTestFiles: false` includes test nodes in `__tests__/integration/ts-analysis-api.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Add `options?: { hideTestFiles?: boolean }` parameter to `analyzeTypeScriptRepo()` signature with default `true` in `lib/ts/analyzer.ts`
-- [ ] T020 [US2] Add test-file skip logic in the first-pass source file loop: `if (hideTestFiles && isTestFile(filePath)) continue` in `lib/ts/analyzer.ts`
-- [ ] T021 [US2] Add empty-folder pruning post-processing pass after all analysis passes in `lib/ts/analyzer.ts` — remove folders with zero children, cascade upward, remove orphaned contains edges
-- [ ] T022 [US2] Extract `hideTestFiles` from request body (default `true`) and pass to `analyzeTypeScriptRepo()` in `app/api/ts-analysis/route.ts`
+- [x] T019 [US2] Add `options?: { hideTestFiles?: boolean }` parameter to `analyzeTypeScriptRepo()` signature with default `true` in `lib/ts/analyzer.ts`
+- [x] T020 [US2] Add test-file skip logic in the first-pass source file loop: `if (hideTestFiles && isTestFile(filePath)) continue` in `lib/ts/analyzer.ts`
+- [x] T021 [US2] Add empty-folder pruning post-processing pass after all analysis passes in `lib/ts/analyzer.ts` — remove folders with zero children, cascade upward, remove orphaned contains edges
+- [x] T022 [US2] Extract `hideTestFiles` from request body (default `true`) and pass to `analyzeTypeScriptRepo()` in `app/api/ts-analysis/route.ts`
 
 **Checkpoint**: Analyzer excludes test files by default. API route accepts and propagates `hideTestFiles` parameter. All T013–T018 tests pass.
 

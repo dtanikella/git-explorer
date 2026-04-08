@@ -264,7 +264,7 @@ describe('analyzeTypeScriptRepo', () => {
         export function normalFn(): void {}
       `,
     });
-    const result = analyzeTypeScriptRepo(repoDir);
+    const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: false });
 
     const testFile = result.nodes.find(
       (n) => n.kind === 'FILE' && n.name === 'utils.test.ts'
@@ -434,5 +434,79 @@ describe('US1: Simplified Edge View', () => {
     });
     const result = analyzeTypeScriptRepo(repoDir);
     expect(result.edges.filter((e) => e.type === 'call').length).toBeGreaterThan(0);
+  });
+});
+
+describe('US2: Hide Test Files', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempRepo(repoDir);
+  });
+
+  // T013
+  it('[T013] hideTestFiles:true returns zero FILE nodes matching test patterns', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): void {}`,
+      'src/utils.test.ts': `export function testHelper(): void {}`,
+      '__tests__/unit/foo.test.ts': `export function fooTest(): void {}`,
+      'src/service.spec.ts': `export function specHelper(): void {}`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: true });
+    const testFileNodes = result.nodes.filter(
+      (n) =>
+        n.kind === 'FILE' &&
+        (n.id.includes('.test.') || n.id.includes('.spec.') || n.id.includes('__tests__'))
+    );
+    expect(testFileNodes.length).toBe(0);
+  });
+
+  // T014
+  it('[T014] hideTestFiles:true returns zero FUNCTION/CLASS/INTERFACE nodes with inTestFile:true', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): void {}`,
+      'src/utils.test.ts': `
+        export function testHelper(): void {}
+        export class TestClass {}
+        export interface TestInterface { id: string; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: true });
+    const testSymbolNodes = result.nodes.filter(
+      (n) =>
+        (n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE') &&
+        n.inTestFile === true
+    );
+    expect(testSymbolNodes.length).toBe(0);
+  });
+
+  // T015
+  it('[T015] hideTestFiles:true prunes folders that contain only test files', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): void {}`,
+      'test-only/only.test.ts': `export function onlyTest(): void {}`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: true });
+    // The 'test-only' folder should be pruned since its only child was a test file
+    const testOnlyFolder = result.nodes.find(
+      (n) => n.kind === 'FOLDER' && n.name === 'test-only'
+    );
+    expect(testOnlyFolder).toBeUndefined();
+  });
+
+  // T016
+  it('[T016] hideTestFiles:false includes test file nodes', () => {
+    repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): void {}`,
+      'src/utils.test.ts': `export function testHelper(): void {}`,
+      '__tests__/unit/foo.test.ts': `export function fooTest(): void {}`,
+    });
+    const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: false });
+    const testFileNodes = result.nodes.filter(
+      (n) =>
+        n.kind === 'FILE' &&
+        (n.id.includes('.test.') || n.id.includes('.spec.') || n.id.includes('__tests__'))
+    );
+    expect(testFileNodes.length).toBeGreaterThan(0);
   });
 });
