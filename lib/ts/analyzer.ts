@@ -40,6 +40,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
   const folderMap = new Map<string, FolderNode>();
   const importNodeMap = new Map<string, ImportNode>();
   const fileFunctionMap = new Map<string, Map<string, string>>();
+  const callEdgeSet = new Set<string>();
 
   let edgeIdCounter = 0;
   function nextEdgeId(): string {
@@ -64,23 +65,20 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
     const parts = relative.split(path.sep).filter(Boolean);
 
     if (parts.length === 0) {
-      // Root folder
       const rootId = 'folder:.';
-      if (!folderMap.has(repoPath)) {
-        const rootNode: FolderNode = {
-          id: rootId,
-          kind: 'FOLDER',
-          parent: null,
-          children: [],
-          siblings: [],
-          name: path.basename(repoPath),
-          path: repoPath,
-          depth: 0,
-        };
-        folderMap.set(repoPath, rootNode);
-        nodes.push(rootNode);
-        nodeMap.set(rootId, rootNode);
-      }
+      const rootNode: FolderNode = {
+        id: rootId,
+        kind: 'FOLDER',
+        parent: null,
+        children: [],
+        siblings: [],
+        name: path.basename(repoPath),
+        path: repoPath,
+        depth: 0,
+      };
+      folderMap.set(repoPath, rootNode);
+      nodes.push(rootNode);
+      nodeMap.set(rootId, rootNode);
       return rootId;
     }
 
@@ -463,10 +461,9 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
         const calleeName = node.expression.getText(sourceFile);
         const targetId = fnMap!.get(calleeName);
         if (targetId && targetId !== enclosingFnId) {
-          const exists = edges.some(
-            (e) => e.type === 'call' && e.source === enclosingFnId && e.target === targetId
-          );
-          if (!exists) {
+          const callKey = `${enclosingFnId}:${targetId}`;
+          if (!callEdgeSet.has(callKey)) {
+            callEdgeSet.add(callKey);
             edges.push({
               id: nextEdgeId(),
               type: 'call',

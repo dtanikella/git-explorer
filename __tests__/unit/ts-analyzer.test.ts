@@ -230,4 +230,50 @@ describe('analyzeTypeScriptRepo', () => {
     expect(fileA!.parent).toBe(srcFolder!.id);
     expect(fileA!.siblings).toHaveLength(1);
   });
+
+  it('handles tsx files with correct fileType', () => {
+    repoDir = createTempRepo({
+      'src/App.tsx': `
+        export const App = () => <div>Hello</div>;
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    const tsxFile = result.nodes.find((n) => n.kind === 'FILE' && n.name === 'App.tsx');
+    expect(tsxFile).toBeDefined();
+    expect(tsxFile!.kind === 'FILE' && tsxFile!.fileType).toBe('tsx');
+  });
+
+  it('handles ClassNode with extends and implements', () => {
+    repoDir = createTempRepo({
+      'src/service.ts': `
+        class BaseService {}
+        interface Runnable { run(): void; }
+        export class AppService extends BaseService implements Runnable {
+          run(): void {}
+        }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    const appService = result.nodes.find(
+      (n) => n.kind === 'CLASS' && n.name === 'AppService'
+    );
+    expect(appService).toBeDefined();
+    expect(appService!.kind === 'CLASS' && appService!.extends).toBe('BaseService');
+    expect(appService!.kind === 'CLASS' && appService!.implements).toContain('Runnable');
+  });
+
+  it('handles InterfaceNode with extends', () => {
+    repoDir = createTempRepo({
+      'src/types.ts': `
+        interface Base { id: string; }
+        export interface Extended extends Base { name: string; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+    const extended = result.nodes.find(
+      (n) => n.kind === 'INTERFACE' && n.name === 'Extended'
+    );
+    expect(extended).toBeDefined();
+    expect(extended!.kind === 'INTERFACE' && extended!.extends).toContain('Base');
+  });
 });
