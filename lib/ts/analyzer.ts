@@ -350,7 +350,7 @@ export function analyzeTypeScriptRepo(repoPath: string): TsGraphData {
             const fnName = decl.name.text;
             const fnId = `fn:${relativePath}:${fnName}`;
             const isExported = !!(
-              ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export
+              ts.getCombinedModifierFlags(node as unknown as ts.Declaration) & ts.ModifierFlags.Export
             );
             const fnNode: FunctionNode = {
               id: fnId,

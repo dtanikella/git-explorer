@@ -34,7 +34,7 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
 
 export default function TsGraph({ repoPath }: TsGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLBodyElement, unknown> | null>(null);
+  const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
   const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
   const nodeSelectionRef = useRef<d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown> | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null);
@@ -203,7 +203,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .attr('fill', (d) => evaluateNodeStyle(d.data, currentNodeRules).color)
       .attr('stroke', '#fff')
       .attr('stroke-width', 1)
-      .call(drag(simulation)) as d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>;
+      .call(drag(simulation) as any) as d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>;
 
     // Store selections and simulation in refs for Effect 2
     linkSelectionRef.current = link;

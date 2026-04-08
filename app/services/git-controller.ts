@@ -98,13 +98,13 @@ export function buildPackingGraphData(commits: Array<{ files: string[] }>) {
   }
 
   // Recursively clean up tree: remove empty children, sum values for folders
-  function finalize(node) {
+  function finalize(node: any) {
     if (node.children && node.children.length > 0) {
       node.children = node.children.map(finalize);
-      node.value = node.children.reduce((sum, c) => sum + (c.value || 0), 0);
+      node.value = node.children.reduce((sum: number, c: any) => sum + (c.value || 0), 0);
       // Remove children if all are leaves with value
-      if (node.children.every((c) => !c.children || c.children.length === 0)) {
-        node.children = node.children.filter((c) => c.value);
+      if (node.children.every((c: any) => !c.children || c.children.length === 0)) {
+        node.children = node.children.filter((c: any) => c.value);
       }
     }
     return node;

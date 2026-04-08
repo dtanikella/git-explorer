@@ -14,6 +14,7 @@ export interface CoChangeLink {
 export interface CoChangeGraph {
   nodes: CoChangeNode[];
   links: CoChangeLink[];
+  packingData?: unknown;
 }
 // TypeScript interfaces for git treemap feature
 

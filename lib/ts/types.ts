@@ -108,7 +108,7 @@ export interface NodeForceRule {
     centerStrength?: number;
     fx?: number | null;
     fy?: number | null;
-    zone?: 'top' | 'bottom' | 'left' | 'right' | 'center';
+    zone?: 'top' | 'bottom' | 'left' | 'right' | 'center' | null;
   };
   style?: {
     color?: string;

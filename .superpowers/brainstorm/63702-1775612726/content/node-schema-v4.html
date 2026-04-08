@@ -1,0 +1,157 @@
+<h2>Node & Edge Schema</h2>
+<p class="subtitle">Both nodes and edges share a base type — each kind extends with its own properties</p>
+
+<div class="section">
+  <h3>Node Base — <code>TsNodeBase</code></h3>
+  <div style="background:#1e1e2e;border:2px solid #888;border-radius:8px;padding:16px;display:inline-block;min-width:340px;margin-top:8px;">
+    <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#89b4fa;">id</span>: string
+<span style="color:#89b4fa;">kind</span>: NodeKind
+<span style="color:#89b4fa;">parent</span>: string | null
+<span style="color:#89b4fa;">children</span>: string[]
+<span style="color:#89b4fa;">siblings</span>: string[]</pre>
+  </div>
+  <p style="color:#888;font-size:13px;margin-top:8px;"><code>type TsNode = FolderNode | FileNode | FunctionNode | ClassNode | InterfaceNode | ImportNode</code></p>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+
+    <div style="background:#1e1e2e;border:2px solid #6c757d;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:3px;background:#6c757d;flex-shrink:0;"></div>
+        <strong style="color:#adb5bd;font-size:14px;">FolderNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'FOLDER'</span>
+<span style="color:#89b4fa;">path</span>: string
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">depth</span>: number
+<span style="color:#89b4fa;">fileCount</span>: number
+<span style="color:#89b4fa;">childFolderCount</span>: number</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #4dabf7;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#4dabf7;flex-shrink:0;"></div>
+        <strong style="color:#4dabf7;font-size:14px;">FileNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'FILE'</span>
+<span style="color:#89b4fa;">path</span>: string
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">extension</span>: string
+<span style="color:#89b4fa;">isEntrypoint</span>: boolean
+<span style="color:#89b4fa;">isBarrel</span>: boolean
+<span style="color:#89b4fa;">importCount</span>: number
+<span style="color:#89b4fa;">exportCount</span>: number
+<span style="color:#89b4fa;">lineCount</span>: number</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #69db7c;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#69db7c;flex-shrink:0;"></div>
+        <strong style="color:#69db7c;font-size:14px;">FunctionNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'FUNCTION'</span>
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">filePath</span>: string
+<span style="color:#89b4fa;">isExported</span>: boolean
+<span style="color:#89b4fa;">isAsync</span>: boolean
+<span style="color:#89b4fa;">isArrow</span>: boolean
+<span style="color:#89b4fa;">paramCount</span>: number
+<span style="color:#89b4fa;">returnType</span>: string | null</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #ffa94d;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#ffa94d;flex-shrink:0;"></div>
+        <strong style="color:#ffa94d;font-size:14px;">ClassNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'CLASS'</span>
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">filePath</span>: string
+<span style="color:#89b4fa;">isExported</span>: boolean
+<span style="color:#89b4fa;">isAbstract</span>: boolean
+<span style="color:#89b4fa;">methodCount</span>: number
+<span style="color:#89b4fa;">propertyCount</span>: number
+<span style="color:#89b4fa;">extends</span>: string | null
+<span style="color:#89b4fa;">implements</span>: string[]</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #da77f2;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#da77f2;flex-shrink:0;"></div>
+        <strong style="color:#da77f2;font-size:14px;">InterfaceNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'INTERFACE'</span>
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">filePath</span>: string
+<span style="color:#89b4fa;">isExported</span>: boolean
+<span style="color:#89b4fa;">propertyCount</span>: number
+<span style="color:#89b4fa;">methodCount</span>: number
+<span style="color:#89b4fa;">extends</span>: string[]</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #ff8787;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#ff8787;flex-shrink:0;"></div>
+        <strong style="color:#ff8787;font-size:14px;">ImportNode</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsNodeBase</span>
+<span style="color:#89b4fa;">kind</span>: <span style="color:#a6e3a1;">'IMPORT'</span>
+<span style="color:#89b4fa;">moduleSpecifier</span>: string
+<span style="color:#89b4fa;">name</span>: string
+<span style="color:#89b4fa;">isExternal</span>: boolean
+<span style="color:#89b4fa;">isTypeOnly</span>: boolean
+<span style="color:#89b4fa;">namedImports</span>: string[]</pre>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:28px;border-top:1px solid #333;padding-top:24px;">
+  <h3>Edge Base — <code>TsEdgeBase</code></h3>
+  <div style="background:#1e1e2e;border:2px solid #888;border-radius:8px;padding:16px;display:inline-block;min-width:340px;margin-top:8px;">
+    <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#89b4fa;">id</span>: string          <span style="color:#6c7086;">// e.g. "source→target:type"</span>
+<span style="color:#89b4fa;">type</span>: EdgeType      <span style="color:#6c7086;">// 'import' | 'export'</span>
+<span style="color:#89b4fa;">source</span>: string      <span style="color:#6c7086;">// source node id</span>
+<span style="color:#89b4fa;">target</span>: string      <span style="color:#6c7086;">// target node id</span></pre>
+  </div>
+  <p style="color:#888;font-size:13px;margin-top:8px;"><code>type TsEdge = ImportEdge | ExportEdge</code></p>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+    <div style="background:#1e1e2e;border:2px solid #4dabf7;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:40px;height:3px;background:#4dabf7;flex-shrink:0;"></div>
+        <strong style="color:#4dabf7;font-size:14px;">ImportEdge</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsEdgeBase</span>
+<span style="color:#89b4fa;">type</span>: <span style="color:#a6e3a1;">'import'</span>
+<span style="color:#89b4fa;">isTypeOnly</span>: boolean
+<span style="color:#89b4fa;">namedImports</span>: string[]
+<span style="color:#89b4fa;">defaultImport</span>: string | null
+<span style="color:#89b4fa;">namespaceImport</span>: string | null</pre>
+    </div>
+
+    <div style="background:#1e1e2e;border:2px solid #ffa94d;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:40px;height:2px;background:repeating-linear-gradient(90deg,#ffa94d 0,#ffa94d 6px,transparent 6px,transparent 12px);flex-shrink:0;margin-top:1px;"></div>
+        <strong style="color:#ffa94d;font-size:14px;">ExportEdge</strong>
+      </div>
+      <pre style="margin:0;font-size:12px;line-height:1.8;color:#cdd6f4;background:transparent;"><span style="color:#6c7086;">// ...TsEdgeBase</span>
+<span style="color:#89b4fa;">type</span>: <span style="color:#a6e3a1;">'export'</span>
+<span style="color:#89b4fa;">subtype</span>: <span style="color:#a6e3a1;">'declaration'</span> | <span style="color:#a6e3a1;">'reexport'</span>
+<span style="color:#89b4fa;">isTypeOnly</span>: boolean
+<span style="color:#89b4fa;">exportedName</span>: string | null  <span style="color:#6c7086;">// alias</span></pre>
+    </div>
+
+  </div>
+</div>
+
+<p style="margin-top:20px;color:#888;font-size:13px;">Anything to add, remove, or rename?</p>

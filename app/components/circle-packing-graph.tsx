@@ -30,7 +30,7 @@ export default function CirclePackingGraph({ width, height, packingData }: { wid
       .style('background', '#f9f9f9');
 
     let focus = packedRoot;
-    let view = [packedRoot.x, packedRoot.y, packedRoot.r * 2];
+    let view: [number, number, number] = [packedRoot.x, packedRoot.y, packedRoot.r * 2];
 
     const color = d3.scaleLinear<string>()
       .domain([0, 5])
@@ -42,7 +42,7 @@ export default function CirclePackingGraph({ width, height, packingData }: { wid
       .data(packedRoot.descendants())
       .join('circle')
       .attr('fill', d => d.children ? color(d.depth) : '#fff')
-      .attr('pointer-events', d => !d.children ? 'none' : undefined)
+      .attr('pointer-events', d => !d.children ? 'none' : null)
       .on('mouseover', function (event, d) {
         d3.select(this).attr('stroke', '#000');
       })
@@ -64,7 +64,7 @@ export default function CirclePackingGraph({ width, height, packingData }: { wid
       .join('text')
       .style('fill-opacity', d => d.parent === packedRoot ? 1 : 0)
       .style('display', d => d.parent === packedRoot ? 'inline' : 'none')
-      .text(d => d.data.name);
+      .text(d => (d.data as any).name);
 
     svg.on('click', (event) => zoom(event, packedRoot));
 
@@ -79,11 +79,11 @@ export default function CirclePackingGraph({ width, height, packingData }: { wid
         });
 
       label
-        .filter(function (l) { return l.parent === focus || this.style.display === 'inline'; })
-        .transition(transition)
+        .filter(function (l) { return l.parent === focus || (this as HTMLElement).style.display === 'inline'; })
+        .transition(transition as any)
         .style('fill-opacity', l => l.parent === focus ? 1 : 0)
-        .on('start', function (l) { if (l.parent === focus) this.style.display = 'inline'; })
-        .on('end', function (l) { if (l.parent !== focus) this.style.display = 'none'; });
+        .on('start', function (l) { if (l.parent === focus) (this as HTMLElement).style.display = 'inline'; })
+        .on('end', function (l) { if (l.parent !== focus) (this as HTMLElement).style.display = 'none'; });
     }
 
     function zoomTo(v: [number, number, number]) {

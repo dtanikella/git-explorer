@@ -61,7 +61,7 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
       .attr('stroke-opacity', (d: any) => linkOpacityScale(d.value));
 
     // Debounced tooltip logic
-    let tooltip = d3.select("body").select("div.tooltip");
+    let tooltip: any = d3.select("body").select("div.tooltip");
     if (tooltip.empty()) {
       tooltip = d3.select("body")
         .append("div")
@@ -99,7 +99,7 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
         return 10;
       })
       .attr('fill', getNodeColor)
-      .call(drag(simulation));
+      .call(drag(simulation) as any);
 
     node.append('title').text((d: any) => d.id);
 
@@ -162,7 +162,7 @@ export default function ForceDirectedGraph({ data }: ForceDirectedGraphProps) {
       .scaleExtent([0.1, 8])
       .on('zoom', (event) => {
         svg.selectAll('g').attr('transform', event.transform);
-      })
+      }) as any
     );
 
     return () => {

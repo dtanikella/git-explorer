@@ -1,0 +1,141 @@
+<h2>Node & Edge Schema</h2>
+<p class="subtitle">Review each kind's properties — let me know what to add, remove, or rename</p>
+
+<div class="section">
+  <h3>Nodes — Discriminated Union: <code>type TsNode = FolderNode | FileNode | FunctionNode | ClassNode | InterfaceNode | ImportNode</code></h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px;">
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:3px;background:#6c757d;flex-shrink:0;"></div>
+        <strong>FolderNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'FOLDER'
+id: string       // absolute path
+path: string
+name: string
+depth: number    // 0 = repo root
+fileCount: number
+childFolderCount: number</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#4dabf7;flex-shrink:0;"></div>
+        <strong>FileNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'FILE'
+id: string       // absolute path
+path: string
+name: string
+extension: string  // .ts | .tsx | .d.ts
+isEntrypoint: boolean
+isBarrel: boolean  // index.ts re-exporting
+importCount: number
+exportCount: number
+lineCount: number</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#69db7c;flex-shrink:0;"></div>
+        <strong>FunctionNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'FUNCTION'
+id: string       // path#name
+name: string
+filePath: string
+isExported: boolean
+isAsync: boolean
+isArrow: boolean
+paramCount: number
+returnType: string | null</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#ffa94d;flex-shrink:0;"></div>
+        <strong>ClassNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'CLASS'
+id: string       // path#ClassName
+name: string
+filePath: string
+isExported: boolean
+isAbstract: boolean
+methodCount: number
+propertyCount: number
+extends: string | null
+implements: string[]</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#da77f2;flex-shrink:0;"></div>
+        <strong>InterfaceNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'INTERFACE'
+id: string       // path#InterfaceName
+name: string
+filePath: string
+isExported: boolean
+propertyCount: number
+methodCount: number
+extends: string[]</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:#ff8787;flex-shrink:0;"></div>
+        <strong>ImportNode</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">kind: 'IMPORT'
+id: string       // moduleSpecifier
+moduleSpecifier: string  // 'react', './helpers'
+name: string     // display name
+isExternal: boolean  // npm vs in-project
+isTypeOnly: boolean  // import type
+namedImports: string[]</code>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Edges — Discriminated Union: <code>type TsEdge = ImportEdge | ExportEdge</code></h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:32px;height:3px;background:#4dabf7;flex-shrink:0;"></div>
+        <strong>ImportEdge</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">type: 'import'
+source: string   // FileNode id
+target: string   // ImportNode id
+isTypeOnly: boolean
+namedImports: string[]
+defaultImport: string | null
+namespaceImport: string | null</code>
+    </div>
+
+    <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:32px;height:3px;background:#ffa94d;border-top:2px dashed #ffa94d;height:0;flex-shrink:0;"></div>
+        <strong>ExportEdge</strong>
+      </div>
+      <code style="display:block;font-size:12px;line-height:1.8;white-space:pre;">type: 'export'
+subtype: 'declaration' | 'reexport'
+source: string   // FileNode id
+target: string   // FunctionNode | ClassNode
+                 // | InterfaceNode | FileNode id
+isTypeOnly: boolean
+exportedName: string | null  // alias</code>
+    </div>
+
+  </div>
+</div>
+
+<p style="margin-top:20px;color:#666;font-size:14px;">Take a look and let me know what to change — properties to add, remove, rename, or restructure.</p>
