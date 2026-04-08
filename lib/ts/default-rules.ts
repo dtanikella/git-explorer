@@ -73,7 +73,7 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'File Contains',
     enabled: true,
     match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'file',
-    forces: { linkDistance: 20, linkStrength: 0.8 },
+    forces: { linkDistance: 10, linkStrength: 1.0 },
     style: { color: '#374151', width: 1 },
   },
   {
