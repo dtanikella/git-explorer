@@ -708,3 +708,123 @@ describe('Cross-File Edges', () => {
     expect(usesEdges).toHaveLength(1);
   });
 });
+
+describe('External Package Call Edges', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempRepo(repoDir);
+  });
+
+  it('emits call edge from function to external package (named import)', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFileSync } from 'fs';
+        export function loadConfig(): string { return readFileSync('config.json', 'utf-8'); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const loadFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'loadConfig');
+    const fsImport = result.nodes.find((n) => n.kind === 'IMPORT' && n.name === 'fs');
+    expect(loadFn).toBeDefined();
+    expect(fsImport).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === loadFn!.id && e.target === fsImport!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('external');
+
+    // No import-type edges should exist
+    const importEdges = result.edges.filter((e) => e.type === 'import');
+    expect(importEdges).toHaveLength(0);
+  });
+
+  it('emits call edge from function to external package (namespace import)', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import * as path from 'path';
+        export function getExt(file: string): string { return path.extname(file); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const getExtFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'getExt');
+    const pathImport = result.nodes.find((n) => n.kind === 'IMPORT' && n.name === 'path');
+    expect(getExtFn).toBeDefined();
+    expect(pathImport).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === getExtFn!.id && e.target === pathImport!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('external');
+  });
+
+  it('emits fallback call edge from file when package is imported but not called', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { Config } from 'some-package';
+        export const x = 1;
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const fileNode = result.nodes.find((n) => n.kind === 'FILE' && n.name === 'index.ts');
+    const pkgImport = result.nodes.find((n) => n.kind === 'IMPORT' && n.name === 'some-package');
+    expect(fileNode).toBeDefined();
+    expect(pkgImport).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === fileNode!.id && e.target === pkgImport!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('external');
+  });
+
+  it('emits call edge from class to external package (method body)', () => {
+    repoDir = createTempRepo({
+      'src/service.ts': `
+        import { readFileSync } from 'fs';
+        export class FileService {
+          load(): string { return readFileSync('data.json', 'utf-8'); }
+        }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const classNode = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'FileService');
+    const fsImport = result.nodes.find((n) => n.kind === 'IMPORT' && n.name === 'fs');
+    expect(classNode).toBeDefined();
+    expect(fsImport).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === classNode!.id && e.target === fsImport!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('external');
+  });
+
+  it('emits call edge from file for top-level external call', () => {
+    repoDir = createTempRepo({
+      'src/index.ts': `
+        import { readFileSync } from 'fs';
+        const data = readFileSync('config.json', 'utf-8');
+        export const config = data;
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const fileNode = result.nodes.find((n) => n.kind === 'FILE' && n.name === 'index.ts');
+    const fsImport = result.nodes.find((n) => n.kind === 'IMPORT' && n.name === 'fs');
+    expect(fileNode).toBeDefined();
+    expect(fsImport).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === fileNode!.id && e.target === fsImport!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('external');
+  });
+});

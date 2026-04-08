@@ -248,7 +248,7 @@ describe('default rules integration', () => {
     expect(forces.collideRadius).toBe(15);
     const style = evaluateNodeStyle(fileNode, defaultNodeRules);
     expect(style.color).toBe('#9ca3af');
-    expect(style.radius).toBe(8);
+    expect(style.radius).toBe(5);
   });
 
   it('evaluates default node rules for a FOLDER node', () => {
@@ -258,7 +258,7 @@ describe('default rules integration', () => {
     expect(forces.zone).toBe('center');
     const style = evaluateNodeStyle(folderNode, defaultNodeRules);
     expect(style.color).toBe('#d1d5db');
-    expect(style.radius).toBe(12);
+    expect(style.radius).toBe(3);
   });
 
   it('evaluates default edge rules for an import edge (falls through to defaults — import-edges rule removed)', () => {
@@ -282,16 +282,17 @@ describe('default rules integration', () => {
   it('evaluates default edge rules for a cross-file call edge', () => {
     const edge = makeCallEdge({ callScope: 'cross-file' });
     const forces = evaluateEdgeForces(edge, defaultEdgeRules);
-    expect(forces.linkDistance).toBe(60);
-    expect(forces.linkStrength).toBe(0.6);
+    expect(forces.linkDistance).toBe(150);
+    expect(forces.linkStrength).toBe(0.3);
     const style = evaluateEdgeStyle(edge, defaultEdgeRules);
-    expect(style.color).toBe('#111827');
+    expect(style.color).toBe('#10b981');
   });
 
   it('evaluates default edge rules for an external call edge', () => {
     const edge = makeCallEdge({ callScope: 'external' });
     const forces = evaluateEdgeForces(edge, defaultEdgeRules);
-    expect(forces.linkDistance).toBe(100);
+    // No explicit external-call rule; falls through to built-in defaults for unmatched properties.
+    expect(forces.linkDistance).toBe(EDGE_FORCE_DEFAULTS.linkDistance);
     expect(forces.linkStrength).toBe(0.3);
     const style = evaluateEdgeStyle(edge, defaultEdgeRules);
     expect(style.color).toBe('#3b82f6');

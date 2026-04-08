@@ -52,6 +52,13 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
   const fileFunctionMap = new Map<string, Map<string, string>>();
   const callEdgeSet = new Set<string>();
 
+  // External import binding map: per-file mapping of localName → importNodeId
+  const externalBindingMap = new Map<string, Map<string, string>>();
+  // External namespace map: per-file mapping of nsName → importNodeId
+  const externalNamespaceMap = new Map<string, Map<string, string>>();
+  // Track which files import each external package (for fallback edges)
+  const fileExternalImports = new Map<string, Set<string>>();
+
   let edgeIdCounter = 0;
   function nextEdgeId(): string {
     return `edge-${edgeIdCounter++}`;
@@ -247,15 +254,37 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         }
 
         if (!isLocal) {
-          const importEdgeKey = `${fileId}→${importNode.id}`;
-          if (!callEdgeSet.has(importEdgeKey)) {
-            callEdgeSet.add(importEdgeKey);
-            edges.push({
-              id: nextEdgeId(),
-              type: 'import',
-              source: fileId,
-              target: importNode.id,
-            } as ImportEdge);
+          // Track file→package import for fallback (no edge emitted yet)
+          if (!fileExternalImports.has(fileId)) {
+            fileExternalImports.set(fileId, new Set());
+          }
+          fileExternalImports.get(fileId)!.add(importNode.id);
+
+          // Collect external import bindings for call resolution
+          const importClause = node.importClause;
+          if (importClause) {
+            if (importClause.name) {
+              if (!externalBindingMap.has(filePath)) {
+                externalBindingMap.set(filePath, new Map());
+              }
+              externalBindingMap.get(filePath)!.set(importClause.name.text, importNode.id);
+            }
+            const extNamedBindings = importClause.namedBindings;
+            if (extNamedBindings) {
+              if (ts.isNamespaceImport(extNamedBindings)) {
+                if (!externalNamespaceMap.has(filePath)) {
+                  externalNamespaceMap.set(filePath, new Map());
+                }
+                externalNamespaceMap.get(filePath)!.set(extNamedBindings.name.text, importNode.id);
+              } else if (ts.isNamedImports(extNamedBindings)) {
+                if (!externalBindingMap.has(filePath)) {
+                  externalBindingMap.set(filePath, new Map());
+                }
+                for (const el of extNamedBindings.elements) {
+                  externalBindingMap.get(filePath)!.set(el.name.text, importNode.id);
+                }
+              }
+            }
           }
         }
 
@@ -603,6 +632,24 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
   for (const sourceFile of sourceFiles) {
     const filePath = sourceFile.fileName;
     const fnMap = fileFunctionMap.get(filePath);
+    const fileRelPath = path.relative(repoPath, filePath);
+    const fileId = `file:${fileRelPath}`;
+
+    // Helper to resolve a callee name to an external package ImportNode id
+    function resolveExternalSymbol(name: string): string | undefined {
+      // Direct named/default import match
+      const directMatch = externalBindingMap.get(filePath)?.get(name);
+      if (directMatch) return directMatch;
+
+      // Namespace import match: ns.foo() → resolve ns to importNodeId
+      const dotIdx = name.indexOf('.');
+      if (dotIdx > 0) {
+        const nsName = name.substring(0, dotIdx);
+        return externalNamespaceMap.get(filePath)?.get(nsName);
+      }
+
+      return undefined;
+    }
 
     // Helper to emit a uses edge (deduplicated by source+target+usageKind)
     function emitUsesEdge(sourceId: string, targetId: string, usageKind: 'type-reference' | 'extends' | 'implements'): void {
@@ -715,13 +762,20 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
               }
             }
           }
-          // Walk class member types
+          // Walk class member types and bodies
           for (const member of node.members) {
             if (ts.isPropertyDeclaration(member) && member.type) {
               walkTypeForRefs(member.type, classId);
             }
             if (ts.isMethodDeclaration(member) && member.name) {
               walkFunctionSignatureForRefs(member.parameters, member.type, classId);
+              // Walk method body for calls (using classId as source)
+              if (member.body) {
+                ts.forEachChild(member.body, (child) => walkForCallsAndRefs(child, classId));
+              }
+            }
+            if (ts.isConstructorDeclaration(member) && member.body) {
+              ts.forEachChild(member.body, (child) => walkForCallsAndRefs(child, classId));
             }
           }
         }
@@ -745,37 +799,55 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         return;
       }
 
-      // Call expressions: resolve both intra-file and cross-file
-      if (ts.isCallExpression(node) && enclosingFnId) {
+      // Call expressions: resolve intra-file, cross-file, and external
+      if (ts.isCallExpression(node)) {
         const calleeName = node.expression.getText(sourceFile);
+        // Use enclosingFnId if inside a function/class, otherwise fall back to fileId
+        const sourceId = enclosingFnId ?? fileId;
         // Try intra-file first
         const localTargetId = fnMap?.get(calleeName);
-        if (localTargetId && localTargetId !== enclosingFnId) {
-          const callKey = `${enclosingFnId}:${localTargetId}`;
+        if (localTargetId && localTargetId !== sourceId) {
+          const callKey = `${sourceId}:${localTargetId}`;
           if (!callEdgeSet.has(callKey)) {
             callEdgeSet.add(callKey);
             edges.push({
               id: nextEdgeId(),
               type: 'call',
-              source: enclosingFnId,
+              source: sourceId,
               target: localTargetId,
-              callScope: getCallScope(enclosingFnId, localTargetId),
+              callScope: getCallScope(sourceId, localTargetId),
             } as CallEdge);
           }
         } else if (!localTargetId) {
           // Try cross-file resolution
           const crossTargetId = resolveCrossFileSymbol(filePath, calleeName);
-          if (crossTargetId && crossTargetId !== enclosingFnId) {
-            const callKey = `${enclosingFnId}:${crossTargetId}`;
+          if (crossTargetId && crossTargetId !== sourceId) {
+            const callKey = `${sourceId}:${crossTargetId}`;
             if (!callEdgeSet.has(callKey)) {
               callEdgeSet.add(callKey);
               edges.push({
                 id: nextEdgeId(),
                 type: 'call',
-                source: enclosingFnId,
+                source: sourceId,
                 target: crossTargetId,
                 callScope: 'cross-file',
               } as CallEdge);
+            }
+          } else {
+            // Try external package resolution
+            const externalTargetId = resolveExternalSymbol(calleeName);
+            if (externalTargetId) {
+              const callKey = `${sourceId}:${externalTargetId}`;
+              if (!callEdgeSet.has(callKey)) {
+                callEdgeSet.add(callKey);
+                edges.push({
+                  id: nextEdgeId(),
+                  type: 'call',
+                  source: sourceId,
+                  target: externalTargetId,
+                  callScope: 'external',
+                } as CallEdge);
+              }
             }
           }
         }
@@ -785,6 +857,30 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }
 
     ts.forEachChild(sourceFile, (node) => walkForCallsAndRefs(node, null));
+  }
+
+  // Fallback: for external packages that were imported but received no call edges,
+  // emit a file→package call edge so they remain visible in the graph
+  const externalCallTargets = new Set(
+    edges.filter((e) => e.type === 'call' && (e as CallEdge).callScope === 'external').map((e) => e.target)
+  );
+  for (const [fileId, importNodeIds] of fileExternalImports) {
+    for (const importNodeId of importNodeIds) {
+      if (!externalCallTargets.has(importNodeId)) {
+        const callKey = `${fileId}:${importNodeId}`;
+        if (!callEdgeSet.has(callKey)) {
+          callEdgeSet.add(callKey);
+          edges.push({
+            id: nextEdgeId(),
+            type: 'call',
+            source: fileId,
+            target: importNodeId,
+            callScope: 'external',
+          } as CallEdge);
+          externalCallTargets.add(importNodeId);
+        }
+      }
+    }
   }
 
   // Third pass: populate parent→children for folder/file hierarchy
