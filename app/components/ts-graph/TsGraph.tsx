@@ -26,6 +26,7 @@ interface TsGraphProps {
 interface SimNode extends d3.SimulationNodeDatum {
   id: string;
   data: TsNode;
+  computedRadius: number;
 }
 
 interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
@@ -98,10 +99,6 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .finally(() => setLoading(false));
   }, [repoPath, hideTestFiles]);
 
-  const simNodes: SimNode[] = useMemo(
-    () => graphData?.nodes.map((n) => ({ id: n.id, data: { ...n } })) ?? [],
-    [graphData]
-  );
   const simEdges: SimEdge[] = useMemo(
     () =>
       graphData?.edges.map((e) => ({
@@ -112,6 +109,54 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       })) ?? [],
     [graphData]
   );
+
+  const simNodes: SimNode[] = useMemo(() => {
+    if (!graphData) return [];
+
+    const nodes = graphData.nodes.map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
+    const edges = graphData.edges;
+
+    // Count edges per node
+    const degree = new Map<string, number>();
+    for (const e of edges) {
+      degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+      degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+    }
+
+    // Find min/max degree among degree-sized node kinds
+    const DEGREE_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE', 'IMPORT']);
+    let minDeg = Infinity;
+    let maxDeg = 0;
+    for (const n of nodes) {
+      if (DEGREE_KINDS.has(n.data.kind)) {
+        const d = degree.get(n.id) ?? 0;
+        if (d < minDeg) minDeg = d;
+        if (d > maxDeg) maxDeg = d;
+      }
+    }
+    if (minDeg === Infinity) minDeg = 0;
+
+    const scale = d3.scaleLinear()
+      .domain([minDeg, Math.max(maxDeg, minDeg + 1)])
+      .range([5, 100])
+      .clamp(true);
+
+    for (const n of nodes) {
+      if (DEGREE_KINDS.has(n.data.kind)) {
+        n.computedRadius = scale(degree.get(n.id) ?? 0);
+      } else {
+        // Folders and files: use fixed radii (not degree-based)
+        n.computedRadius = n.data.kind === 'FOLDER' ? 3 : 5;
+      }
+    }
+
+    return nodes;
+  }, [graphData]);
+
+  // Import nodes use a fixed visual radius; others use their computed radius
+  function visualRadius(d: SimNode): number {
+    return d.data.kind === 'IMPORT' ? 10 : d.computedRadius;
+  }
 
   // Effect 1: simulation setup — runs only when simNodes or simEdges change
   useEffect(() => {
@@ -152,9 +197,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       )
       .force(
         'collide',
-        d3.forceCollide<SimNode>().radius((d) =>
-          evaluateNodeForces(d.data, currentNodeRules).collideRadius
-        )
+        d3.forceCollide<SimNode>().radius((d) => d.computedRadius + 3)
       )
       .force(
         'x',
@@ -201,7 +244,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .selectAll('circle')
       .data(simNodes)
       .join('circle')
-      .attr('r', (d) => evaluateNodeStyle(d.data, currentNodeRules).radius)
+      .attr('r', (d) => visualRadius(d))
       .attr('fill', (d) => evaluateNodeStyle(d.data, currentNodeRules).color)
       .attr('stroke', '#fff')
       .attr('stroke-width', 1)
@@ -286,7 +329,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, edgeRules).width);
 
     nodeSelectionRef.current
-      .attr('r', (d) => evaluateNodeStyle(d.data, nodeRules).radius)
+      .attr('r', (d) => visualRadius(d))
       .attr('fill', (d) => evaluateNodeStyle(d.data, nodeRules).color);
 
     // Reheat simulation slightly for force changes

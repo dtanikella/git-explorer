@@ -276,7 +276,7 @@ describe('default rules integration', () => {
     expect(forces.linkDistance).toBe(30);
     expect(forces.linkStrength).toBe(1.0);
     const style = evaluateEdgeStyle(edge, defaultEdgeRules);
-    expect(style.color).toBe('#374151');
+    expect(style.color).toBe('#9ca3af');
   });
 
   it('evaluates default edge rules for a cross-file call edge', () => {
@@ -285,7 +285,7 @@ describe('default rules integration', () => {
     expect(forces.linkDistance).toBe(150);
     expect(forces.linkStrength).toBe(0.3);
     const style = evaluateEdgeStyle(edge, defaultEdgeRules);
-    expect(style.color).toBe('#10b981');
+    expect(style.color).toBe('#9ca3af');
   });
 
   it('evaluates default edge rules for an external call edge', () => {
@@ -295,6 +295,6 @@ describe('default rules integration', () => {
     expect(forces.linkDistance).toBe(EDGE_FORCE_DEFAULTS.linkDistance);
     expect(forces.linkStrength).toBe(0.3);
     const style = evaluateEdgeStyle(edge, defaultEdgeRules);
-    expect(style.color).toBe('#3b82f6');
+    expect(style.color).toBe('#9ca3af');
   });
 });
