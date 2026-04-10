@@ -719,6 +719,28 @@ describe('Cross-File Edges', () => {
     // param type + return type should be deduplicated to one type-reference edge
     expect(usesEdges).toHaveLength(1);
   });
+
+  it('emits cross-file call edge for default import used in JSX', () => {
+    repoDir = createTempRepo({
+      'src/Button.tsx': `export default function Button({ label }: { label: string }) { return null; }`,
+      'src/App.tsx': `
+        import Button from './Button';
+        export default function App() { return <Button label="hi" />; }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const appFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'App');
+    const buttonFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'Button');
+    expect(appFn).toBeDefined();
+    expect(buttonFn).toBeDefined();
+
+    const callEdge = result.edges.find(
+      (e) => e.type === 'call' && e.source === appFn!.id && e.target === buttonFn!.id
+    );
+    expect(callEdge).toBeDefined();
+    expect((callEdge as import('@/lib/ts/types').CallEdge).callScope).toBe('cross-file');
+  });
 });
 
 describe('External Package Call Edges', () => {

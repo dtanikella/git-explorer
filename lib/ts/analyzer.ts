@@ -657,19 +657,27 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       continue;
     }
 
-    // Try to find the target declaration node by matching originalName against known node ID patterns
-    const candidateIds = [
-      `fn:${resolvedRelative}:${binding.originalName}`,
-      `iface:${resolvedRelative}:${binding.originalName}`,
-      `class:${resolvedRelative}:${binding.originalName}`,
-    ];
+    // Try to find the target declaration node by matching originalName against known node ID patterns.
+    // For default imports (originalName === 'default'), also try localName as fallback since
+    // `export default function Foo` creates a node with name "Foo", not "default".
+    const namesToTry = binding.originalName === 'default'
+      ? [binding.originalName, binding.localName]
+      : [binding.originalName];
 
     let targetNodeId: string | undefined;
-    for (const candidateId of candidateIds) {
-      if (nodeMap.has(candidateId)) {
-        targetNodeId = candidateId;
-        break;
+    for (const name of namesToTry) {
+      const candidateIds = [
+        `fn:${resolvedRelative}:${name}`,
+        `iface:${resolvedRelative}:${name}`,
+        `class:${resolvedRelative}:${name}`,
+      ];
+      for (const candidateId of candidateIds) {
+        if (nodeMap.has(candidateId)) {
+          targetNodeId = candidateId;
+          break;
+        }
       }
+      if (targetNodeId) break;
     }
 
     if (targetNodeId) {

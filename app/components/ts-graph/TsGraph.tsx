@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
 import {
   TsGraphData,
@@ -43,6 +43,8 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
   const nodeSelectionRef = useRef<d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown> | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const simNodesRef = useRef<SimNode[]>([]);
 
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -166,6 +168,9 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     return nodes;
   }, [graphData, simEdges]);
+
+  // Keep simNodesRef in sync for search callback
+  useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
 
   // Import nodes use a fixed visual radius; others use their computed radius
   function visualRadius(d: SimNode): number {
@@ -300,14 +305,15 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       node.attr('cx', (d) => d.x!).attr('cy', (d) => d.y!);
     });
 
-    svg.call(
-      d3
+    const zoomBehavior = d3
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 8])
         .on('zoom', (event) => {
           g.attr('transform', event.transform);
-        })
-    );
+        });
+    zoomRef.current = zoomBehavior;
+
+    svg.call(zoomBehavior);
 
     function drag(simulation: d3.Simulation<SimNode, SimEdge>) {
       function dragstarted(event: any, d: SimNode) {
@@ -333,6 +339,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     return () => {
       simulation.stop();
+      zoomRef.current = null;
     };
   }, [simNodes, simEdges]);
 
@@ -353,6 +360,44 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       simulationRef.current.alpha(0.3).restart();
     }
   }, [nodeRules, edgeRules]);
+
+  // Search handler: find node by name (case-insensitive) and zoom to it
+  const handleSearchNode = useCallback((query: string): boolean => {
+    const lowerQ = query.toLowerCase();
+    const match = simNodesRef.current.find((n) => {
+      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+      return name.toLowerCase() === lowerQ;
+    }) ?? simNodesRef.current.find((n) => {
+      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+      return name.toLowerCase().includes(lowerQ);
+    });
+    if (!match || match.x == null || match.y == null) return false;
+    if (!svgRef.current || !zoomRef.current) return false;
+
+    const svg = d3.select(svgRef.current);
+    const width = svgRef.current.parentElement?.clientWidth || 800;
+    const height = 600;
+    const scale = 2;
+    const transform = d3.zoomIdentity
+      .translate(width / 2 - match.x * scale, height / 2 - match.y * scale)
+      .scale(scale);
+
+    svg.transition().duration(500).call(zoomRef.current.transform, transform);
+
+    // Briefly highlight the node
+    if (nodeSelectionRef.current) {
+      nodeSelectionRef.current
+        .filter((d) => d.id === match.id)
+        .attr('stroke', '#facc15')
+        .attr('stroke-width', 4)
+        .transition()
+        .delay(1500)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1);
+    }
+
+    return true;
+  }, []);
 
   if (loading) {
     return (
@@ -398,6 +443,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         onEdgeRulesChange={setEdgeRules}
         hideTestFiles={hideTestFiles}
         onHideTestFilesChange={setHideTestFiles}
+        onSearchNode={handleSearchNode}
       />
     </div>
   );
