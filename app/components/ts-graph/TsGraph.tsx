@@ -34,6 +34,9 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
   data: TsEdge;
 }
 
+// TODO: temporarily excluding IMPORT nodes — restore by adding 'IMPORT' back
+const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
+
 export default function TsGraph({ repoPath }: TsGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -99,40 +102,50 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .finally(() => setLoading(false));
   }, [repoPath, hideTestFiles]);
 
-  const simEdges: SimEdge[] = useMemo(
-    () =>
-      graphData?.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { ...e },
-      })) ?? [],
-    [graphData]
-  );
+  const simEdges: SimEdge[] = useMemo(() => {
+    if (!graphData) return [];
+    // Build a set of symbol (non-file/folder) node IDs
+    const symbolIds = new Set(
+      graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
+    );
+    // Keep only edges where both endpoints are symbol nodes
+    return graphData.edges
+      .filter((e) => symbolIds.has(e.source) && symbolIds.has(e.target))
+      .map((e) => ({ id: e.id, source: e.source, target: e.target, data: { ...e } }));
+  }, [graphData]);
 
   const simNodes: SimNode[] = useMemo(() => {
     if (!graphData) return [];
 
-    const nodes = graphData.nodes.map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
-    const edges = graphData.edges;
-
-    // Count edges per node
-    const degree = new Map<string, number>();
-    for (const e of edges) {
-      degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
-      degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+    // Only include symbol nodes that have at least one remaining edge
+    const connectedIds = new Set<string>();
+    for (const e of simEdges) {
+      const src = typeof e.source === 'string' ? e.source : (e.source as SimNode).id;
+      const tgt = typeof e.target === 'string' ? e.target : (e.target as SimNode).id;
+      connectedIds.add(src);
+      connectedIds.add(tgt);
     }
 
-    // Find min/max degree among degree-sized node kinds
-    const DEGREE_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE', 'IMPORT']);
+    const nodes = graphData.nodes
+      .filter((n) => SYMBOL_KINDS.has(n.kind) && connectedIds.has(n.id))
+      .map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
+
+    // Count edges per node for degree-based sizing
+    const degree = new Map<string, number>();
+    for (const e of simEdges) {
+      const src = typeof e.source === 'string' ? e.source : (e.source as SimNode).id;
+      const tgt = typeof e.target === 'string' ? e.target : (e.target as SimNode).id;
+      degree.set(src, (degree.get(src) ?? 0) + 1);
+      degree.set(tgt, (degree.get(tgt) ?? 0) + 1);
+    }
+
+    // Find min/max degree among symbol nodes
     let minDeg = Infinity;
     let maxDeg = 0;
     for (const n of nodes) {
-      if (DEGREE_KINDS.has(n.data.kind)) {
-        const d = degree.get(n.id) ?? 0;
-        if (d < minDeg) minDeg = d;
-        if (d > maxDeg) maxDeg = d;
-      }
+      const d = degree.get(n.id) ?? 0;
+      if (d < minDeg) minDeg = d;
+      if (d > maxDeg) maxDeg = d;
     }
     if (minDeg === Infinity) minDeg = 0;
 
@@ -141,21 +154,24 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .range([5, 100])
       .clamp(true);
 
+    const fnScale = d3.scaleLinear()
+      .domain([minDeg, Math.max(maxDeg, minDeg + 1)])
+      .range([10, 40])
+      .clamp(true);
+
     for (const n of nodes) {
-      if (DEGREE_KINDS.has(n.data.kind)) {
-        n.computedRadius = scale(degree.get(n.id) ?? 0);
-      } else {
-        // Folders and files: use fixed radii (not degree-based)
-        n.computedRadius = n.data.kind === 'FOLDER' ? 3 : 5;
-      }
+      const deg = degree.get(n.id) ?? 0;
+      n.computedRadius = n.data.kind === 'FUNCTION' ? fnScale(deg) : scale(deg);
     }
 
     return nodes;
-  }, [graphData]);
+  }, [graphData, simEdges]);
 
   // Import nodes use a fixed visual radius; others use their computed radius
   function visualRadius(d: SimNode): number {
-    return d.data.kind === 'IMPORT' ? 10 : d.computedRadius;
+    if (d.data.kind === 'IMPORT') return 10;
+    if (d.data.kind === 'FUNCTION') return d.computedRadius;
+    return d.computedRadius;
   }
 
   // Effect 1: simulation setup — runs only when simNodes or simEdges change

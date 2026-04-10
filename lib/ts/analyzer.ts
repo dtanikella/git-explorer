@@ -1,5 +1,6 @@
 import * as ts from 'typescript';
 import * as path from 'path';
+import Module from 'module';
 import {
   TsGraphData,
   TsNode,
@@ -232,7 +233,88 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       // Import declarations
       if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
         const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
-        const isLocal = isLocalImport(specifier);
+
+        // Resolve module to determine if it's truly local (repo-internal)
+        // rather than relying on prefix heuristics, which miss baseUrl and
+        // custom tsconfig path aliases.
+        const resolvedMod = ts.resolveModuleName(
+          specifier,
+          filePath,
+          program.getCompilerOptions(),
+          ts.sys
+        );
+        const resolvedFileName = resolvedMod.resolvedModule?.resolvedFileName;
+        // A module is local when it resolves to a file inside the repo
+        // that isn't under node_modules. We avoid isExternalLibraryImport
+        // because it can misclassify baseUrl-resolved paths.
+        // Normalize repoPath to ensure no trailing slash before comparing.
+        const normalizedRepoPath = repoPath.endsWith(path.sep) ? repoPath : repoPath + path.sep;
+        const startsWithRepo = resolvedFileName?.startsWith(normalizedRepoPath) ?? false;
+        const hasNodeModules = resolvedFileName?.includes(path.sep + 'node_modules' + path.sep) ?? false;
+        let isLocal: boolean;
+        if (resolvedFileName) {
+          isLocal = startsWithRepo && !hasNodeModules;
+        } else if (isLocalImport(specifier)) {
+          isLocal = true;
+        } else {
+          // Unresolved bare specifier (e.g. "containers/foo" via baseUrl).
+          const bareModule = specifier.startsWith('@')
+            ? specifier.split('/').slice(0, 2).join('/')
+            : specifier.split('/')[0];
+
+          // 1) Check if it's listed as a dependency in any package.json
+          //    between the importing file and the repo root. This is the
+          //    most reliable signal for monorepos with pnpm/yarn PnP/hoisting.
+          let isDependency = false;
+          let searchDir = path.dirname(filePath);
+          const repoRoot = normalizedRepoPath.replace(/\/$/, '');
+          while (true) {
+            const pkgJsonPath = path.join(searchDir, 'package.json');
+            if (ts.sys.fileExists(pkgJsonPath)) {
+              try {
+                const pkgJson = JSON.parse(ts.sys.readFile(pkgJsonPath) || '{}');
+                const allDeps = {
+                  ...pkgJson.dependencies,
+                  ...pkgJson.devDependencies,
+                  ...pkgJson.peerDependencies,
+                  ...pkgJson.optionalDependencies,
+                };
+                if (bareModule in allDeps) {
+                  isDependency = true;
+                  break;
+                }
+              } catch {
+                // malformed package.json, skip
+              }
+            }
+            if (searchDir === repoRoot || searchDir === path.dirname(searchDir)) break;
+            searchDir = path.dirname(searchDir);
+          }
+
+          if (isDependency) {
+            isLocal = false;
+          } else {
+            // 2) Not in any package.json. Check if it's a Node.js built-in
+            //    that's used as the EXACT specifier (e.g. "fs", "path",
+            //    "fs/promises") — but NOT a subpath that just starts with a
+            //    builtin name (e.g. "constants/featureFlags" is NOT the
+            //    Node.js "constants" module).
+            const builtins = new Set(Module.builtinModules);
+            // Treat as builtin only if the full specifier or `node:`-stripped
+            // form is an exact builtin, OR if the bare module is a builtin
+            // AND the subpath is a known Node.js subpath export pattern.
+            const isExactBuiltin = builtins.has(specifier)
+              || builtins.has(specifier.replace(/^node:/, ''));
+            // Node.js subpath exports (e.g. "fs/promises", "stream/web")
+            // always have a single segment after the module name.
+            const parts = specifier.split('/');
+            const isBuiltinSubpath = builtins.has(parts[0])
+              && parts.length === 2
+              && !parts[1].includes('-')  // internal modules like "constants/featureFlags" have hyphens or camelCase names
+              && /^[a-z]+$/.test(parts[1]); // Node.js subpaths are all lowercase alpha (promises, web, consumers)
+            isLocal = !(isExactBuiltin || isBuiltinSubpath);
+          }
+        }
 
         let importNode = importNodeMap.get(specifier);
         if (!importNode) {
@@ -799,11 +881,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         return;
       }
 
-      // Call expressions: resolve intra-file, cross-file, and external
-      if (ts.isCallExpression(node)) {
-        const calleeName = node.expression.getText(sourceFile);
-        // Use enclosingFnId if inside a function/class, otherwise fall back to fileId
-        const sourceId = enclosingFnId ?? fileId;
+      // Helper: resolve a callee name and emit the appropriate call edge
+      function emitCallEdgeForName(calleeName: string, sourceId: string): void {
         // Try intra-file first
         const localTargetId = fnMap?.get(calleeName);
         if (localTargetId && localTargetId !== sourceId) {
@@ -850,6 +929,24 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
               }
             }
           }
+        }
+      }
+
+      // Call expressions: resolve intra-file, cross-file, and external
+      if (ts.isCallExpression(node)) {
+        const calleeName = node.expression.getText(sourceFile);
+        const sourceId = enclosingFnId ?? fileId;
+        emitCallEdgeForName(calleeName, sourceId);
+      }
+
+      // JSX element usage: <Component /> and <Component>...</Component>
+      // These are not CallExpressions in the AST, so we handle them separately.
+      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+        const tagName = node.tagName.getText(sourceFile);
+        // Only resolve user-defined components (PascalCase), skip intrinsic HTML tags (lowercase)
+        if (tagName[0] && tagName[0] === tagName[0].toUpperCase()) {
+          const sourceId = enclosingFnId ?? fileId;
+          emitCallEdgeForName(tagName, sourceId);
         }
       }
 
@@ -912,7 +1009,9 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }
   }
 
-  // Fifth pass: emit contains edges for FOLDER → child-FOLDER, FOLDER → FILE, and FILE → children
+  // Fifth pass: emit contains edges for FOLDER → child-FOLDER and FOLDER → FILE only.
+  // FILE → MODULE contains edges are intentionally omitted so that co-located
+  // functions/classes/interfaces are not linked merely by sharing a file.
   for (const node of nodes) {
     if (!node.parent) continue;
     const parentNode = nodeMap.get(node.parent);
@@ -922,14 +1021,6 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         id: nextEdgeId(),
         type: 'contains',
         containsScope: 'folder',
-        source: node.parent,
-        target: node.id,
-      });
-    } else if (parentNode.kind === 'FILE' && (node.kind === 'FUNCTION' || node.kind === 'CLASS' || node.kind === 'INTERFACE')) {
-      edges.push({
-        id: nextEdgeId(),
-        type: 'contains',
-        containsScope: 'file',
         source: node.parent,
         target: node.id,
       });
@@ -951,6 +1042,29 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         edges = edges.filter((e) => !emptySet.has(e.source) && !emptySet.has(e.target));
         changed = true;
       }
+    }
+  }
+
+  // Prune isolated modules: remove FUNCTION/CLASS/INTERFACE nodes that have
+  // no call or uses edges connecting them to other modules.
+  {
+    const moduleKinds = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
+    const semanticEdgeTypes = new Set(['call', 'uses']);
+    const connectedModuleIds = new Set<string>();
+    for (const edge of edges) {
+      if (semanticEdgeTypes.has(edge.type)) {
+        connectedModuleIds.add(edge.source);
+        connectedModuleIds.add(edge.target);
+      }
+    }
+    const isolatedIds = new Set(
+      nodes
+        .filter((n) => moduleKinds.has(n.kind) && !connectedModuleIds.has(n.id))
+        .map((n) => n.id)
+    );
+    if (isolatedIds.size > 0) {
+      nodes = nodes.filter((n) => !isolatedIds.has(n.id));
+      edges = edges.filter((e) => !isolatedIds.has(e.source) && !isolatedIds.has(e.target));
     }
   }
 

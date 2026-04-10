@@ -52,17 +52,20 @@ describe('analyzeTypeScriptRepo', () => {
           return a + b;
         }
       `,
+      'src/index.ts': `
+        import { add } from './utils';
+        export function main(): number { return add(1, 2); }
+      `,
     });
     const result = analyzeTypeScriptRepo(repoDir);
 
-    const fns = result.nodes.filter((n) => n.kind === 'FUNCTION');
-    expect(fns).toHaveLength(1);
-    expect(fns[0].kind === 'FUNCTION' && fns[0].name).toBe('add');
-    expect(fns[0].kind === 'FUNCTION' && fns[0].params).toEqual([
+    const addFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'add');
+    expect(addFn).toBeDefined();
+    expect(addFn!.kind === 'FUNCTION' && addFn!.params).toEqual([
       { name: 'a', type: 'number' },
       { name: 'b', type: 'number' },
     ]);
-    expect(fns[0].kind === 'FUNCTION' && fns[0].returnType).toBe('number');
+    expect(addFn!.kind === 'FUNCTION' && addFn!.returnType).toBe('number');
   });
 
   it('creates ClassNode for class declarations', () => {
@@ -73,13 +76,16 @@ describe('analyzeTypeScriptRepo', () => {
           greet(): string { return this.name; }
         }
       `,
+      'src/index.ts': `
+        import { MyService } from './service';
+        export function create(svc: MyService): void {}
+      `,
     });
     const result = analyzeTypeScriptRepo(repoDir);
 
-    const classes = result.nodes.filter((n) => n.kind === 'CLASS');
-    expect(classes).toHaveLength(1);
-    expect(classes[0].kind === 'CLASS' && classes[0].name).toBe('MyService');
-    expect(classes[0].kind === 'CLASS' && classes[0].constructorParams).toEqual([
+    const classNode = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'MyService');
+    expect(classNode).toBeDefined();
+    expect(classNode!.kind === 'CLASS' && classNode!.constructorParams).toEqual([
       { name: 'name', type: 'string' },
     ]);
   });
@@ -93,15 +99,18 @@ describe('analyzeTypeScriptRepo', () => {
           start(): void;
         }
       `,
+      'src/index.ts': `
+        import { Config } from './types';
+        export function init(c: Config): void {}
+      `,
     });
     const result = analyzeTypeScriptRepo(repoDir);
 
-    const ifaces = result.nodes.filter((n) => n.kind === 'INTERFACE');
-    expect(ifaces).toHaveLength(1);
-    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].name).toBe('Config');
-    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].isExported).toBe(true);
-    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].propertyCount).toBe(2);
-    expect(ifaces[0].kind === 'INTERFACE' && ifaces[0].methodCount).toBe(1);
+    const iface = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'Config');
+    expect(iface).toBeDefined();
+    expect(iface!.kind === 'INTERFACE' && iface!.isExported).toBe(true);
+    expect(iface!.kind === 'INTERFACE' && iface!.propertyCount).toBe(2);
+    expect(iface!.kind === 'INTERFACE' && iface!.methodCount).toBe(1);
   });
 
   it('does not create ImportNode or ImportEdge for local imports', () => {
@@ -149,7 +158,7 @@ describe('analyzeTypeScriptRepo', () => {
     expect(callEdge).toBeDefined();
   });
 
-  it('creates FunctionNode and CallEdge for arrow functions', () => {
+  it('creates FunctionNode for arrow functions with call edges', () => {
     repoDir = createTempRepo({
       'src/arrows.ts': `
         const greet = (name: string): string => 'Hello ' + name;
@@ -157,9 +166,6 @@ describe('analyzeTypeScriptRepo', () => {
       `,
     });
     const result = analyzeTypeScriptRepo(repoDir);
-
-    const fns = result.nodes.filter((n) => n.kind === 'FUNCTION');
-    expect(fns.length).toBeGreaterThanOrEqual(2);
 
     const greetFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'greet');
     const runFn = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'run');
@@ -222,9 +228,11 @@ describe('analyzeTypeScriptRepo', () => {
 
   it('handles ClassNode with extends and implements', () => {
     repoDir = createTempRepo({
+      'src/base.ts': `export class BaseService {}`,
+      'src/types.ts': `export interface Runnable { run(): void; }`,
       'src/service.ts': `
-        class BaseService {}
-        interface Runnable { run(): void; }
+        import { BaseService } from './base';
+        import { Runnable } from './types';
         export class AppService extends BaseService implements Runnable {
           run(): void {}
         }
@@ -241,8 +249,9 @@ describe('analyzeTypeScriptRepo', () => {
 
   it('handles InterfaceNode with extends', () => {
     repoDir = createTempRepo({
+      'src/base.ts': `export interface Base { id: string; }`,
       'src/types.ts': `
-        interface Base { id: string; }
+        import { Base } from './base';
         export interface Extended extends Base { name: string; }
       `,
     });
@@ -256,11 +265,14 @@ describe('analyzeTypeScriptRepo', () => {
 
   it('sets inTestFile on FileNode and child nodes inside a test file', () => {
     repoDir = createTempRepo({
+      'src/utils.ts': `export function helper(): void {}`,
       'src/utils.test.ts': `
-        export function testHelper(): void {}
+        import { helper } from './utils';
+        export function testHelper(): void { helper(); }
       `,
       'src/regular.ts': `
-        export function normalFn(): void {}
+        import { helper } from './utils';
+        export function normalFn(): void { helper(); }
       `,
     });
     const result = analyzeTypeScriptRepo(repoDir, { hideTestFiles: false });
@@ -769,6 +781,11 @@ describe('External Package Call Edges', () => {
         export const x = 1;
       `,
     });
+    // Add some-package to package.json so the analyzer recognizes it as external
+    fs.writeFileSync(
+      path.join(repoDir, 'package.json'),
+      JSON.stringify({ dependencies: { 'some-package': '1.0.0' } })
+    );
     const result = analyzeTypeScriptRepo(repoDir);
 
     const fileNode = result.nodes.find((n) => n.kind === 'FILE' && n.name === 'index.ts');

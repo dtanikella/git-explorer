@@ -1,30 +1,6 @@
-import { NodeForceRule, EdgeForceRule, CallEdge, ContainsEdge, UsesEdge } from './types';
+import { NodeForceRule, EdgeForceRule, CallEdge, UsesEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
-  {
-    id: 'folder-nodes',
-    label: 'Folders',
-    enabled: true,
-    match: (n) => n.kind === 'FOLDER',
-    forces: { charge: -400, collideRadius: 30, zone: 'center' },
-    style: { color: '#d1d5db', radius: 3 },
-  },
-  {
-    id: 'file-tsx',
-    label: 'TSX Files',
-    enabled: true,
-    match: (n) => n.kind === 'FILE' && n.fileType === 'tsx',
-    forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#9ca3af', radius: 5 },
-  },
-  {
-    id: 'file-ts',
-    label: 'TS Files',
-    enabled: true,
-    match: (n) => n.kind === 'FILE' && n.fileType === 'ts',
-    forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#9ca3af', radius: 5 },
-  },
   {
     id: 'function-nodes',
     label: 'Functions',
@@ -61,35 +37,11 @@ export const defaultNodeRules: NodeForceRule[] = [
 
 export const defaultEdgeRules: EdgeForceRule[] = [
   {
-    id: 'folder-folder-contains',
-    label: 'Folder → Folder',
-    enabled: true,
-    match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'folder' && e.target.startsWith('folder:'),
-    forces: { linkDistance: 10, linkStrength: 1.0 },
-    style: { color: '#9ca3af', width: 0.5 },
-  },
-  {
-    id: 'folder-file-contains',
-    label: 'Folder → File',
-    enabled: true,
-    match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'folder' && e.target.startsWith('file:'),
-    forces: { linkDistance: 20, linkStrength: 0.6 },
-    style: { color: '#9ca3af', width: 0.5 },
-  },
-  {
-    id: 'file-contains-edges',
-    label: 'File Contains',
-    enabled: true,
-    match: (e) => e.type === 'contains' && (e as ContainsEdge).containsScope === 'file',
-    forces: { linkDistance: 5, linkStrength: 1.0 },
-    style: { color: '#9ca3af', width: 1 },
-  },
-  {
     id: 'call-same-file',
     label: 'Same-File Calls',
     enabled: true,
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'same-file',
-    forces: { linkDistance: 30, linkStrength: 1.0 },
+    forces: { linkDistance: 30, linkStrength: 0.8 },
     style: { color: '#9ca3af', width: 1 },
   },
   {
@@ -97,7 +49,7 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'Cross-File Calls',
     enabled: true,
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'cross-file',
-    forces: { linkDistance: 150, linkStrength: 0.3 },
+    forces: { linkDistance: 50, linkStrength: 0.6 },
     style: { color: '#9ca3af', width: 1.5 },
   },
   {
@@ -113,7 +65,7 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'Type References',
     enabled: true,
     match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'type-reference',
-    forces: { linkDistance: 160, linkStrength: 0.2 },
+    forces: { linkDistance: 100, linkStrength: 0.5 },
     style: { color: '#9ca3af', width: 1 },
   },
   {
@@ -121,7 +73,7 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'Extends',
     enabled: true,
     match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'extends',
-    forces: { linkDistance: 120, linkStrength: 0.4 },
+    forces: { linkDistance: 100, linkStrength: 0.4 },
     style: { color: '#9ca3af', width: 1.5 },
   },
   {
@@ -129,7 +81,7 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     label: 'Implements',
     enabled: true,
     match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'implements',
-    forces: { linkDistance: 120, linkStrength: 0.4 },
+    forces: { linkDistance: 100, linkStrength: 0.4 },
     style: { color: '#9ca3af', width: 1.5 },
   },
 ];
