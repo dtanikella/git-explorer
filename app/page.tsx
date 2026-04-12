@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import DateRangeSelector from './components/DateRangeSelector';
 import { CoChangeGraph } from '@/lib/git/types';
+import TsGraph from './components/ts-graph/TsGraph';
 import ForceDirectedGraph from './components/force-directed-graph';
 import CirclePackingGraph from './components/circle-packing-graph';
 import FileOccurrenceTable from './components/FileOccurrenceTable';
@@ -73,36 +74,20 @@ export default function HomePage() {
               onError={undefined}
             />
           </div>
-          {/* Second row: repo presets and date range selector */}
+          {/* Second row: date range selector */}
           <div style={{ display: 'flex', flexDirection: 'row', gap: 16, marginBottom: 24, width: '100%' }}>
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 16, flex: 3 }}>
-              <button
-                className="btn-secondary"
-                style={{ minWidth: 140 }}
-                onClick={() => handleRepositorySelect('/Users/dhananjaytanikella/code/fedora')}
-              >
-                fedora
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ minWidth: 140 }}
-                onClick={() => handleRepositorySelect('/Users/dhananjaytanikella/code/mono-frontend')}
-              >
-                mono-frontend
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ minWidth: 220 }}
-                onClick={() => handleRepositorySelect('/Users/dhananjaytanikella/code/student-checkout-frontend')}
-              >
-                student-checkout-frontend
-              </button>
-            </div>
-            <div style={{ flex: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
               <DateRangeSelector value={dateRange} onChange={setDateRange} />
             </div>
           </div>
           {/* Graph area: take as much width as possible */}
+          {/* TypeScript Repository Graph — shown when repoPath is set */}
+          {repoPath && (
+            <div style={{ width: '100%', marginBottom: 24 }}>
+              <TsGraph repoPath={repoPath} />
+            </div>
+          )}
+          {/* Co-change visualizations — shown when git analysis data is available */}
           {graphData && (
             <>
               <div style={{ width: '100%', minHeight: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc', padding: 0 }}>
