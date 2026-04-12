@@ -1,56 +1,6 @@
-import { NodeForceRule, EdgeForceRule, CallEdge } from './types';
+import { NodeForceRule, EdgeForceRule, CallEdge, UsesEdge } from './types';
 
 export const defaultNodeRules: NodeForceRule[] = [
-  // Test files — must precede general file rules so first-match-wins gives test styling
-  {
-    id: 'file-test',
-    label: 'Test Files',
-    enabled: true,
-    match: (n) =>
-      n.kind === 'FILE' &&
-      (n.path.includes('.test.ts') ||
-        n.path.includes('.test.tsx') ||
-        n.path.includes('.spec.ts') ||
-        n.path.includes('.spec.tsx') ||
-        n.path.split('/').includes('__tests__')),
-    forces: { charge: -80, collideRadius: 6 },
-    style: { color: '#e5e7eb', radius: 3 },
-  },
-  // Children of test files — must precede general function/class/interface rules
-  {
-    id: 'test-children',
-    label: 'Test File Children',
-    enabled: true,
-    match: (n) =>
-      (n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE') &&
-      !!n.inTestFile,
-    forces: { charge: -40, collideRadius: 4 },
-    style: { color: '#e5e7eb', radius: 2 },
-  },
-  {
-    id: 'folder-nodes',
-    label: 'Folders',
-    enabled: true,
-    match: (n) => n.kind === 'FOLDER',
-    forces: { charge: -400, collideRadius: 30, zone: 'center' },
-    style: { color: '#d1d5db', radius: 12 },
-  },
-  {
-    id: 'file-tsx',
-    label: 'TSX Files',
-    enabled: true,
-    match: (n) => n.kind === 'FILE' && n.fileType === 'tsx',
-    forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#9ca3af', radius: 8 },
-  },
-  {
-    id: 'file-ts',
-    label: 'TS Files',
-    enabled: true,
-    match: (n) => n.kind === 'FILE' && n.fileType === 'ts',
-    forces: { charge: -200, collideRadius: 15 },
-    style: { color: '#9ca3af', radius: 8 },
-  },
   {
     id: 'function-nodes',
     label: 'Functions',
@@ -76,63 +26,31 @@ export const defaultNodeRules: NodeForceRule[] = [
     style: { color: '#8b5cf6', radius: 7 },
   },
   {
-    id: 'import-local',
-    label: 'Local Imports',
+    id: 'import-nodes',
+    label: 'Imports',
     enabled: true,
-    match: (n) => n.kind === 'IMPORT' && n.source === 'local',
-    forces: { charge: -50, collideRadius: 6 },
-    style: { color: '#94a3b8', radius: 4 },
-  },
-  {
-    id: 'import-package',
-    label: 'Package Imports',
-    enabled: true,
-    match: (n) => n.kind === 'IMPORT' && n.source === 'package',
-    forces: { charge: -50, collideRadius: 6, zone: 'right' },
+    match: (n) => n.kind === 'IMPORT',
+    forces: { charge: -80, collideRadius: 6 },
     style: { color: '#3b82f6', radius: 4 },
   },
 ];
 
 export const defaultEdgeRules: EdgeForceRule[] = [
   {
-    id: 'contains-edges',
-    label: 'Contains Edges',
-    enabled: true,
-    match: (e) => e.type === 'contains',
-    forces: { linkDistance: 60, linkStrength: 0.2 },
-    style: { color: '#e5e7eb', width: 0.5 },
-  },
-  {
-    id: 'import-edges',
-    label: 'Import Edges',
-    enabled: true,
-    match: (e) => e.type === 'import',
-    forces: { linkDistance: 80, linkStrength: 0.6 },
-    style: { color: '#94a3b8', width: 1 },
-  },
-  {
-    id: 'export-edges',
-    label: 'Export Edges',
-    enabled: true,
-    match: (e) => e.type === 'export',
-    forces: { linkDistance: 60, linkStrength: 0.7 },
-    style: { color: '#6366f1', width: 1.5 },
-  },
-  {
     id: 'call-same-file',
     label: 'Same-File Calls',
     enabled: true,
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'same-file',
-    forces: { linkDistance: 30, linkStrength: 1.0 },
-    style: { color: '#374151', width: 1 },
+    forces: { linkDistance: 30, linkStrength: 0.8 },
+    style: { color: '#9ca3af', width: 1 },
   },
   {
     id: 'call-cross-file',
     label: 'Cross-File Calls',
     enabled: true,
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'cross-file',
-    forces: { linkDistance: 60, linkStrength: 0.6 },
-    style: { color: '#111827', width: 1 },
+    forces: { linkDistance: 50, linkStrength: 0.6 },
+    style: { color: '#9ca3af', width: 1.5 },
   },
   {
     id: 'call-external',
@@ -140,6 +58,30 @@ export const defaultEdgeRules: EdgeForceRule[] = [
     enabled: true,
     match: (e) => e.type === 'call' && (e as CallEdge).callScope === 'external',
     forces: { linkDistance: 100, linkStrength: 0.3 },
-    style: { color: '#3b82f6', width: 1 },
+    style: { color: '#9ca3af', width: 1 },
+  },
+  {
+    id: 'uses-type-ref',
+    label: 'Type References',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'type-reference',
+    forces: { linkDistance: 100, linkStrength: 0.5 },
+    style: { color: '#9ca3af', width: 1 },
+  },
+  {
+    id: 'uses-extends',
+    label: 'Extends',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'extends',
+    forces: { linkDistance: 100, linkStrength: 0.4 },
+    style: { color: '#9ca3af', width: 1.5 },
+  },
+  {
+    id: 'uses-implements',
+    label: 'Implements',
+    enabled: true,
+    match: (e) => e.type === 'uses' && (e as UsesEdge).usageKind === 'implements',
+    forces: { linkDistance: 100, linkStrength: 0.4 },
+    style: { color: '#9ca3af', width: 1.5 },
   },
 ];

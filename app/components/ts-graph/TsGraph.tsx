@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
 import {
   TsGraphData,
@@ -26,6 +26,7 @@ interface TsGraphProps {
 interface SimNode extends d3.SimulationNodeDatum {
   id: string;
   data: TsNode;
+  computedRadius: number;
 }
 
 interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
@@ -33,16 +34,22 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
   data: TsEdge;
 }
 
+// TODO: temporarily excluding IMPORT nodes — restore by adding 'IMPORT' back
+const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
+
 export default function TsGraph({ repoPath }: TsGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
   const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
   const nodeSelectionRef = useRef<d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown> | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const simNodesRef = useRef<SimNode[]>([]);
 
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hideTestFiles, setHideTestFiles] = useState(true);
   const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
   const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
 
@@ -81,7 +88,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     fetch('/api/ts-analysis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath }),
+      body: JSON.stringify({ repoPath, hideTestFiles }),
     })
       .then((res) => res.json())
       .then((result) => {
@@ -95,22 +102,82 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         setError(err.message || 'Network error');
       })
       .finally(() => setLoading(false));
-  }, [repoPath]);
+  }, [repoPath, hideTestFiles]);
 
-  const simNodes: SimNode[] = useMemo(
-    () => graphData?.nodes.map((n) => ({ id: n.id, data: { ...n } })) ?? [],
-    [graphData]
-  );
-  const simEdges: SimEdge[] = useMemo(
-    () =>
-      graphData?.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { ...e },
-      })) ?? [],
-    [graphData]
-  );
+  const simEdges: SimEdge[] = useMemo(() => {
+    if (!graphData) return [];
+    // Build a set of symbol (non-file/folder) node IDs
+    const symbolIds = new Set(
+      graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
+    );
+    // Keep only edges where both endpoints are symbol nodes
+    return graphData.edges
+      .filter((e) => symbolIds.has(e.source) && symbolIds.has(e.target))
+      .map((e) => ({ id: e.id, source: e.source, target: e.target, data: { ...e } }));
+  }, [graphData]);
+
+  const simNodes: SimNode[] = useMemo(() => {
+    if (!graphData) return [];
+
+    // Only include symbol nodes that have at least one remaining edge
+    const connectedIds = new Set<string>();
+    for (const e of simEdges) {
+      const src = typeof e.source === 'string' ? e.source : (e.source as SimNode).id;
+      const tgt = typeof e.target === 'string' ? e.target : (e.target as SimNode).id;
+      connectedIds.add(src);
+      connectedIds.add(tgt);
+    }
+
+    const nodes = graphData.nodes
+      .filter((n) => SYMBOL_KINDS.has(n.kind) && connectedIds.has(n.id))
+      .map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
+
+    // Count edges per node for degree-based sizing
+    const degree = new Map<string, number>();
+    for (const e of simEdges) {
+      const src = typeof e.source === 'string' ? e.source : (e.source as SimNode).id;
+      const tgt = typeof e.target === 'string' ? e.target : (e.target as SimNode).id;
+      degree.set(src, (degree.get(src) ?? 0) + 1);
+      degree.set(tgt, (degree.get(tgt) ?? 0) + 1);
+    }
+
+    // Find min/max degree among symbol nodes
+    let minDeg = Infinity;
+    let maxDeg = 0;
+    for (const n of nodes) {
+      const d = degree.get(n.id) ?? 0;
+      if (d < minDeg) minDeg = d;
+      if (d > maxDeg) maxDeg = d;
+    }
+    if (minDeg === Infinity) minDeg = 0;
+
+    const scale = d3.scaleLinear()
+      .domain([minDeg, Math.max(maxDeg, minDeg + 1)])
+      .range([5, 100])
+      .clamp(true);
+
+    const fnScale = d3.scaleLinear()
+      .domain([minDeg, Math.max(maxDeg, minDeg + 1)])
+      .range([10, 40])
+      .clamp(true);
+
+    for (const n of nodes) {
+      const deg = degree.get(n.id) ?? 0;
+      n.computedRadius = n.data.kind === 'FUNCTION' ? fnScale(deg) : scale(deg);
+    }
+
+    return nodes;
+  }, [graphData, simEdges]);
+
+  // Keep simNodesRef in sync for search callback
+  useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
+
+  // Import nodes use a fixed visual radius; others use their computed radius
+  function visualRadius(d: SimNode): number {
+    if (d.data.kind === 'IMPORT') return 10;
+    if (d.data.kind === 'FUNCTION') return d.computedRadius;
+    return d.computedRadius;
+  }
 
   // Effect 1: simulation setup — runs only when simNodes or simEdges change
   useEffect(() => {
@@ -151,9 +218,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       )
       .force(
         'collide',
-        d3.forceCollide<SimNode>().radius((d) =>
-          evaluateNodeForces(d.data, currentNodeRules).collideRadius
-        )
+        d3.forceCollide<SimNode>().radius((d) => d.computedRadius + 3)
       )
       .force(
         'x',
@@ -200,7 +265,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .selectAll('circle')
       .data(simNodes)
       .join('circle')
-      .attr('r', (d) => evaluateNodeStyle(d.data, currentNodeRules).radius)
+      .attr('r', (d) => visualRadius(d))
       .attr('fill', (d) => evaluateNodeStyle(d.data, currentNodeRules).color)
       .attr('stroke', '#fff')
       .attr('stroke-width', 1)
@@ -240,14 +305,15 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       node.attr('cx', (d) => d.x!).attr('cy', (d) => d.y!);
     });
 
-    svg.call(
-      d3
+    const zoomBehavior = d3
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 8])
         .on('zoom', (event) => {
           g.attr('transform', event.transform);
-        })
-    );
+        });
+    zoomRef.current = zoomBehavior;
+
+    svg.call(zoomBehavior);
 
     function drag(simulation: d3.Simulation<SimNode, SimEdge>) {
       function dragstarted(event: any, d: SimNode) {
@@ -273,6 +339,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     return () => {
       simulation.stop();
+      zoomRef.current = null;
     };
   }, [simNodes, simEdges]);
 
@@ -285,7 +352,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, edgeRules).width);
 
     nodeSelectionRef.current
-      .attr('r', (d) => evaluateNodeStyle(d.data, nodeRules).radius)
+      .attr('r', (d) => visualRadius(d))
       .attr('fill', (d) => evaluateNodeStyle(d.data, nodeRules).color);
 
     // Reheat simulation slightly for force changes
@@ -293,6 +360,44 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       simulationRef.current.alpha(0.3).restart();
     }
   }, [nodeRules, edgeRules]);
+
+  // Search handler: find node by name (case-insensitive) and zoom to it
+  const handleSearchNode = useCallback((query: string): boolean => {
+    const lowerQ = query.toLowerCase();
+    const match = simNodesRef.current.find((n) => {
+      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+      return name.toLowerCase() === lowerQ;
+    }) ?? simNodesRef.current.find((n) => {
+      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+      return name.toLowerCase().includes(lowerQ);
+    });
+    if (!match || match.x == null || match.y == null) return false;
+    if (!svgRef.current || !zoomRef.current) return false;
+
+    const svg = d3.select(svgRef.current);
+    const width = svgRef.current.parentElement?.clientWidth || 800;
+    const height = 600;
+    const scale = 2;
+    const transform = d3.zoomIdentity
+      .translate(width / 2 - match.x * scale, height / 2 - match.y * scale)
+      .scale(scale);
+
+    svg.transition().duration(500).call(zoomRef.current.transform, transform);
+
+    // Briefly highlight the node
+    if (nodeSelectionRef.current) {
+      nodeSelectionRef.current
+        .filter((d) => d.id === match.id)
+        .attr('stroke', '#facc15')
+        .attr('stroke-width', 4)
+        .transition()
+        .delay(1500)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1);
+    }
+
+    return true;
+  }, []);
 
   if (loading) {
     return (
@@ -312,6 +417,14 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
   if (!graphData) return null;
 
+  if (graphData.nodes.length === 0) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
+        No non-test files found. Uncheck &ldquo;Hide test files&rdquo; in the panel to include test files in the graph.
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', width: '100%', height: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
       <div style={{ flex: 1, position: 'relative' }}>
@@ -328,6 +441,9 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         edgeRules={edgeRules}
         onNodeRulesChange={setNodeRules}
         onEdgeRulesChange={setEdgeRules}
+        hideTestFiles={hideTestFiles}
+        onHideTestFilesChange={setHideTestFiles}
+        onSearchNode={handleSearchNode}
       />
     </div>
   );

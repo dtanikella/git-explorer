@@ -6,7 +6,8 @@ import { analyzeTypeScriptRepo } from '@/lib/ts/analyzer';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { repoPath } = body;
+    const { repoPath, hideTestFiles } = body;
+    const hideTestFilesOption: boolean = hideTestFiles !== undefined ? Boolean(hideTestFiles) : true;
 
     if (!repoPath || typeof repoPath !== 'string') {
       return NextResponse.json(
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const startTime = Date.now();
-    const data = await analyzeTypeScriptRepo(repoPath);
+    const data = await analyzeTypeScriptRepo(repoPath, { hideTestFiles: hideTestFilesOption });
     const analysisDurationMs = Date.now() - startTime;
 
     return NextResponse.json({

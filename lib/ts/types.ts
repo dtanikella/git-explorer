@@ -69,7 +69,7 @@ export type TsNode = FolderNode | FileNode | FunctionNode | ClassNode | Interfac
 
 export interface TsEdgeBase {
   id: string;
-  type: 'import' | 'export' | 'call' | 'contains';
+  type: 'import' | 'export' | 'call' | 'contains' | 'uses';
   source: string;
   target: string;
 }
@@ -90,9 +90,16 @@ export interface CallEdge extends TsEdgeBase {
 
 export interface ContainsEdge extends TsEdgeBase {
   type: 'contains';
+  containsScope: 'folder' | 'file';
 }
 
-export type TsEdge = ImportEdge | ExportEdge | CallEdge | ContainsEdge;
+
+export interface UsesEdge extends TsEdgeBase {
+  type: 'uses';
+  usageKind: 'type-reference' | 'extends' | 'implements';
+}
+
+export type TsEdge = ImportEdge | ExportEdge | CallEdge | ContainsEdge | UsesEdge;
 
 // --- Graph Data ---
 

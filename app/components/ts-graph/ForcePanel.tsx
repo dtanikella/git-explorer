@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NodeForceRule, EdgeForceRule } from '@/lib/ts/types';
 
 interface ForcePanelProps {
@@ -5,6 +6,9 @@ interface ForcePanelProps {
   edgeRules: EdgeForceRule[];
   onNodeRulesChange: (rules: NodeForceRule[]) => void;
   onEdgeRulesChange: (rules: EdgeForceRule[]) => void;
+  hideTestFiles: boolean;
+  onHideTestFilesChange: (value: boolean) => void;
+  onSearchNode: (query: string) => boolean;
 }
 
 export default function ForcePanel({
@@ -12,7 +16,18 @@ export default function ForcePanel({
   edgeRules,
   onNodeRulesChange,
   onEdgeRulesChange,
+  hideTestFiles,
+  onHideTestFilesChange,
+  onSearchNode,
 }: ForcePanelProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchNotFound, setSearchNotFound] = useState(false);
+
+  function handleSearch() {
+    if (!searchQuery.trim()) return;
+    const found = onSearchNode(searchQuery.trim());
+    setSearchNotFound(!found);
+  }
   function toggleNodeRule(id: string) {
     onNodeRulesChange(
       nodeRules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
@@ -69,6 +84,35 @@ export default function ForcePanel({
         background: '#fafafa',
       }}
     >
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setSearchNotFound(false); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+            placeholder="Search node..."
+            style={{ flex: 1, padding: '4px 8px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 4 }}
+          />
+          <button
+            onClick={handleSearch}
+            style={{ padding: '4px 10px', fontSize: 13, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+          >
+            Search
+          </button>
+        </div>
+        {searchNotFound && (
+          <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>No matching node found</div>
+        )}
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={hideTestFiles}
+          onChange={(e) => onHideTestFilesChange(e.target.checked)}
+        />
+        Hide test files
+      </label>
       <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
         Node Rules
       </h3>
