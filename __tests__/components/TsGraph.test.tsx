@@ -1,8 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-// Mock d3 to avoid ESM resolution issues; TsGraph only needs chainable DOM helpers
+// ── D3 mock ───────────────────────────────────────────────────────────────────
 jest.mock('d3', () => {
   const chainable = (): any => {
     const obj: Record<string, any> = {};
@@ -30,19 +30,6 @@ jest.mock('d3', () => {
     return obj;
   };
 
-  const dragBehavior = (): any => {
-    const obj: Record<string, any> = {};
-    obj.on = jest.fn(() => obj);
-    return obj;
-  };
-
-  const zoomBehavior = (): any => {
-    const obj: Record<string, any> = {};
-    obj.scaleExtent = jest.fn(() => obj);
-    obj.on = jest.fn(() => obj);
-    return obj;
-  };
-
   return {
     select: jest.fn(() => chainable()),
     forceSimulation: jest.fn(() => simMethods()),
@@ -51,17 +38,36 @@ jest.mock('d3', () => {
     forceCollide: jest.fn(() => ({ radius: jest.fn().mockReturnThis() })),
     forceX: jest.fn(() => ({ x: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
     forceY: jest.fn(() => ({ y: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
-    zoom: jest.fn(() => zoomBehavior()),
-    drag: jest.fn(() => dragBehavior()),
   };
 });
 
-// Mock ForcePanel so it doesn't pull in its own dependencies
-jest.mock('@/app/components/ts-graph/ForcePanel', () => {
-  return function MockForcePanel() {
-    return <div data-testid="force-panel" />;
-  };
-});
+// ── Sigma mock ────────────────────────────────────────────────────────────────
+const mockSigmaKill = jest.fn();
+const MockSigma = jest.fn().mockImplementation(() => ({
+  on: jest.fn(),
+  kill: mockSigmaKill,
+  graphToViewport: jest.fn(() => ({ x: 100, y: 200 })),
+  getCamera: jest.fn(() => ({ disable: jest.fn(), enable: jest.fn() })),
+  viewportToGraph: jest.fn(() => ({ x: 0, y: 0 })),
+}));
+jest.mock('sigma', () => ({ __esModule: true, default: MockSigma }));
+
+// ── Graphology mock ───────────────────────────────────────────────────────────
+const MockGraph = jest.fn().mockImplementation(() => ({
+  addNode: jest.fn(),
+  addEdge: jest.fn(),
+  hasEdge: jest.fn(() => false),
+  getNodeAttributes: jest.fn(() => ({ label: 'testNode', x: 0, y: 0 })),
+  setNodeAttribute: jest.fn(),
+  order: 2,
+}));
+jest.mock('graphology', () => ({ __esModule: true, default: MockGraph }));
+
+// ── ForceAtlas2 mock ──────────────────────────────────────────────────────────
+jest.mock('graphology-layout-forceatlas2', () => ({
+  __esModule: true,
+  default: { assign: jest.fn() },
+}));
 
 import TsGraph from '@/app/components/ts-graph/TsGraph';
 
@@ -76,56 +82,111 @@ beforeEach(() => {
   global.fetch = mockFetch;
 });
 
-describe('TsGraph — Hide test files toggle', () => {
-  it('T023: renders "Hide test files" checkbox checked by default', async () => {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const FUNCTION_NODE = (id: string, name: string) => ({
+  id,
+  kind: 'FUNCTION' as const,
+  name,
+  parent: null,
+  children: [],
+  siblings: [],
+  params: [],
+  returnType: null,
+});
+
+const CALL_EDGE = (id: string, source: string, target: string) => ({
+  id,
+  type: 'call' as const,
+  source,
+  target,
+  callScope: 'same-file' as const,
+});
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('TsGraph — Sigma migration', () => {
+  it('T023: renders loading state while fetch is pending', () => {
+    let resolvePromise!: (v: unknown) => void;
+    mockFetch.mockReturnValueOnce(new Promise((res) => { resolvePromise = res; }));
+
     render(<TsGraph repoPath="/some/repo" />);
 
-    const checkbox = await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-    expect(checkbox).toBeInTheDocument();
-    expect(checkbox).toBeChecked();
+    expect(screen.getByText(/analyzing typescript structure/i)).toBeInTheDocument();
+
+    // resolve to avoid act() warning
+    resolvePromise({ ok: true, json: async () => ({ success: true, data: { nodes: [], edges: [] } }) });
   });
 
-  it('T024: unchecking toggle triggers fetch with hideTestFiles: false', async () => {
+  it('T024: sends hideTestFiles: true on mount', async () => {
     render(<TsGraph repoPath="/some/repo" />);
 
-    const checkbox = await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
 
-    await act(async () => {
-      fireEvent.click(checkbox);
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/ts-analysis');
+    expect(JSON.parse(options.body as string)).toMatchObject({
+      repoPath: '/some/repo',
+      hideTestFiles: true,
     });
-
-    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(c[1].body));
-    const lastBody = bodies[bodies.length - 1];
-    expect(lastBody).toMatchObject({ hideTestFiles: false });
   });
 
-  it('T025: re-checking toggle triggers fetch with hideTestFiles: true', async () => {
+  it('T025: renders error message on API failure', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ success: false, error: 'Analysis failed' }),
+    });
+
     render(<TsGraph repoPath="/some/repo" />);
 
-    // Wait for initial render with checkbox
     await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
+      expect(screen.getByText('Analysis failed')).toBeInTheDocument()
     );
+  });
 
-    // uncheck — wait for loading cycle to complete before re-querying
-    await act(async () => {
-      fireEvent.click(screen.getByRole('checkbox', { name: /hide test files/i }));
+  it('T026: renders no-nodes message when graph has no nodes', async () => {
+    render(<TsGraph repoPath="/some/repo" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/no typescript symbols found/i)).toBeInTheDocument()
+    );
+  });
+
+  it('T027: mounts Sigma when graph data contains nodes', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          nodes: [FUNCTION_NODE('fn1', 'alpha'), FUNCTION_NODE('fn2', 'beta')],
+          edges: [CALL_EDGE('e1', 'fn1', 'fn2')],
+        },
+      }),
     });
 
-    // re-check — re-query after the loading state was cleared
-    await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-    await act(async () => {
-      fireEvent.click(screen.getByRole('checkbox', { name: /hide test files/i }));
+    render(<TsGraph repoPath="/some/repo" />);
+
+    await waitFor(() => expect(MockSigma).toHaveBeenCalledTimes(1));
+  });
+
+  it('T028: kills Sigma on unmount', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          nodes: [FUNCTION_NODE('fn1', 'alpha'), FUNCTION_NODE('fn2', 'beta')],
+          edges: [CALL_EDGE('e1', 'fn1', 'fn2')],
+        },
+      }),
     });
 
-    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(c[1].body));
-    const lastBody = bodies[bodies.length - 1];
-    expect(lastBody).toMatchObject({ hideTestFiles: true });
+    const { unmount } = render(<TsGraph repoPath="/some/repo" />);
+
+    await waitFor(() => expect(MockSigma).toHaveBeenCalledTimes(1));
+
+    unmount();
+
+    expect(mockSigmaKill).toHaveBeenCalledTimes(1);
   });
 });
