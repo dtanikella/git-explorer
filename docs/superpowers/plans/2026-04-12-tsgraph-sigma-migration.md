@@ -4,9 +4,9 @@
 
 **Goal:** Replace D3 force-directed rendering in `TsGraph.tsx` with Sigma.js (WebGL) + Graphology, and remove the ForcePanel and all force/style rule infrastructure.
 
-**Architecture:** Graphology holds the graph model with node/edge visual attributes set per kind. `forceAtlas2.assign()` runs synchronously (200 iterations) before Sigma mounts. Sigma handles WebGL rendering, zoom/pan, and drag via `@sigma/plugin-drag-nodes`. No user-facing controls remain.
+**Architecture:** Graphology holds the graph model with node/edge visual attributes set per kind. `forceAtlas2.assign()` runs synchronously (200 iterations) before Sigma mounts. Sigma handles WebGL rendering, zoom/pan, and drag via its built-in event system (`downNode`/`mousemovebody`/`mouseup`). No user-facing controls remain.
 
-**Tech Stack:** `sigma`, `graphology`, `graphology-layout-forceatlas2`, `@sigma/plugin-drag-nodes`, React 19, Next.js, Jest + `@testing-library/react`
+**Tech Stack:** `sigma`, `graphology`, `graphology-layout-forceatlas2`, React 19, Next.js, Jest + `@testing-library/react`
 
 ---
 
@@ -20,7 +20,7 @@
 | `lib/ts/types.ts` | Modify — remove `NodeForceRule`, `EdgeForceRule`, `ResolvedNodeForces`, `ResolvedNodeStyle`, `ResolvedEdgeForces`, `ResolvedEdgeStyle` |
 | `app/components/ts-graph/TsGraph.tsx` | Full rewrite — Sigma/Graphology |
 | `__tests__/components/TsGraph.test.tsx` | Full rewrite — new mocks and tests |
-| `package.json` | Add 4 new packages |
+| `package.json` | Add 3 new packages |
 
 ---
 
@@ -80,12 +80,6 @@ const MockSigma = jest.fn().mockImplementation(() => ({
   graphToViewport: mockSigmaGraphToViewport,
 }));
 jest.mock('sigma', () => ({ __esModule: true, default: MockSigma }));
-
-// ── DragNodePlugin mock ───────────────────────────────────────────────────────
-const mockDragKill = jest.fn();
-jest.mock('@sigma/plugin-drag-nodes', () => ({
-  DragNodePlugin: jest.fn().mockImplementation(() => ({ kill: mockDragKill })),
-}));
 
 // ── Graphology mock ───────────────────────────────────────────────────────────
 const mockAddNode = jest.fn();
@@ -213,7 +207,7 @@ describe('TsGraph — Sigma migration', () => {
     await waitFor(() => expect(MockSigma).toHaveBeenCalledTimes(1));
   });
 
-  it('T028: kills Sigma and drag plugin on unmount', async () => {
+  it('T028: kills Sigma on unmount', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -232,7 +226,6 @@ describe('TsGraph — Sigma migration', () => {
     unmount();
 
     expect(mockSigmaKill).toHaveBeenCalledTimes(1);
-    expect(mockDragKill).toHaveBeenCalledTimes(1);
   });
 });
 ```
@@ -305,7 +298,6 @@ import { useEffect, useRef, useState } from 'react';
 import Graph from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 import Sigma from 'sigma';
-import { DragNodePlugin } from '@sigma/plugin-drag-nodes';
 import { TsGraphData } from '@/lib/ts/types';
 
 interface TsGraphProps {
@@ -411,7 +403,28 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       defaultEdgeColor: '#cccccc',
     });
 
-    const dragPlugin = new DragNodePlugin({ sigma });
+    // Inline drag using Sigma's event system
+    let draggedNode: string | null = null;
+
+    sigma.on('downNode', ({ node }: { node: string }) => {
+      draggedNode = node;
+      sigma.getCamera().disable();
+    });
+
+    sigma.on('mousemovebody', (e: any) => {
+      if (!draggedNode) return;
+      const pos = sigma.viewportToGraph(e);
+      graph.setNodeAttribute(draggedNode, 'x', pos.x);
+      graph.setNodeAttribute(draggedNode, 'y', pos.y);
+      e.preventSigmaDefault?.();
+    });
+
+    const stopDrag = () => {
+      draggedNode = null;
+      sigma.getCamera().enable();
+    };
+    sigma.on('mouseup', stopDrag);
+    sigma.on('mouseoutStage', stopDrag);
 
     sigma.on('enterNode', ({ node }: { node: string }) => {
       const attrs = graph.getNodeAttributes(node);
@@ -422,7 +435,6 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     sigma.on('leaveNode', () => setTooltip(null));
 
     return () => {
-      dragPlugin.kill();
       sigma.kill();
     };
   }, [graphData]);
