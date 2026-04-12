@@ -94,6 +94,36 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }));
   }
 
+  // Extract the inner arrow/function from HOC wrapper call chains.
+  // Handles: memo(() => ...), React.forwardRef((props, ref) => ...), connect(mapState)(Component)
+  // Returns the innermost ArrowFunction or FunctionExpression, or undefined if none found.
+  function extractInnerFunction(node: ts.Expression): ts.ArrowFunction | ts.FunctionExpression | undefined {
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      return node;
+    }
+    if (ts.isCallExpression(node)) {
+      // Search arguments for an arrow/function expression
+      for (const arg of node.arguments) {
+        if (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) {
+          return arg;
+        }
+      }
+      // Also check if the callee itself is a call expression (chained HOCs like connect(mapState)(Component))
+      // and check arguments of the outer call
+      if (ts.isCallExpression(node.expression)) {
+        for (const arg of node.expression.arguments) {
+          if (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) {
+            return arg;
+          }
+        }
+      }
+    }
+    if (ts.isParenthesizedExpression(node)) {
+      return extractInnerFunction(node.expression);
+    }
+    return undefined;
+  }
+
   function ensureFolderChain(dirPath: string): string {
     if (folderMap.has(dirPath)) return folderMap.get(dirPath)!.id;
 
@@ -537,13 +567,25 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       }
 
       // Variable declarations: const fn = () => {} or const fn = function() {}
+      // Also handles HOC wrappers: const Comp = memo(() => {}), React.forwardRef((...) => {}), etc.
       if (ts.isVariableStatement(node)) {
         for (const decl of node.declarationList.declarations) {
-          if (
-            ts.isIdentifier(decl.name) &&
-            decl.initializer &&
-            (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
-          ) {
+          if (!ts.isIdentifier(decl.name) || !decl.initializer) continue;
+
+          let innerFn: ts.ArrowFunction | ts.FunctionExpression | undefined;
+          let isHocWithoutInlineFn = false;
+          if (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) {
+            innerFn = decl.initializer;
+          } else if (ts.isCallExpression(decl.initializer)) {
+            innerFn = extractInnerFunction(decl.initializer);
+            // HOC wrapping a reference: const Connected = connect(mapState)(Component)
+            // No inline function found, but PascalCase name indicates a component
+            if (!innerFn && decl.name.text[0] === decl.name.text[0].toUpperCase()) {
+              isHocWithoutInlineFn = true;
+            }
+          }
+
+          if (innerFn || isHocWithoutInlineFn) {
             const fnName = decl.name.text;
             const fnId = `fn:${relativePath}:${fnName}`;
             const isExported = !!(
@@ -556,8 +598,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
               children: [],
               siblings: [],
               name: fnName,
-              params: extractParams(decl.initializer.parameters, sourceFile),
-              returnType: decl.initializer.type ? decl.initializer.type.getText(sourceFile) : null,
+              params: innerFn ? extractParams(innerFn.parameters, sourceFile) : [],
+              returnType: innerFn?.type ? innerFn.type.getText(sourceFile) : null,
               inTestFile: isTest,
             };
             nodes.push(fnNode);
@@ -608,6 +650,62 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
 
     // re-export edge removed (US1)
     void reexportTarget;
+  }
+
+  // Build barrel re-export map: for each file, which other files does it
+  // re-export from (via `export * from` or `export { X } from`)?
+  // Maps: sourceFilePath → [resolvedTargetFilePath, ...]
+  const barrelReexportMap = new Map<string, string[]>();
+  for (const { sourceFileName, specifier } of pendingReexports) {
+    const resolvedModule = ts.resolveModuleName(
+      specifier,
+      sourceFileName,
+      program.getCompilerOptions(),
+      ts.sys
+    );
+    const resolvedFile = resolvedModule.resolvedModule?.resolvedFileName;
+    if (resolvedFile && resolvedFile.startsWith(repoPath)) {
+      if (!barrelReexportMap.has(sourceFileName)) {
+        barrelReexportMap.set(sourceFileName, []);
+      }
+      barrelReexportMap.get(sourceFileName)!.push(resolvedFile);
+    }
+  }
+
+  // Helper: find a declaration node by name, following barrel re-export chains.
+  // Returns the node ID if found, undefined otherwise.
+  function findNodeThroughBarrels(
+    startFilePath: string,
+    symbolName: string,
+    namesToTry: string[],
+    visited?: Set<string>,
+  ): string | undefined {
+    if (!visited) visited = new Set();
+    if (visited.has(startFilePath)) return undefined;
+    visited.add(startFilePath);
+
+    const relPath = path.relative(repoPath, startFilePath);
+    for (const name of namesToTry) {
+      const candidateIds = [
+        `fn:${relPath}:${name}`,
+        `iface:${relPath}:${name}`,
+        `class:${relPath}:${name}`,
+      ];
+      for (const candidateId of candidateIds) {
+        if (nodeMap.has(candidateId)) return candidateId;
+      }
+    }
+
+    // Not found directly — follow barrel re-exports
+    const reexportTargets = barrelReexportMap.get(startFilePath);
+    if (reexportTargets) {
+      for (const targetFile of reexportTargets) {
+        const result = findNodeThroughBarrels(targetFile, symbolName, namesToTry, visited);
+        if (result) return result;
+      }
+    }
+
+    return undefined;
   }
 
   // Resolve local import specifiers (kept for potential future use; no edges emitted)
@@ -664,21 +762,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       ? [binding.originalName, binding.localName]
       : [binding.originalName];
 
-    let targetNodeId: string | undefined;
-    for (const name of namesToTry) {
-      const candidateIds = [
-        `fn:${resolvedRelative}:${name}`,
-        `iface:${resolvedRelative}:${name}`,
-        `class:${resolvedRelative}:${name}`,
-      ];
-      for (const candidateId of candidateIds) {
-        if (nodeMap.has(candidateId)) {
-          targetNodeId = candidateId;
-          break;
-        }
-      }
-      if (targetNodeId) break;
-    }
+    // Search the resolved file first, then follow barrel re-export chains
+    const targetNodeId = findNodeThroughBarrels(resolvedFile, binding.originalName, namesToTry);
 
     if (targetNodeId) {
       if (!crossFileSymbolMap.has(binding.sourceFilePath)) {
@@ -701,15 +786,9 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       const memberName = name.substring(dotIdx + 1);
       const nsTargetFile = namespaceMap.get(filePath)?.get(nsName);
       if (nsTargetFile) {
-        const targetRelative = path.relative(repoPath, nsTargetFile);
-        const candidateIds = [
-          `fn:${targetRelative}:${memberName}`,
-          `iface:${targetRelative}:${memberName}`,
-          `class:${targetRelative}:${memberName}`,
-        ];
-        for (const candidateId of candidateIds) {
-          if (nodeMap.has(candidateId)) return candidateId;
-        }
+        // Search the target file and follow barrel re-exports
+        const result = findNodeThroughBarrels(nsTargetFile, memberName, [memberName]);
+        if (result) return result;
       }
     }
 
@@ -818,24 +897,32 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         return;
       }
 
-      // VariableDeclaration with arrow function or function expression
+      // VariableDeclaration with arrow function, function expression, or HOC wrapper
       if (
         ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
-        node.initializer &&
-        (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+        node.initializer
       ) {
-        const fnId = fnMap?.get(node.name.text) ?? null;
-        if (fnId) {
-          walkFunctionSignatureForRefs(node.initializer.parameters, node.initializer.type, fnId);
+        let innerFn: ts.ArrowFunction | ts.FunctionExpression | undefined;
+        if (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) {
+          innerFn = node.initializer;
+        } else if (ts.isCallExpression(node.initializer)) {
+          innerFn = extractInnerFunction(node.initializer);
         }
-        const body = node.initializer.body;
-        if (body && ts.isBlock(body)) {
-          ts.forEachChild(body, (child) => walkForCallsAndRefs(child, fnId));
-        } else if (body) {
-          walkForCallsAndRefs(body, fnId);
+
+        if (innerFn) {
+          const fnId = fnMap?.get(node.name.text) ?? null;
+          if (fnId) {
+            walkFunctionSignatureForRefs(innerFn.parameters, innerFn.type, fnId);
+          }
+          const body = innerFn.body;
+          if (body && ts.isBlock(body)) {
+            ts.forEachChild(body, (child) => walkForCallsAndRefs(child, fnId));
+          } else if (body) {
+            walkForCallsAndRefs(body, fnId);
+          }
+          return;
         }
-        return;
       }
 
       // Class declarations: extends and implements heritage
@@ -945,6 +1032,16 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         const calleeName = node.expression.getText(sourceFile);
         const sourceId = enclosingFnId ?? fileId;
         emitCallEdgeForName(calleeName, sourceId);
+
+        // Function references passed as arguments: .map(fn), useEffect(fn), etc.
+        // These are Identifiers or PropertyAccessExpressions that resolve to
+        // known functions but are NOT CallExpressions themselves.
+        for (const arg of node.arguments) {
+          if (ts.isIdentifier(arg) || ts.isPropertyAccessExpression(arg)) {
+            const refName = arg.getText(sourceFile);
+            emitCallEdgeForName(refName, sourceId);
+          }
+        }
       }
 
       // JSX element usage: <Component /> and <Component>...</Component>
@@ -955,6 +1052,19 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         if (tagName[0] && tagName[0] === tagName[0].toUpperCase()) {
           const sourceId = enclosingFnId ?? fileId;
           emitCallEdgeForName(tagName, sourceId);
+        }
+
+        // Function references in JSX attributes: onClick={handler}, render={renderFn}
+        const attributes = ts.isJsxOpeningElement(node) ? node.attributes : node.attributes;
+        for (const attr of attributes.properties) {
+          if (ts.isJsxAttribute(attr) && attr.initializer && ts.isJsxExpression(attr.initializer)) {
+            const expr = attr.initializer.expression;
+            if (expr && (ts.isIdentifier(expr) || ts.isPropertyAccessExpression(expr))) {
+              const refName = expr.getText(sourceFile);
+              const sourceId = enclosingFnId ?? fileId;
+              emitCallEdgeForName(refName, sourceId);
+            }
+          }
         }
       }
 
