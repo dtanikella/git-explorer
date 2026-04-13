@@ -2,45 +2,6 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-// ── D3 mock ───────────────────────────────────────────────────────────────────
-jest.mock('d3', () => {
-  const chainable = (): any => {
-    const obj: Record<string, any> = {};
-    const methods = [
-      'append', 'style', 'attr', 'call', 'on', 'remove',
-      'selectAll', 'join', 'data', 'html', 'text',
-    ];
-    methods.forEach((m) => {
-      obj[m] = jest.fn(() => obj);
-    });
-    return obj;
-  };
-
-  const simMethods = (): any => {
-    const obj: Record<string, any> = {};
-    ['force', 'on', 'alpha', 'alphaTarget', 'restart', 'stop', 'tick'].forEach((m) => {
-      obj[m] = jest.fn(() => obj);
-    });
-    return obj;
-  };
-
-  const linkForce = (): any => {
-    const obj: Record<string, any> = {};
-    ['id', 'distance', 'strength'].forEach((m) => { obj[m] = jest.fn(() => obj); });
-    return obj;
-  };
-
-  return {
-    select: jest.fn(() => chainable()),
-    forceSimulation: jest.fn(() => simMethods()),
-    forceLink: jest.fn(() => linkForce()),
-    forceManyBody: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
-    forceCollide: jest.fn(() => ({ radius: jest.fn().mockReturnThis() })),
-    forceX: jest.fn(() => ({ x: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
-    forceY: jest.fn(() => ({ y: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
-  };
-});
-
 // ── Sigma mock ────────────────────────────────────────────────────────────────
 const mockSigmaKill = jest.fn();
 const MockSigma = jest.fn().mockImplementation(() => ({
@@ -61,7 +22,7 @@ const MockGraph = jest.fn().mockImplementation(() => ({
   setNodeAttribute: jest.fn(),
   order: 2,
 }));
-jest.mock('graphology', () => ({ __esModule: true, default: MockGraph }));
+jest.mock('graphology', () => ({ __esModule: true, default: MockGraph, DirectedGraph: MockGraph }));
 
 // ── ForceAtlas2 mock ──────────────────────────────────────────────────────────
 jest.mock('graphology-layout-forceatlas2', () => ({

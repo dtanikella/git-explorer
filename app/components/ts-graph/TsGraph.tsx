@@ -4,13 +4,17 @@ import { useEffect, useRef, useState } from 'react';
 import { DirectedGraph } from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 import Sigma from 'sigma';
-import { TsGraphData } from '@/lib/ts/types';
+import { TsGraphData, FunctionNode, ClassNode, InterfaceNode, TsNode } from '@/lib/ts/types';
 
 interface TsGraphProps {
   repoPath: string;
 }
 
-const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
+type SymbolNode = FunctionNode | ClassNode | InterfaceNode;
+
+function isSymbolNode(n: TsNode): n is SymbolNode {
+  return n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE';
+}
 
 const NODE_COLORS: Record<string, string> = {
   FUNCTION: '#3b82f6',
@@ -60,12 +64,13 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
         } else {
           setError(result.error || 'Analysis failed');
         }
+        setLoading(false);
       })
       .catch((err) => {
         if (err.name === 'AbortError') return;
         setError(err.message || 'Network error');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, [repoPath]);
@@ -73,28 +78,25 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   useEffect(() => {
     if (!containerRef.current || !graphData || graphData.nodes.length === 0) return;
 
-    const symbolIds = new Set(
-      graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
-    );
+    const symbolIds = new Set(graphData.nodes.filter(isSymbolNode).map((n) => n.id));
 
     const graph = new DirectedGraph();
 
     for (const node of graphData.nodes) {
-      if (!symbolIds.has(node.id)) continue;
-      const name = (node as { name: string }).name;
+      if (!isSymbolNode(node)) continue;
       graph.addNode(node.id, {
         x: Math.random(),
         y: Math.random(),
         size: NODE_SIZES[node.kind] ?? 6,
         color: NODE_COLORS[node.kind] ?? '#999999',
-        label: name,
+        label: node.name,
       });
     }
 
     for (const edge of graphData.edges) {
       if (!symbolIds.has(edge.source) || !symbolIds.has(edge.target)) continue;
       if (edge.source === edge.target) continue;
-      if (graph.hasEdge(edge.source, edge.target) || graph.hasEdge(edge.target, edge.source)) continue;
+      if (graph.hasEdge(edge.source, edge.target)) continue;
       graph.addEdge(edge.source, edge.target, {
         size: EDGE_SIZES[edge.type] ?? 1,
         color: EDGE_COLORS[edge.type] ?? '#cccccc',
@@ -117,17 +119,17 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     // Inline drag using Sigma's event system
     let draggedNode: string | null = null;
 
-    sigma.on('downNode', ({ node }: { node: string }) => {
+    sigma.on('downNode', ({ node }) => {
       draggedNode = node;
       sigma.getCamera().disable();
     });
 
-    sigma.on('moveBody', (e: any) => {
+    sigma.on('moveBody', ({ event }) => {
       if (!draggedNode) return;
-      const pos = sigma.viewportToGraph(e);
+      const pos = sigma.viewportToGraph({ x: event.x, y: event.y });
       graph.setNodeAttribute(draggedNode, 'x', pos.x);
       graph.setNodeAttribute(draggedNode, 'y', pos.y);
-      e.preventSigmaDefault?.();
+      event.preventSigmaDefault();
     });
 
     const stopDrag = () => {
@@ -137,10 +139,10 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     sigma.on('upNode', stopDrag);
     sigma.on('upStage', stopDrag);
 
-    sigma.on('enterNode', ({ node }: { node: string }) => {
+    sigma.on('enterNode', ({ node }) => {
       const attrs = graph.getNodeAttributes(node);
       const pos = sigma.graphToViewport({ x: attrs.x as number, y: attrs.y as number });
-      setTooltip({ label: attrs.label as string, x: pos.x, y: pos.y });
+      setTooltip({ label: String(attrs.label), x: pos.x, y: pos.y });
     });
 
     sigma.on('leaveNode', () => setTooltip(null));
@@ -169,7 +171,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
   if (!graphData) return null;
 
-  if (!graphData.nodes.some((n) => SYMBOL_KINDS.has(n.kind))) {
+  if (!graphData.nodes.some(isSymbolNode)) {
     return (
       <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
         No TypeScript symbols found.
