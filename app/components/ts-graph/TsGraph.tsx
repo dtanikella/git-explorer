@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Graph from 'graphology';
+import { DirectedGraph } from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 import Sigma from 'sigma';
 import { TsGraphData } from '@/lib/ts/types';
@@ -77,11 +77,11 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
     );
 
-    const graph = new Graph({ type: 'directed' });
+    const graph = new DirectedGraph();
 
     for (const node of graphData.nodes) {
       if (!symbolIds.has(node.id)) continue;
-      const name = 'name' in node ? (node as { name: string }).name : node.id;
+      const name = (node as { name: string }).name;
       graph.addNode(node.id, {
         x: Math.random(),
         y: Math.random(),
@@ -122,7 +122,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       sigma.getCamera().disable();
     });
 
-    sigma.on('mousemovebody', (e: any) => {
+    sigma.on('moveBody', (e: any) => {
       if (!draggedNode) return;
       const pos = sigma.viewportToGraph(e);
       graph.setNodeAttribute(draggedNode, 'x', pos.x);
@@ -134,8 +134,8 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       draggedNode = null;
       sigma.getCamera().enable();
     };
-    sigma.on('mouseup', stopDrag);
-    sigma.on('mouseoutStage', stopDrag);
+    sigma.on('upNode', stopDrag);
+    sigma.on('upStage', stopDrag);
 
     sigma.on('enterNode', ({ node }: { node: string }) => {
       const attrs = graph.getNodeAttributes(node);
