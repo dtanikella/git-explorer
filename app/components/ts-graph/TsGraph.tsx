@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DirectedGraph } from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
-import Sigma from 'sigma';
+import type SigmaType from 'sigma';
 import { TsGraphData, FunctionNode, ClassNode, InterfaceNode, TsNode } from '@/lib/ts/types';
 
 interface TsGraphProps {
@@ -110,46 +110,54 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
       settings: { gravity: 1, scalingRatio: 2, barnesHutOptimize: true },
     });
 
-    const sigma = new Sigma(graph, containerRef.current, {
-      renderEdgeLabels: false,
-      defaultNodeColor: '#999999',
-      defaultEdgeColor: '#cccccc',
+    let sigma: SigmaType | null = null;
+    let cancelled = false;
+
+    import('sigma').then(({ default: Sigma }) => {
+      if (cancelled || !containerRef.current) return;
+
+      sigma = new Sigma(graph, containerRef.current, {
+        renderEdgeLabels: false,
+        defaultNodeColor: '#999999',
+        defaultEdgeColor: '#cccccc',
+      });
+
+      // Inline drag using Sigma's event system
+      let draggedNode: string | null = null;
+
+      sigma.on('downNode', ({ node }) => {
+        draggedNode = node;
+        sigma!.getCamera().disable();
+      });
+
+      sigma.on('moveBody', ({ event }) => {
+        if (!draggedNode) return;
+        const pos = sigma!.viewportToGraph({ x: event.x, y: event.y });
+        graph.setNodeAttribute(draggedNode, 'x', pos.x);
+        graph.setNodeAttribute(draggedNode, 'y', pos.y);
+        event.preventSigmaDefault();
+      });
+
+      const stopDrag = () => {
+        draggedNode = null;
+        sigma!.getCamera().enable();
+      };
+      sigma.on('upNode', stopDrag);
+      sigma.on('upStage', stopDrag);
+
+      sigma.on('enterNode', ({ node }) => {
+        const attrs = graph.getNodeAttributes(node);
+        const pos = sigma!.graphToViewport({ x: attrs.x as number, y: attrs.y as number });
+        setTooltip({ label: String(attrs.label), x: pos.x, y: pos.y });
+      });
+
+      sigma.on('leaveNode', () => setTooltip(null));
     });
-
-    // Inline drag using Sigma's event system
-    let draggedNode: string | null = null;
-
-    sigma.on('downNode', ({ node }) => {
-      draggedNode = node;
-      sigma.getCamera().disable();
-    });
-
-    sigma.on('moveBody', ({ event }) => {
-      if (!draggedNode) return;
-      const pos = sigma.viewportToGraph({ x: event.x, y: event.y });
-      graph.setNodeAttribute(draggedNode, 'x', pos.x);
-      graph.setNodeAttribute(draggedNode, 'y', pos.y);
-      event.preventSigmaDefault();
-    });
-
-    const stopDrag = () => {
-      draggedNode = null;
-      sigma.getCamera().enable();
-    };
-    sigma.on('upNode', stopDrag);
-    sigma.on('upStage', stopDrag);
-
-    sigma.on('enterNode', ({ node }) => {
-      const attrs = graph.getNodeAttributes(node);
-      const pos = sigma.graphToViewport({ x: attrs.x as number, y: attrs.y as number });
-      setTooltip({ label: String(attrs.label), x: pos.x, y: pos.y });
-    });
-
-    sigma.on('leaveNode', () => setTooltip(null));
 
     return () => {
+      cancelled = true;
       setTooltip(null);
-      sigma.kill();
+      if (sigma) sigma.kill();
     };
   }, [graphData]);
 
