@@ -50,6 +50,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // TODO: rules UI was removed with ForcePanel; these values are frozen at defaults until a toolbar UI is added
   const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
   const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
 
@@ -435,7 +436,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   if (graphData.nodes.length === 0) {
     return (
       <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
-        No non-test files found. Uncheck &ldquo;Hide test files&rdquo; in the panel to include test files in the graph.
+        No non-test files found. Uncheck &ldquo;Hide test files&rdquo; in the toolbar to include test files in the graph.
       </div>
     );
   }
