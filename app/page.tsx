@@ -2,20 +2,18 @@
 
 import { useState, useCallback, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
-import DateRangeSelector from './components/DateRangeSelector';
 import TsGraph from './components/ts-graph/TsGraph';
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
-  const [dateRange, setDateRange] = useState<string>('2w');
   const [hideTestFiles, setHideTestFiles] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
 
-  const handleRepositorySelect = (path: string) => {
+  const handleRepositorySelect = useCallback((path: string) => {
     setRepoPath(path);
-  };
+  }, []);
 
   const handleRegisterSearch = useCallback((handler: (query: string) => boolean) => {
     searchHandlerRef.current = handler;
@@ -48,8 +46,6 @@ export default function HomePage() {
 
       {/* Row 2: Tools & Filters */}
       <div className="shrink-0 flex items-center gap-4 px-2 py-1 bg-gray-50 border border-gray-200 rounded-md text-sm">
-        <DateRangeSelector value={dateRange} onChange={setDateRange} />
-
         <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
           <input
             type="checkbox"
