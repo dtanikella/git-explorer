@@ -43,6 +43,13 @@ jest.mock('d3', () => {
     return obj;
   };
 
+  const scaleLinear = (): any => {
+    const obj: Record<string, any> = {};
+    ['domain', 'range', 'clamp'].forEach((m) => { obj[m] = jest.fn(() => obj); });
+    obj.call = jest.fn((val: number) => val);
+    return obj;
+  };
+
   return {
     select: jest.fn(() => chainable()),
     forceSimulation: jest.fn(() => simMethods()),
@@ -53,13 +60,7 @@ jest.mock('d3', () => {
     forceY: jest.fn(() => ({ y: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
     zoom: jest.fn(() => zoomBehavior()),
     drag: jest.fn(() => dragBehavior()),
-  };
-});
-
-// Mock ForcePanel so it doesn't pull in its own dependencies
-jest.mock('@/app/components/ts-graph/ForcePanel', () => {
-  return function MockForcePanel() {
-    return <div data-testid="force-panel" />;
+    scaleLinear: jest.fn(() => scaleLinear()),
   };
 });
 
@@ -76,56 +77,33 @@ beforeEach(() => {
   global.fetch = mockFetch;
 });
 
-describe('TsGraph — Hide test files toggle', () => {
-  it('T023: renders "Hide test files" checkbox checked by default', async () => {
-    render(<TsGraph repoPath="/some/repo" />);
+describe('TsGraph — data fetching with hideTestFiles prop', () => {
+  it('fetches with hideTestFiles=true when prop is true', async () => {
+    render(<TsGraph repoPath="/some/repo" hideTestFiles={true} />);
 
-    const checkbox = await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-    expect(checkbox).toBeInTheDocument();
-    expect(checkbox).toBeChecked();
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/ts-analysis', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: true }),
+      }));
+    });
   });
 
-  it('T024: unchecking toggle triggers fetch with hideTestFiles: false', async () => {
-    render(<TsGraph repoPath="/some/repo" />);
+  it('fetches with hideTestFiles=false when prop is false', async () => {
+    render(<TsGraph repoPath="/some/repo" hideTestFiles={false} />);
 
-    const checkbox = await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-
-    await act(async () => {
-      fireEvent.click(checkbox);
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith('/api/ts-analysis', expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: false }),
+      }));
     });
-
-    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(c[1].body));
-    const lastBody = bodies[bodies.length - 1];
-    expect(lastBody).toMatchObject({ hideTestFiles: false });
   });
 
-  it('T025: re-checking toggle triggers fetch with hideTestFiles: true', async () => {
-    render(<TsGraph repoPath="/some/repo" />);
+  it('registers search handler when onSearchNode is provided', () => {
+    const registerFn = jest.fn();
+    render(<TsGraph repoPath="/some/repo" hideTestFiles={true} onSearchNode={registerFn} />);
 
-    // Wait for initial render with checkbox
-    await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-
-    // uncheck — wait for loading cycle to complete before re-querying
-    await act(async () => {
-      fireEvent.click(screen.getByRole('checkbox', { name: /hide test files/i }));
-    });
-
-    // re-check — re-query after the loading state was cleared
-    await waitFor(() =>
-      screen.getByRole('checkbox', { name: /hide test files/i })
-    );
-    await act(async () => {
-      fireEvent.click(screen.getByRole('checkbox', { name: /hide test files/i }));
-    });
-
-    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(c[1].body));
-    const lastBody = bodies[bodies.length - 1];
-    expect(lastBody).toMatchObject({ hideTestFiles: true });
+    expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 });
