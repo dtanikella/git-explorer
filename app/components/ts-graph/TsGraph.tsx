@@ -17,10 +17,11 @@ import {
   evaluateEdgeStyle,
 } from '@/lib/ts/force-rules';
 import { defaultNodeRules, defaultEdgeRules } from '@/lib/ts/default-rules';
-import ForcePanel from './ForcePanel';
 
 interface TsGraphProps {
   repoPath: string;
+  hideTestFiles: boolean;
+  onSearchNode?: (handler: (query: string) => boolean) => void;
 }
 
 interface SimNode extends d3.SimulationNodeDatum {
@@ -37,7 +38,7 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
 // TODO: temporarily excluding IMPORT nodes — restore by adding 'IMPORT' back
 const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
 
-export default function TsGraph({ repoPath }: TsGraphProps) {
+export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGraphProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
   const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
@@ -49,7 +50,6 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hideTestFiles, setHideTestFiles] = useState(true);
   const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
   const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
 
@@ -196,7 +196,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     svg.selectAll('*').remove();
 
     const width = svgRef.current.parentElement?.clientWidth || 800;
-    const height = 600;
+    const height = svgRef.current.parentElement?.clientHeight || 600;
 
     const zoneMap: Record<string, { x: number; y: number }> = {
       top: { x: width / 2, y: height * 0.2 },
@@ -385,7 +385,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     const svg = d3.select(svgRef.current);
     const width = svgRef.current.parentElement?.clientWidth || 800;
-    const height = 600;
+    const height = svgRef.current.parentElement?.clientHeight || 600;
     const scale = 2;
     const transform = d3.zoomIdentity
       .translate(width / 2 - match.x * scale, height / 2 - match.y * scale)
@@ -407,6 +407,12 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
     return true;
   }, []);
+
+  useEffect(() => {
+    if (onSearchNode) {
+      onSearchNode(handleSearchNode);
+    }
+  }, [onSearchNode, handleSearchNode]);
 
   if (loading) {
     return (
@@ -435,24 +441,13 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   }
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: 600, background: '#fff', borderRadius: 8, border: '1px solid #ccc' }}>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <svg
-          ref={svgRef}
-          width="100%"
-          height={600}
-          style={{ display: 'block' }}
-          aria-label="TypeScript repository structure graph"
-        />
-      </div>
-      <ForcePanel
-        nodeRules={nodeRules}
-        edgeRules={edgeRules}
-        onNodeRulesChange={setNodeRules}
-        onEdgeRulesChange={setEdgeRules}
-        hideTestFiles={hideTestFiles}
-        onHideTestFilesChange={setHideTestFiles}
-        onSearchNode={handleSearchNode}
+    <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 8, border: '1px solid #ccc', position: 'relative' }}>
+      <svg
+        ref={svgRef}
+        width="100%"
+        height="100%"
+        style={{ display: 'block' }}
+        aria-label="TypeScript repository structure graph"
       />
     </div>
   );
