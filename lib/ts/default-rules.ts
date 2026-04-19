@@ -33,6 +33,14 @@ export const defaultNodeRules: NodeForceRule[] = [
     forces: { charge: -80, collideRadius: 6 },
     style: { color: '#3b82f6', radius: 4 },
   },
+  {
+    id: 'file-nodes',
+    label: 'Files (top-level calls)',
+    enabled: true,
+    match: (n) => n.kind === 'FILE',
+    forces: { charge: -120, collideRadius: 10 },
+    style: { color: '#6b7280', radius: 8 },
+  },
 ];
 
 export const defaultEdgeRules: EdgeForceRule[] = [

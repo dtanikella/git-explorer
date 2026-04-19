@@ -106,13 +106,21 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
 
   const simEdges: SimEdge[] = useMemo(() => {
     if (!graphData) return [];
-    // Build a set of symbol (non-file/folder) node IDs
     const symbolIds = new Set(
       graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
     );
-    // Keep only edges where both endpoints are symbol nodes
+    // Include FILE nodes that are an endpoint of a call edge where the other endpoint is a symbol
+    const fileIds = new Set(
+      graphData.nodes.filter((n) => n.kind === 'FILE').map((n) => n.id)
+    );
+    const eligibleIds = new Set(symbolIds);
+    for (const e of graphData.edges) {
+      if (e.type !== 'call') continue;
+      if (fileIds.has(e.source) && symbolIds.has(e.target)) eligibleIds.add(e.source);
+      if (fileIds.has(e.target) && symbolIds.has(e.source)) eligibleIds.add(e.target);
+    }
     return graphData.edges
-      .filter((e) => symbolIds.has(e.source) && symbolIds.has(e.target))
+      .filter((e) => eligibleIds.has(e.source) && eligibleIds.has(e.target))
       .map((e) => ({ id: e.id, source: e.source, target: e.target, data: { ...e } }));
   }, [graphData]);
 
@@ -129,7 +137,7 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
     }
 
     const nodes = graphData.nodes
-      .filter((n) => SYMBOL_KINDS.has(n.kind) && connectedIds.has(n.id))
+      .filter((n) => (SYMBOL_KINDS.has(n.kind) || n.kind === 'FILE') && connectedIds.has(n.id))
       .map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
 
     // Count edges per node for degree-based sizing
@@ -172,9 +180,10 @@ export default function TsGraph({ repoPath }: TsGraphProps) {
   // Keep simNodesRef in sync for search callback
   useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
 
-  // Import nodes use a fixed visual radius; others use their computed radius
+  // Import nodes use a fixed visual radius; FILE nodes use a fixed smaller radius
   function visualRadius(d: SimNode): number {
     if (d.data.kind === 'IMPORT') return 10;
+    if (d.data.kind === 'FILE') return 8;
     if (d.data.kind === 'FUNCTION') return d.computedRadius;
     return d.computedRadius;
   }
