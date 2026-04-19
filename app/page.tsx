@@ -19,17 +19,17 @@ export default function HomePage() {
     searchHandlerRef.current = handler;
   }, []);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     if (!searchQuery.trim()) return;
     if (searchHandlerRef.current) {
       const found = searchHandlerRef.current(searchQuery.trim());
       setSearchNotFound(!found);
     }
-  };
+  }, [searchQuery]);
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
-  };
+  }, [handleSearch]);
 
   return (
     <main className="h-screen flex flex-col p-2 gap-2 overflow-hidden">
@@ -38,9 +38,6 @@ export default function HomePage() {
         <RepositorySelector
           onRepositorySelected={handleRepositorySelect}
           currentPath={repoPath}
-          isLoading={false}
-          error={undefined}
-          onError={undefined}
         />
       </div>
 

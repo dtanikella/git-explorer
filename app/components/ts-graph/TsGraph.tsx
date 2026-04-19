@@ -50,15 +50,13 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // TODO: rules UI was removed with ForcePanel; these values are frozen at defaults until a toolbar UI is added
-  const [nodeRules, setNodeRules] = useState<NodeForceRule[]>(defaultNodeRules);
-  const [edgeRules, setEdgeRules] = useState<EdgeForceRule[]>(defaultEdgeRules);
+  // Rules UI was removed with ForcePanel. Using defaults until toolbar controls are added.
+  const nodeRules = defaultNodeRules;
+  const edgeRules = defaultEdgeRules;
 
   // Refs to snapshot current rules for use inside Effect 1 without stale closure warnings
   const nodeRulesRef = useRef(nodeRules);
   const edgeRulesRef = useRef(edgeRules);
-  useEffect(() => { nodeRulesRef.current = nodeRules; }, [nodeRules]);
-  useEffect(() => { edgeRulesRef.current = edgeRules; }, [edgeRules]);
 
   // Tooltip lifecycle effect — mount/unmount only
   useEffect(() => {
@@ -353,23 +351,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
     };
   }, [simNodes, simEdges]);
 
-  // Effect 2: visual attribute update — runs when rules change, no simulation rebuild
-  useEffect(() => {
-    if (!linkSelectionRef.current || !nodeSelectionRef.current) return;
 
-    linkSelectionRef.current
-      .attr('stroke', (d) => evaluateEdgeStyle(d.data, edgeRules).color)
-      .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, edgeRules).width);
-
-    nodeSelectionRef.current
-      .attr('r', (d) => visualRadius(d))
-      .attr('fill', (d) => evaluateNodeStyle(d.data, nodeRules).color);
-
-    // Reheat simulation slightly for force changes
-    if (simulationRef.current) {
-      simulationRef.current.alpha(0.3).restart();
-    }
-  }, [nodeRules, edgeRules]);
 
   // Search handler: find node by name (case-insensitive) and zoom to it
   const handleSearchNode = useCallback((query: string): boolean => {
