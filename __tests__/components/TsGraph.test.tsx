@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 // Mock d3 to avoid ESM resolution issues; TsGraph only needs chainable DOM helpers
@@ -44,10 +44,9 @@ jest.mock('d3', () => {
   };
 
   const scaleLinear = (): any => {
-    const obj: Record<string, any> = {};
-    ['domain', 'range', 'clamp'].forEach((m) => { obj[m] = jest.fn(() => obj); });
-    obj.call = jest.fn((val: number) => val);
-    return obj;
+    const fn: any = jest.fn((val: number) => val);
+    ['domain', 'range', 'clamp'].forEach((m) => { fn[m] = jest.fn(() => fn); });
+    return fn;
   };
 
   return {
@@ -87,6 +86,8 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
         body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: true }),
       }));
     });
+
+    await act(async () => {});
   });
 
   it('fetches with hideTestFiles=false when prop is false', async () => {
@@ -98,6 +99,8 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
         body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: false }),
       }));
     });
+
+    await act(async () => {});
   });
 
   it('registers search handler when onSearchNode is provided', () => {
