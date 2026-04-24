@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -22,19 +21,33 @@ interface TsGraphProps {
   onSearchNode?: (handler: (query: string) => boolean) => void;
 }
 
-interface SimNode extends d3.SimulationNodeDatum {
-  id: string;
-  data: TsNode;
-  computedRadius: number;
+type SymbolNode = FunctionNode | ClassNode | InterfaceNode;
+
+function isSymbolNode(n: TsNode): n is SymbolNode {
+  return n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE';
 }
 
-interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
-  id: string;
-  data: TsEdge;
-}
+const NODE_COLORS: Record<string, string> = {
+  FUNCTION: '#3b82f6',
+  CLASS: '#8b5cf6',
+  INTERFACE: '#10b981',
+};
 
-// TODO: temporarily excluding IMPORT nodes — restore by adding 'IMPORT' back
-const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
+const NODE_SIZES: Record<string, number> = {
+  FUNCTION: 6,
+  CLASS: 10,
+  INTERFACE: 8,
+};
+
+const EDGE_COLORS: Record<string, string> = {
+  call: '#fcd34d',
+  uses: '#f9a8d4',
+};
+
+const EDGE_SIZES: Record<string, number> = {
+  call: 1.5,
+  uses: 1,
+};
 
 export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -83,13 +96,15 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
 
   useEffect(() => {
     if (!repoPath) return;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
     fetch('/api/ts-analysis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath, hideTestFiles }),
+      body: JSON.stringify({ repoPath, hideTestFiles: true }),
+      signal: controller.signal,
     })
       .then((res) => res.json())
       .then((result) => {
@@ -98,8 +113,10 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
         } else {
           setError(result.error || 'Analysis failed');
         }
+        setLoading(false);
       })
       .catch((err) => {
+        if (err.name === 'AbortError') return;
         setError(err.message || 'Network error');
       })
       .finally(() => setLoading(false));
@@ -471,7 +488,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
 
   if (!graphData) return null;
 
-  if (graphData.nodes.length === 0) {
+  if (!graphData.nodes.some(isSymbolNode)) {
     return (
       <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
         No non-test files found. Uncheck &ldquo;Hide test files&rdquo; in the toolbar to include test files in the graph.
