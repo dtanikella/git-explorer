@@ -261,8 +261,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
 
     ts.forEachChild(sourceFile, (node) => {
       // Import declarations
-      if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
-        const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
+      if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const specifier = node.moduleSpecifier.text;
 
         // Resolve module to determine if it's truly local (repo-internal)
         // rather than relying on prefix heuristics, which miss baseUrl and
@@ -615,8 +615,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       }
 
       // Re-exports: defer edge emission until all FileNodes exist
-      if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
-        const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
+      if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const specifier = node.moduleSpecifier.text;
         pendingReexports.push({
           sourceFileId: fileId,
           specifier,
@@ -1127,9 +1127,9 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
     }
   }
 
-  // Fifth pass: emit contains edges for FOLDER → child-FOLDER and FOLDER → FILE only.
-  // FILE → MODULE contains edges are intentionally omitted so that co-located
-  // functions/classes/interfaces are not linked merely by sharing a file.
+  // Fifth pass: emit contains edges.
+  //   FOLDER → FOLDER / FOLDER → FILE: containsScope 'folder'
+  //   FILE → FUNCTION / FILE → CLASS / FILE → INTERFACE: containsScope 'file'
   for (const node of nodes) {
     if (!node.parent) continue;
     const parentNode = nodeMap.get(node.parent);
@@ -1139,6 +1139,17 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
         id: nextEdgeId(),
         type: 'contains',
         containsScope: 'folder',
+        source: node.parent,
+        target: node.id,
+      });
+    } else if (
+      parentNode.kind === 'FILE' &&
+      (node.kind === 'FUNCTION' || node.kind === 'CLASS' || node.kind === 'INTERFACE')
+    ) {
+      edges.push({
+        id: nextEdgeId(),
+        type: 'contains',
+        containsScope: 'file',
         source: node.parent,
         target: node.id,
       });

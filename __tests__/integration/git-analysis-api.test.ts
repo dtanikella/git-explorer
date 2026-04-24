@@ -33,10 +33,6 @@ jest.mock('@/lib/git/tree-builder', () => ({
   buildTreeFromFiles: jest.fn(),
 }));
 
-jest.mock('@/lib/treemap/data-transformer', () => ({
-  applyColors: jest.fn(),
-}));
-
 jest.mock('@/lib/utils/date-helpers', () => ({
   createTimeRangeConfig: jest.fn(),
 }));
@@ -46,7 +42,6 @@ const mockCountCommitsByFile = require('@/lib/git/analyzer').countCommitsByFile;
 const mockFilterTopFiles = require('@/lib/git/analyzer').filterTopFiles;
 const mockCalculateFrequencyScores = require('@/lib/git/analyzer').calculateFrequencyScores;
 const mockBuildTreeFromFiles = require('@/lib/git/tree-builder').buildTreeFromFiles;
-const mockApplyColors = require('@/lib/treemap/data-transformer').applyColors;
 const mockCreateTimeRangeConfig = require('@/lib/utils/date-helpers').createTimeRangeConfig;
 
 describe('/api/git-analysis POST', () => {
@@ -114,36 +109,6 @@ describe('/api/git-analysis POST', () => {
     ]);
 
     mockBuildTreeFromFiles.mockReturnValue({
-      name: 'root',
-      path: '',
-      value: 1,
-      isFile: false,
-      children: [
-        {
-          name: 'src',
-          path: 'src',
-          value: 1,
-          isFile: false,
-          children: [
-            {
-              name: 'App.tsx',
-              path: 'src/App.tsx',
-              value: 1,
-              isFile: true,
-              color: '#006400',
-              fileData: {
-                filePath: 'src/App.tsx',
-                totalCommitCount: 1,
-                recentCommitCount: 1,
-                frequencyScore: 1,
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    mockApplyColors.mockReturnValue({
       name: 'root',
       path: '',
       value: 1,

@@ -1,0 +1,302 @@
+import {
+  evaluateNodeForces,
+  evaluateNodeStyle,
+  evaluateEdgeForces,
+  evaluateEdgeStyle,
+  NODE_FORCE_DEFAULTS,
+  NODE_STYLE_DEFAULTS,
+  EDGE_FORCE_DEFAULTS,
+  EDGE_STYLE_DEFAULTS,
+} from '@/lib/ts/force-rules';
+import {
+  FileNode,
+  FolderNode,
+  NodeForceRule,
+  ImportEdge,
+  CallEdge,
+  EdgeForceRule,
+} from '@/lib/ts/types';
+import { defaultNodeRules, defaultEdgeRules } from '@/lib/ts/default-rules';
+
+const makeFileNode = (overrides?: Partial<FileNode>): FileNode => ({
+  id: 'file-1',
+  kind: 'FILE',
+  parent: 'folder-src',
+  children: [],
+  siblings: [],
+  name: 'index.ts',
+  path: '/repo/src/index.ts',
+  fileType: 'ts',
+  ...overrides,
+});
+
+const makeFolderNode = (overrides?: Partial<FolderNode>): FolderNode => ({
+  id: 'folder-src',
+  kind: 'FOLDER',
+  parent: null,
+  children: [],
+  siblings: [],
+  name: 'src',
+  path: '/repo/src',
+  depth: 1,
+  ...overrides,
+});
+
+const makeImportEdge = (overrides?: Partial<ImportEdge>): ImportEdge => ({
+  id: 'edge-1',
+  type: 'import',
+  source: 'file-1',
+  target: 'import-1',
+  ...overrides,
+});
+
+const makeCallEdge = (overrides?: Partial<CallEdge>): CallEdge => ({
+  id: 'edge-call-1',
+  type: 'call',
+  source: 'fn-a',
+  target: 'fn-b',
+  callScope: 'same-file',
+  ...overrides,
+});
+
+describe('evaluateNodeForces', () => {
+  it('returns defaults when no rules match', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Folders only',
+        enabled: true,
+        match: (n) => n.kind === 'FOLDER',
+        forces: { charge: -500 },
+      },
+    ];
+    const result = evaluateNodeForces(node, rules);
+    expect(result).toEqual(NODE_FORCE_DEFAULTS);
+  });
+
+  it('applies first matching rule per property', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Files: strong charge',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        forces: { charge: -800 },
+      },
+      {
+        id: 'r2',
+        label: 'Files: weak charge',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        forces: { charge: -100, collideRadius: 20 },
+      },
+    ];
+    const result = evaluateNodeForces(node, rules);
+    expect(result.charge).toBe(-800);
+    expect(result.collideRadius).toBe(20);
+  });
+
+  it('skips disabled rules', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Disabled',
+        enabled: false,
+        match: (n) => n.kind === 'FILE',
+        forces: { charge: -999 },
+      },
+      {
+        id: 'r2',
+        label: 'Enabled',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        forces: { charge: -200 },
+      },
+    ];
+    const result = evaluateNodeForces(node, rules);
+    expect(result.charge).toBe(-200);
+  });
+});
+
+describe('evaluateNodeStyle', () => {
+  it('returns defaults when no rules match', () => {
+    const node = makeFileNode();
+    const result = evaluateNodeStyle(node, []);
+    expect(result).toEqual(NODE_STYLE_DEFAULTS);
+  });
+
+  it('applies first matching rule per style property', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Color only',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        style: { color: '#ff0000' },
+      },
+      {
+        id: 'r2',
+        label: 'Color and radius',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        style: { color: '#0000ff', radius: 12 },
+      },
+    ];
+    const result = evaluateNodeStyle(node, rules);
+    expect(result.color).toBe('#ff0000');
+    expect(result.radius).toBe(12);
+  });
+});
+
+describe('evaluateEdgeForces', () => {
+  it('returns defaults when no rules match', () => {
+    const edge = makeImportEdge();
+    const result = evaluateEdgeForces(edge, []);
+    expect(result).toEqual(EDGE_FORCE_DEFAULTS);
+  });
+
+  it('applies first matching rule per property', () => {
+    const edge = makeImportEdge();
+    const rules: EdgeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Imports: short distance',
+        enabled: true,
+        match: (e) => e.type === 'import',
+        forces: { linkDistance: 50 },
+      },
+      {
+        id: 'r2',
+        label: 'All edges: strong',
+        enabled: true,
+        match: () => true,
+        forces: { linkStrength: 0.8, linkDistance: 200 },
+      },
+    ];
+    const result = evaluateEdgeForces(edge, rules);
+    expect(result.linkDistance).toBe(50);
+    expect(result.linkStrength).toBe(0.8);
+  });
+});
+
+describe('evaluateEdgeStyle', () => {
+  it('returns defaults when no rules match', () => {
+    const edge = makeImportEdge();
+    const result = evaluateEdgeStyle(edge, []);
+    expect(result).toEqual(EDGE_STYLE_DEFAULTS);
+  });
+
+  it('applies first matching rule per property', () => {
+    const edge = makeImportEdge();
+    const rules: EdgeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Import edges: red',
+        enabled: true,
+        match: (e) => e.type === 'import',
+        style: { color: '#ff0000' },
+      },
+    ];
+    const result = evaluateEdgeStyle(edge, rules);
+    expect(result.color).toBe('#ff0000');
+    expect(result.width).toBe(EDGE_STYLE_DEFAULTS.width);
+  });
+});
+
+describe('edge cases', () => {
+  it('evaluateNodeForces ignores a matching enabled rule with no forces sub-object', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'No forces defined',
+        enabled: true,
+        match: (n) => n.kind === 'FILE',
+        // no forces property
+        style: { color: '#aabbcc' },
+      },
+    ];
+    const result = evaluateNodeForces(node, rules);
+    expect(result).toEqual(NODE_FORCE_DEFAULTS);
+  });
+
+  it('evaluateNodeStyle skips disabled rules', () => {
+    const node = makeFileNode();
+    const rules: NodeForceRule[] = [
+      {
+        id: 'r1',
+        label: 'Disabled style',
+        enabled: false,
+        match: (n) => n.kind === 'FILE',
+        style: { color: '#ff0000' },
+      },
+    ];
+    const result = evaluateNodeStyle(node, rules);
+    expect(result).toEqual(NODE_STYLE_DEFAULTS);
+  });
+});
+
+describe('default rules integration', () => {
+  it('evaluates default node rules for a TS FILE node (falls through to defaults — file rules removed)', () => {
+    const fileNode = makeFileNode({ fileType: 'ts' });
+    const forces = evaluateNodeForces(fileNode, defaultNodeRules);
+    // No file rule matches, falls through to defaults
+    expect(forces.charge).toBe(NODE_FORCE_DEFAULTS.charge);
+    expect(forces.collideRadius).toBe(NODE_FORCE_DEFAULTS.collideRadius);
+    const style = evaluateNodeStyle(fileNode, defaultNodeRules);
+    expect(style.color).toBe(NODE_STYLE_DEFAULTS.color);
+    expect(style.radius).toBe(NODE_STYLE_DEFAULTS.radius);
+  });
+
+  it('evaluates default node rules for a FOLDER node (falls through to defaults — folder rules removed)', () => {
+    const folderNode = makeFolderNode();
+    const forces = evaluateNodeForces(folderNode, defaultNodeRules);
+    // No folder rule matches, falls through to defaults
+    expect(forces.charge).toBe(NODE_FORCE_DEFAULTS.charge);
+    expect(forces.zone).toBe(null);
+    const style = evaluateNodeStyle(folderNode, defaultNodeRules);
+    expect(style.color).toBe(NODE_STYLE_DEFAULTS.color);
+    expect(style.radius).toBe(NODE_STYLE_DEFAULTS.radius);
+  });
+
+  it('evaluates default edge rules for an import edge (falls through to defaults — import-edges rule removed)', () => {
+    const edge = makeImportEdge();
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    // import-edges rule was removed in US1; import edges are no longer emitted.
+    // No rule matches, so the function returns the built-in defaults.
+    expect(forces.linkDistance).toBe(100);
+    expect(forces.linkStrength).toBe(0.5);
+  });
+
+  it('evaluates default edge rules for a same-file call edge', () => {
+    const edge = makeCallEdge({ callScope: 'same-file' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(30);
+    expect(forces.linkStrength).toBe(0.8);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#9ca3af');
+  });
+
+  it('evaluates default edge rules for a cross-file call edge', () => {
+    const edge = makeCallEdge({ callScope: 'cross-file' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    expect(forces.linkDistance).toBe(50);
+    expect(forces.linkStrength).toBe(0.6);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#9ca3af');
+  });
+
+  it('evaluates default edge rules for an external call edge', () => {
+    const edge = makeCallEdge({ callScope: 'external' });
+    const forces = evaluateEdgeForces(edge, defaultEdgeRules);
+    // No explicit external-call rule; falls through to built-in defaults for unmatched properties.
+    expect(forces.linkDistance).toBe(EDGE_FORCE_DEFAULTS.linkDistance);
+    expect(forces.linkStrength).toBe(0.3);
+    const style = evaluateEdgeStyle(edge, defaultEdgeRules);
+    expect(style.color).toBe('#9ca3af');
+  });
+});

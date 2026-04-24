@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 interface RepositorySelectorProps {
   onRepositorySelected: (path: string) => void;
-  isLoading: boolean;
+  isLoading?: boolean;
   error?: string;
   currentPath?: string;
   onError?: (message: string) => void;
@@ -12,7 +12,7 @@ interface RepositorySelectorProps {
 
 export default function RepositorySelector({
   onRepositorySelected,
-  isLoading,
+  isLoading = false,
   error,
   currentPath,
   onError,

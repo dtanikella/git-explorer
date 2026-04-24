@@ -107,3 +107,65 @@ export interface TsGraphData {
   nodes: TsNode[];
   edges: TsEdge[];
 }
+
+// --- Force Rule Types ---
+
+export interface NodeForceRule {
+  id: string;
+  label: string;
+  enabled: boolean;
+  match: (node: TsNode) => boolean;
+  forces?: {
+    charge?: number;
+    collideRadius?: number;
+    centerStrength?: number;
+    fx?: number | null;
+    fy?: number | null;
+    zone?: 'top' | 'bottom' | 'left' | 'right' | 'center' | null;
+  };
+  style?: {
+    color?: string;
+    radius?: number;
+  };
+}
+
+export interface EdgeForceRule {
+  id: string;
+  label: string;
+  enabled: boolean;
+  match: (edge: TsEdge) => boolean;
+  forces?: {
+    linkStrength?: number;
+    linkDistance?: number;
+  };
+  style?: {
+    color?: string;
+    width?: number;
+  };
+}
+
+// --- Resolved Types (output of rule evaluation) ---
+
+export interface ResolvedNodeForces {
+  charge: number;
+  collideRadius: number;
+  centerStrength: number;
+  fx: number | null;
+  fy: number | null;
+  zone: 'top' | 'bottom' | 'left' | 'right' | 'center' | null;
+}
+
+export interface ResolvedNodeStyle {
+  color: string;
+  radius: number;
+}
+
+export interface ResolvedEdgeForces {
+  linkStrength: number;
+  linkDistance: number;
+}
+
+export interface ResolvedEdgeStyle {
+  color: string;
+  width: number;
+}

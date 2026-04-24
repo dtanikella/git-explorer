@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+html,
+body {
+  height: 100%;
+}
+
 /* Base styles for better typography and consistency */
 @layer base {
   html {
