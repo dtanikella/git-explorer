@@ -27,6 +27,17 @@ function isSymbolNode(n: TsNode): n is SymbolNode {
   return n.kind === 'FUNCTION' || n.kind === 'CLASS' || n.kind === 'INTERFACE';
 }
 
+interface SimNode extends d3.SimulationNodeDatum {
+  id: string;
+  data: TsNode;
+  computedRadius: number;
+}
+
+interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
+  id: string;
+  data: TsEdge;
+}
+
 const NODE_COLORS: Record<string, string> = {
   FUNCTION: '#3b82f6',
   CLASS: '#8b5cf6',
@@ -125,7 +136,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   const simEdges: SimEdge[] = useMemo(() => {
     if (!graphData) return [];
     const symbolIds = new Set(
-      graphData.nodes.filter((n) => SYMBOL_KINDS.has(n.kind)).map((n) => n.id)
+      graphData.nodes.filter(isSymbolNode).map((n) => n.id)
     );
     // Include FILE nodes that are an endpoint of a call edge where the other endpoint is a symbol
     const fileIds = new Set(
@@ -155,7 +166,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
     }
 
     const nodes = graphData.nodes
-      .filter((n) => (SYMBOL_KINDS.has(n.kind) || n.kind === 'FILE') && connectedIds.has(n.id))
+      .filter((n) => (isSymbolNode(n) || n.kind === 'FILE') && connectedIds.has(n.id))
       .map((n) => ({ id: n.id, data: { ...n }, computedRadius: 0 }));
 
     // Count edges per node for degree-based sizing
