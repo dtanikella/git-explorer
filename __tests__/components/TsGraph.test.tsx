@@ -36,12 +36,6 @@ jest.mock('d3', () => {
     return obj;
   };
 
-  const dragBehavior = (): any => {
-    const obj: Record<string, any> = {};
-    obj.on = jest.fn(() => obj);
-    return obj;
-  };
-
   const zoomBehavior = (): any => {
     const obj: Record<string, any> = {};
     obj.scaleExtent = jest.fn(() => obj);
@@ -70,7 +64,6 @@ jest.mock('d3', () => {
     forceX: jest.fn(() => ({ x: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
     forceY: jest.fn(() => ({ y: jest.fn().mockReturnThis(), strength: jest.fn().mockReturnThis() })),
     zoom: jest.fn(() => zoomBehavior()),
-    drag: jest.fn(() => dragBehavior()),
     scaleLinear: jest.fn(() => scaleLinear()),
     zoomIdentity: { k: 1, x: 0, y: 0, translate: jest.fn().mockReturnThis(), scale: jest.fn().mockReturnThis() },
     __getLastSim: () => lastSim,

@@ -7,8 +7,6 @@ import {
   TsGraphData,
   TsNode,
   TsEdge,
-  NodeForceRule,
-  EdgeForceRule,
 } from '@/lib/ts/types';
 import {
   evaluateNodeForces,
@@ -399,8 +397,6 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       resizeObserver.disconnect();
     };
   }, [simNodes, simEdges]);
-
-
 
   // Search handler: find node by name (case-insensitive), zoom to it, and highlight it
   const handleSearchNode = useCallback((query: string): boolean => {
