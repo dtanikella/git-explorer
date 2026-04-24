@@ -326,6 +326,40 @@ describe('analyzeTypeScriptRepo', () => {
     expect(folderToFile).toBeDefined();
   });
 
+  it('emits contains edges from file to function, class, and interface nodes', () => {
+    repoDir = createTempRepo({
+      'src/survey.ts': `
+        export function ProductsOnboardingSurvey(): string { return 'survey'; }
+        export class SurveyHelper {}
+        export interface SurveyConfig { name: string; }
+      `,
+      'src/index.ts': `
+        import { ProductsOnboardingSurvey, SurveyHelper, SurveyConfig } from './survey';
+        export function init(c: SurveyConfig): string { return ProductsOnboardingSurvey(); }
+        export function create(): SurveyHelper { return new SurveyHelper(); }
+      `,
+    });
+    const result = analyzeTypeScriptRepo(repoDir);
+
+    const fileNode = result.nodes.find((n) => n.kind === 'FILE' && n.name === 'survey.ts');
+    const fnNode = result.nodes.find((n) => n.kind === 'FUNCTION' && n.name === 'ProductsOnboardingSurvey');
+    const classNode = result.nodes.find((n) => n.kind === 'CLASS' && n.name === 'SurveyHelper');
+    const ifaceNode = result.nodes.find((n) => n.kind === 'INTERFACE' && n.name === 'SurveyConfig');
+    expect(fileNode).toBeDefined();
+    expect(fnNode).toBeDefined();
+    expect(classNode).toBeDefined();
+    expect(ifaceNode).toBeDefined();
+
+    const fileContainsEdges = result.edges.filter(
+      (e) => e.type === 'contains' && e.source === fileNode!.id
+    ) as import('../../lib/ts/types').ContainsEdge[];
+
+    expect(fileContainsEdges.every((e) => e.containsScope === 'file')).toBe(true);
+    expect(fileContainsEdges.find((e) => e.target === fnNode!.id)).toBeDefined();
+    expect(fileContainsEdges.find((e) => e.target === classNode!.id)).toBeDefined();
+    expect(fileContainsEdges.find((e) => e.target === ifaceNode!.id)).toBeDefined();
+  });
+
   it('does not emit ImportNode or resolution edges for local imports', () => {
     repoDir = createTempRepo({
       'src/index.ts': `
