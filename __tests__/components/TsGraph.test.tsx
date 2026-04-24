@@ -17,10 +17,16 @@ jest.mock('d3', () => {
   };
 
   const simMethods = (): any => {
+    let tickHandler: (() => void) | null = null;
     const obj: Record<string, any> = {};
-    ['force', 'on', 'alpha', 'alphaTarget', 'restart', 'stop', 'tick'].forEach((m) => {
+    ['force', 'alpha', 'alphaTarget', 'restart', 'stop'].forEach((m) => {
       obj[m] = jest.fn(() => obj);
     });
+    obj.on = jest.fn((event: string, handler: () => void) => {
+      if (event === 'tick') tickHandler = handler;
+      return obj;
+    });
+    obj._fireTick = () => { if (tickHandler) tickHandler(); };
     return obj;
   };
 
@@ -49,9 +55,15 @@ jest.mock('d3', () => {
     return fn;
   };
 
+  let lastSim: any = null;
+
   return {
     select: jest.fn(() => chainable()),
-    forceSimulation: jest.fn(() => simMethods()),
+    forceSimulation: jest.fn((nodes: any[]) => {
+      if (nodes) nodes.forEach((n: any, i: number) => { n.x = 100 + i * 50; n.y = 100 + i * 50; });
+      lastSim = simMethods();
+      return lastSim;
+    }),
     forceLink: jest.fn(() => linkForce()),
     forceManyBody: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
     forceCollide: jest.fn(() => ({ radius: jest.fn().mockReturnThis() })),
@@ -61,6 +73,7 @@ jest.mock('d3', () => {
     drag: jest.fn(() => dragBehavior()),
     scaleLinear: jest.fn(() => scaleLinear()),
     zoomIdentity: { k: 1, x: 0, y: 0, translate: jest.fn().mockReturnThis(), scale: jest.fn().mockReturnThis() },
+    __getLastSim: () => lastSim,
   };
 });
 
@@ -137,5 +150,36 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
   it('renders a canvas element, not an svg', async () => {
     const { container } = render(<TsGraph repoPath="" hideTestFiles={false} />);
     expect(container.querySelector('canvas')).toBeNull(); // no repo yet, returns null
+  });
+});
+
+describe('TsGraph — canvas rendering', () => {
+  it('calls ctx.clearRect on simulation tick when graph data is loaded', async () => {
+    const mockData = {
+      nodes: [
+        { id: 'n1', kind: 'FUNCTION', name: 'foo', filePath: 'src/a.ts' },
+        { id: 'n2', kind: 'FUNCTION', name: 'bar', filePath: 'src/b.ts' },
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2', type: 'call', weight: 1 },
+      ],
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const d3Mock = require('d3');
+    render(<TsGraph repoPath="/some/repo" hideTestFiles={false} />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    // Fire one tick
+    const sim = d3Mock.__getLastSim();
+    act(() => { sim._fireTick(); });
+
+    expect(mockCtx.clearRect).toHaveBeenCalled();
+    expect(mockCtx.beginPath).toHaveBeenCalled();
   });
 });

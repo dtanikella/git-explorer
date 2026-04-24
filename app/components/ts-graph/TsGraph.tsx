@@ -195,11 +195,73 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   useEffect(() => {
     if (!canvasRef.current || simNodes.length === 0) return;
 
-    const svg = d3.select(canvasRef.current as any);
-    svg.selectAll('*').remove();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      setCtxError(true);
+      return;
+    }
+    ctxRef.current = ctx;
 
-    const width = canvasRef.current.parentElement?.clientWidth || 800;
-    const height = canvasRef.current.parentElement?.clientHeight || 600;
+    canvas.width = canvas.offsetWidth || 800;
+    canvas.height = canvas.offsetHeight || 600;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const currentNodeRules = nodeRulesRef.current;
+    const currentEdgeRules = edgeRulesRef.current;
+
+    function drawFrame() {
+      const c = ctxRef.current;
+      const cv = canvasRef.current;
+      if (!c || !cv) return;
+      const t = zoomTransformRef.current;
+
+      c.clearRect(0, 0, cv.width, cv.height);
+      c.save();
+      c.setTransform(t.k, 0, 0, t.k, t.x, t.y);
+
+      // Draw edges
+      for (const e of simEdges) {
+        const src = e.source as SimNode;
+        const tgt = e.target as SimNode;
+        if (src.x == null || src.y == null || tgt.x == null || tgt.y == null) continue;
+        const style = evaluateEdgeStyle(e.data, currentEdgeRules);
+        c.beginPath();
+        c.moveTo(src.x, src.y);
+        c.lineTo(tgt.x, tgt.y);
+        c.strokeStyle = style.color;
+        c.lineWidth = style.width;
+        c.globalAlpha = 0.6;
+        c.stroke();
+        c.globalAlpha = 1.0;
+      }
+
+      // Draw nodes
+      for (const n of simNodes) {
+        if (n.x == null || n.y == null) continue;
+        const style = evaluateNodeStyle(n.data, currentNodeRules);
+        const r = visualRadius(n);
+        c.beginPath();
+        c.arc(n.x, n.y, r, 0, 2 * Math.PI);
+        c.fillStyle = style.color;
+        c.fill();
+        c.strokeStyle = '#fff';
+        c.lineWidth = 1;
+        c.stroke();
+        if (highlightedNodeIdRef.current === n.id) {
+          c.beginPath();
+          c.arc(n.x, n.y, r + 2, 0, 2 * Math.PI);
+          c.strokeStyle = '#facc15';
+          c.lineWidth = 4;
+          c.stroke();
+        }
+      }
+
+      c.restore();
+    }
+
+    drawFrameRef.current = drawFrame;
 
     const zoneMap: Record<string, { x: number; y: number }> = {
       top: { x: width / 2, y: height * 0.2 },
@@ -208,9 +270,6 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       right: { x: width * 0.8, y: height / 2 },
       center: { x: width / 2, y: height / 2 },
     };
-
-    const currentNodeRules = nodeRulesRef.current;
-    const currentEdgeRules = edgeRulesRef.current;
 
     const simulation = d3
       .forceSimulation<SimNode>(simNodes)
@@ -234,7 +293,8 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       )
       .force(
         'x',
-        d3.forceX<SimNode>()
+        d3
+          .forceX<SimNode>()
           .x((d) => {
             const forces = evaluateNodeForces(d.data, currentNodeRules);
             if (forces.fx !== null) return forces.fx;
@@ -248,7 +308,8 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       )
       .force(
         'y',
-        d3.forceY<SimNode>()
+        d3
+          .forceY<SimNode>()
           .y((d) => {
             const forces = evaluateNodeForces(d.data, currentNodeRules);
             if (forces.fy !== null) return forces.fy;
@@ -261,94 +322,34 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
           })
       );
 
-    const g = svg.append('g');
-
-    const link = g
-      .append('g')
-      .selectAll('line')
-      .data(simEdges)
-      .join('line')
-      .attr('stroke', (d) => evaluateEdgeStyle(d.data, currentEdgeRules).color)
-      .attr('stroke-width', (d) => evaluateEdgeStyle(d.data, currentEdgeRules).width)
-      .attr('stroke-opacity', 0.6) as d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown>;
-
-    const node = g
-      .append('g')
-      .selectAll('circle')
-      .data(simNodes)
-      .join('circle')
-      .attr('r', (d) => visualRadius(d))
-      .attr('fill', (d) => evaluateNodeStyle(d.data, currentNodeRules).color)
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1)
-      .call(drag(simulation) as any) as d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>;
-
     simulationRef.current = simulation;
-
-    node
-      .on('mouseenter', (event, d) => {
-        if (!tooltipRef.current) return;
-        const label = 'name' in d.data ? (d.data as { name: string }).name : d.id;
-        tooltipRef.current
-          .style('visibility', 'visible')
-          .html(`<strong>${d.data.kind}</strong>: ${label}`);
-      })
-      .on('mousemove', (event) => {
-        if (!tooltipRef.current) return;
-        tooltipRef.current
-          .style('top', event.pageY - 10 + 'px')
-          .style('left', event.pageX + 10 + 'px');
-      })
-      .on('mouseleave', () => {
-        if (!tooltipRef.current) return;
-        tooltipRef.current.style('visibility', 'hidden');
-      });
-
-    simulation.on('tick', () => {
-      link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
-
-      node.attr('cx', (d) => d.x!).attr('cy', (d) => d.y!);
-    });
+    simulation.on('tick', drawFrame);
 
     const zoomBehavior = d3
-        .zoom<HTMLCanvasElement, unknown>()
-        .scaleExtent([0.1, 8])
-        .on('zoom', (event) => {
-          g.attr('transform', event.transform);
-        });
+      .zoom<HTMLCanvasElement, unknown>()
+      .scaleExtent([0.1, 8])
+      .on('zoom', (event) => {
+        zoomTransformRef.current = event.transform;
+        drawFrame();
+      });
     zoomRef.current = zoomBehavior;
+    d3.select(canvas as any).call(zoomBehavior as any);
 
-    svg.call(zoomBehavior);
-
-    function drag(simulation: d3.Simulation<SimNode, SimEdge>) {
-      function dragstarted(event: any, d: SimNode) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      }
-      function dragged(event: any, d: SimNode) {
-        d.fx = event.x;
-        d.fy = event.y;
-      }
-      function dragended(event: any, d: SimNode) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      }
-      return d3
-        .drag<SVGCircleElement, SimNode>()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended);
+    const resizeObserver = new ResizeObserver(() => {
+      if (!canvasRef.current) return;
+      canvasRef.current.width = canvasRef.current.offsetWidth || 800;
+      canvasRef.current.height = canvasRef.current.offsetHeight || 600;
+      drawFrame();
+    });
+    if (canvas.parentElement) {
+      resizeObserver.observe(canvas.parentElement);
     }
 
     return () => {
       simulation.stop();
       zoomRef.current = null;
+      drawFrameRef.current = null;
+      resizeObserver.disconnect();
     };
   }, [simNodes, simEdges]);
 
