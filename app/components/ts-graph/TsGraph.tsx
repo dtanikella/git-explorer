@@ -183,6 +183,53 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
   // Keep simNodesRef in sync for search callback
   useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
 
+  const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const t = zoomTransformRef.current;
+
+    const mx = (event.clientX - rect.left - t.x) / t.k;
+    const my = (event.clientY - rect.top - t.y) / t.k;
+
+    const nodes = simNodesRef.current;
+    let found: SimNode | null = null;
+    for (const n of nodes) {
+      if (n.x == null || n.y == null) continue;
+      const dx = mx - n.x;
+      const dy = my - n.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= visualRadius(n)) {
+        found = n;
+        break;
+      }
+    }
+
+    if (found !== hoveredNodeRef.current) {
+      hoveredNodeRef.current = found;
+      if (found && tooltipRef.current) {
+        const label = 'name' in found.data ? (found.data as { name: string }).name : found.id;
+        tooltipRef.current
+          .style('visibility', 'visible')
+          .html(`<strong>${found.data.kind}</strong>: ${label}`);
+      } else if (tooltipRef.current) {
+        tooltipRef.current.style('visibility', 'hidden');
+      }
+    }
+
+    if (found && tooltipRef.current) {
+      tooltipRef.current
+        .style('top', event.pageY - 10 + 'px')
+        .style('left', event.pageX + 10 + 'px');
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    hoveredNodeRef.current = null;
+    if (tooltipRef.current) {
+      tooltipRef.current.style('visibility', 'hidden');
+    }
+  }, []);
+
   // Import nodes use a fixed visual radius; FILE nodes use a fixed smaller radius
   function visualRadius(d: SimNode): number {
     if (d.data.kind === 'IMPORT') return 10;
@@ -427,6 +474,8 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block' }}
         aria-label="TypeScript repository structure graph"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
       />
     </div>
   );

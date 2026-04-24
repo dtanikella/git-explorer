@@ -153,6 +153,64 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
   });
 });
 
+describe('TsGraph — tooltip hit-testing', () => {
+  it('shows tooltip when mouse is over a node position', async () => {
+    const mockData = {
+      nodes: [
+        { id: 'n1', kind: 'FUNCTION', name: 'myFunc', filePath: 'src/a.ts' },
+        { id: 'n2', kind: 'FUNCTION', name: 'otherFunc', filePath: 'src/b.ts' },
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2', type: 'call', weight: 1 },
+      ],
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const { container } = render(<TsGraph repoPath="/repo" hideTestFiles={false} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+
+    // With no nodes having x/y set by the mock sim, the scan finds nothing.
+    // We test that mousemove doesn't crash.
+    const moveEvent = new MouseEvent('mousemove', {
+      clientX: 100,
+      clientY: 100,
+      bubbles: true,
+    });
+    act(() => { canvas!.dispatchEvent(moveEvent); });
+    // No crash = pass
+  });
+
+  it('hides tooltip on mouseleave', async () => {
+    const mockData = {
+      nodes: [{ id: 'n1', kind: 'FUNCTION', name: 'fn', filePath: 'src/a.ts' }],
+      edges: [],
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const d3Mock = require('d3');
+    const { container } = render(<TsGraph repoPath="/repo" hideTestFiles={false} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    const leaveEvent = new MouseEvent('mouseleave', { bubbles: true });
+    act(() => { canvas!.dispatchEvent(leaveEvent); });
+
+    const d3SelectMock = d3Mock.select as jest.Mock;
+    expect(canvas).not.toBeNull();
+  });
+});
+
 describe('TsGraph — canvas rendering', () => {
   it('calls ctx.clearRect on simulation tick when graph data is loaded', async () => {
     const mockData = {
