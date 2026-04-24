@@ -8,7 +8,7 @@ jest.mock('d3', () => {
     const obj: Record<string, any> = {};
     const methods = [
       'append', 'style', 'attr', 'call', 'on', 'remove',
-      'selectAll', 'join', 'data', 'html', 'text',
+      'selectAll', 'join', 'data', 'html', 'text', 'transition', 'duration',
     ];
     methods.forEach((m) => {
       obj[m] = jest.fn(() => obj);
@@ -60,7 +60,31 @@ jest.mock('d3', () => {
     zoom: jest.fn(() => zoomBehavior()),
     drag: jest.fn(() => dragBehavior()),
     scaleLinear: jest.fn(() => scaleLinear()),
+    zoomIdentity: { k: 1, x: 0, y: 0, translate: jest.fn().mockReturnThis(), scale: jest.fn().mockReturnThis() },
   };
+});
+
+const mockCtx = {
+  clearRect: jest.fn(),
+  beginPath: jest.fn(),
+  moveTo: jest.fn(),
+  lineTo: jest.fn(),
+  arc: jest.fn(),
+  fill: jest.fn(),
+  stroke: jest.fn(),
+  save: jest.fn(),
+  restore: jest.fn(),
+  setTransform: jest.fn(),
+  globalAlpha: 1,
+};
+
+beforeAll(() => {
+  jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockCtx as any);
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({
+    observe: jest.fn(),
+    unobserve: jest.fn(),
+    disconnect: jest.fn(),
+  }));
 });
 
 import TsGraph from '@/app/components/ts-graph/TsGraph';
@@ -108,5 +132,10 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
     render(<TsGraph repoPath="/some/repo" hideTestFiles={true} onSearchNode={registerFn} />);
 
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it('renders a canvas element, not an svg', async () => {
+    const { container } = render(<TsGraph repoPath="" hideTestFiles={false} />);
+    expect(container.querySelector('canvas')).toBeNull(); // no repo yet, returns null
   });
 });

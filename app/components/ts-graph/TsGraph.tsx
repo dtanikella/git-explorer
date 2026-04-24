@@ -39,17 +39,21 @@ interface SimEdge extends d3.SimulationLinkDatum<SimNode> {
 const SYMBOL_KINDS = new Set(['FUNCTION', 'CLASS', 'INTERFACE']);
 
 export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGraphProps) {
-  const svgRef = useRef<SVGSVGElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
-  const linkSelectionRef = useRef<d3.Selection<SVGLineElement, SimEdge, SVGGElement, unknown> | null>(null);
-  const nodeSelectionRef = useRef<d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown> | null>(null);
   const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
+  const zoomTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const simNodesRef = useRef<SimNode[]>([]);
+  const hoveredNodeRef = useRef<SimNode | null>(null);
+  const highlightedNodeIdRef = useRef<string | null>(null);
+  const drawFrameRef = useRef<(() => void) | null>(null);
 
   const [graphData, setGraphData] = useState<TsGraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ctxError, setCtxError] = useState(false);
   // Rules UI was removed with ForcePanel. Using defaults until toolbar controls are added.
   const nodeRules = defaultNodeRules;
   const edgeRules = defaultEdgeRules;
@@ -189,13 +193,13 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
 
   // Effect 1: simulation setup — runs only when simNodes or simEdges change
   useEffect(() => {
-    if (!svgRef.current || simNodes.length === 0) return;
+    if (!canvasRef.current || simNodes.length === 0) return;
 
-    const svg = d3.select(svgRef.current);
+    const svg = d3.select(canvasRef.current as any);
     svg.selectAll('*').remove();
 
-    const width = svgRef.current.parentElement?.clientWidth || 800;
-    const height = svgRef.current.parentElement?.clientHeight || 600;
+    const width = canvasRef.current.parentElement?.clientWidth || 800;
+    const height = canvasRef.current.parentElement?.clientHeight || 600;
 
     const zoneMap: Record<string, { x: number; y: number }> = {
       top: { x: width / 2, y: height * 0.2 },
@@ -279,9 +283,6 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       .attr('stroke-width', 1)
       .call(drag(simulation) as any) as d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>;
 
-    // Store selections and simulation in refs for Effect 2
-    linkSelectionRef.current = link;
-    nodeSelectionRef.current = node;
     simulationRef.current = simulation;
 
     node
@@ -314,7 +315,7 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
     });
 
     const zoomBehavior = d3
-        .zoom<SVGSVGElement, unknown>()
+        .zoom<HTMLCanvasElement, unknown>()
         .scaleExtent([0.1, 8])
         .on('zoom', (event) => {
           g.attr('transform', event.transform);
@@ -364,29 +365,17 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
       return name.toLowerCase().includes(lowerQ);
     });
     if (!match || match.x == null || match.y == null) return false;
-    if (!svgRef.current || !zoomRef.current) return false;
+    if (!canvasRef.current || !zoomRef.current) return false;
 
-    const svg = d3.select(svgRef.current);
-    const width = svgRef.current.parentElement?.clientWidth || 800;
-    const height = svgRef.current.parentElement?.clientHeight || 600;
+    const svg = d3.select(canvasRef.current as any);
+    const width = canvasRef.current.parentElement?.clientWidth || 800;
+    const height = canvasRef.current.parentElement?.clientHeight || 600;
     const scale = 2;
     const transform = d3.zoomIdentity
       .translate(width / 2 - match.x * scale, height / 2 - match.y * scale)
       .scale(scale);
 
     svg.transition().duration(500).call(zoomRef.current.transform, transform);
-
-    // Briefly highlight the node
-    if (nodeSelectionRef.current) {
-      nodeSelectionRef.current
-        .filter((d) => d.id === match.id)
-        .attr('stroke', '#facc15')
-        .attr('stroke-width', 4)
-        .transition()
-        .delay(1500)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1);
-    }
 
     return true;
   }, []);
@@ -413,6 +402,14 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
     );
   }
 
+  if (ctxError) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center', color: '#ef4444' }}>
+        Canvas not supported in this browser.
+      </div>
+    );
+  }
+
   if (!graphData) return null;
 
   if (graphData.nodes.length === 0) {
@@ -425,11 +422,9 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
 
   return (
     <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 8, border: '1px solid #ccc', position: 'relative' }}>
-      <svg
-        ref={svgRef}
-        width="100%"
-        height="100%"
-        style={{ display: 'block' }}
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', display: 'block' }}
         aria-label="TypeScript repository structure graph"
       />
     </div>
