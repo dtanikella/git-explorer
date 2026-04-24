@@ -402,28 +402,43 @@ export default function TsGraph({ repoPath, hideTestFiles, onSearchNode }: TsGra
 
 
 
-  // Search handler: find node by name (case-insensitive) and zoom to it
+  // Search handler: find node by name (case-insensitive), zoom to it, and highlight it
   const handleSearchNode = useCallback((query: string): boolean => {
     const lowerQ = query.toLowerCase();
-    const match = simNodesRef.current.find((n) => {
-      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
-      return name.toLowerCase() === lowerQ;
-    }) ?? simNodesRef.current.find((n) => {
-      const name = 'name' in n.data ? (n.data as { name: string }).name : '';
-      return name.toLowerCase().includes(lowerQ);
-    });
+    const match =
+      simNodesRef.current.find((n) => {
+        const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+        return name.toLowerCase() === lowerQ;
+      }) ??
+      simNodesRef.current.find((n) => {
+        const name = 'name' in n.data ? (n.data as { name: string }).name : '';
+        return name.toLowerCase().includes(lowerQ);
+      });
+
     if (!match || match.x == null || match.y == null) return false;
     if (!canvasRef.current || !zoomRef.current) return false;
 
-    const svg = d3.select(canvasRef.current as any);
-    const width = canvasRef.current.parentElement?.clientWidth || 800;
-    const height = canvasRef.current.parentElement?.clientHeight || 600;
+    const canvas = canvasRef.current;
+    const width = canvas.offsetWidth || 800;
+    const height = canvas.offsetHeight || 600;
     const scale = 2;
     const transform = d3.zoomIdentity
       .translate(width / 2 - match.x * scale, height / 2 - match.y * scale)
       .scale(scale);
 
-    svg.transition().duration(500).call(zoomRef.current.transform, transform);
+    d3.select(canvas as any)
+      .transition()
+      .duration(500)
+      .call((zoomRef.current as any).transform, transform);
+
+    // Highlight node — drawFrame checks highlightedNodeIdRef on every tick/zoom event
+    highlightedNodeIdRef.current = match.id;
+    drawFrameRef.current?.();
+
+    setTimeout(() => {
+      highlightedNodeIdRef.current = null;
+      drawFrameRef.current?.();
+    }, 1500);
 
     return true;
   }, []);

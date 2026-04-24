@@ -147,6 +147,17 @@ describe('TsGraph — data fetching with hideTestFiles prop', () => {
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  it('search handler returns false when no matching node exists', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+
+    render(<TsGraph repoPath="/some/repo" hideTestFiles={false} onSearchNode={registerFn} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('nonExistentFunction')).toBe(false);
+  });
+
   it('renders a canvas element, not an svg', async () => {
     const { container } = render(<TsGraph repoPath="" hideTestFiles={false} />);
     expect(container.querySelector('canvas')).toBeNull(); // no repo yet, returns null
