@@ -52,7 +52,7 @@ ctx.setTransform(t.k, 0, 0, t.k, t.x, t.y);
 ctx.restore();
 ```
 
-The search-and-zoom-to-node logic is unchanged — it transitions the zoom transform, and `drawFrame()` repaints on each animation frame of the transition.
+The search-and-zoom-to-node logic is unchanged — it transitions the zoom transform. During the transition, D3 emits continuous `zoom` events; the zoom handler calls `drawFrame()` on each event, so the canvas repaints smoothly throughout the transition.
 
 ### Tick handler
 
@@ -90,7 +90,7 @@ At 10,000 nodes, this scan completes in ~0.1 ms. A `hoveredNodeRef` prevents red
 
 ### Removed
 
-- `svgRef`, `linkSelectionRef`, `nodeSelectionRef` — replaced by `canvasRef` and `ctxRef`
+- `svgRef`, `linkSelectionRef`, `nodeSelectionRef` — replaced by `canvasRef` (the canvas element) and `ctxRef` (the `CanvasRenderingContext2D` obtained via `canvas.getContext('2d')`, stored so `drawFrame` can use it without re-fetching)
 - D3 drag behavior — intentionally removed; nodes settle in a static layout
 - SVG `<g>` grouping — canvas transform stack replaces this
 
