@@ -261,8 +261,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
 
     ts.forEachChild(sourceFile, (node) => {
       // Import declarations
-      if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
-        const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
+      if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const specifier = node.moduleSpecifier.text;
 
         // Resolve module to determine if it's truly local (repo-internal)
         // rather than relying on prefix heuristics, which miss baseUrl and
@@ -615,8 +615,8 @@ export function analyzeTypeScriptRepo(repoPath: string, options?: { hideTestFile
       }
 
       // Re-exports: defer edge emission until all FileNodes exist
-      if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
-        const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
+      if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const specifier = node.moduleSpecifier.text;
         pendingReexports.push({
           sourceFileId: fileId,
           specifier,
