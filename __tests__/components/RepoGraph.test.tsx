@@ -149,3 +149,103 @@ describe('RepoGraph — data fetching', () => {
     await act(async () => {});
   });
 });
+
+describe('RepoGraph — canvas rendering', () => {
+  it('calls ctx.clearRect on simulation tick when data is loaded', async () => {
+    const mockData = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const d3Mock = require('d3');
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    const sim = d3Mock.__getLastSim();
+    act(() => { sim._fireTick(); });
+
+    expect(mockCtx.clearRect).toHaveBeenCalled();
+    expect(mockCtx.beginPath).toHaveBeenCalled();
+  });
+});
+
+describe('RepoGraph — search', () => {
+  it('registers search handler when onSearchNode is provided', () => {
+    const registerFn = jest.fn();
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} />);
+    expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it('search handler returns false when no matching node exists', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('nonExistent')).toBe(false);
+  });
+});
+
+describe('RepoGraph — tooltip', () => {
+  it('does not crash on mousemove over canvas', async () => {
+    const mockData = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+
+    const moveEvent = new MouseEvent('mousemove', { clientX: 100, clientY: 100, bubbles: true });
+    act(() => { canvas!.dispatchEvent(moveEvent); });
+    // No crash = pass
+  });
+
+  it('does not crash on mouseleave', async () => {
+    const mockData = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    const leaveEvent = new MouseEvent('mouseleave', { bubbles: true });
+    act(() => { canvas!.dispatchEvent(leaveEvent); });
+    // No crash = pass
+  });
+});
