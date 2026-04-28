@@ -14,6 +14,7 @@ export class TreeWrapper {
     this.rootNode = new NodeWrapper(_tree.rootNode);
   }
 
+  /** Access the raw tree-sitter TreeCursor for low-level traversal. Returns unwrapped types. */
   walk(): TreeCursor {
     return this._tree.walk();
   }

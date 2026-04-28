@@ -13,17 +13,17 @@ describe('QueryWrapper', () => {
 
   describe('createQuery', () => {
     it('creates a query from a valid pattern', () => {
-      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)');
+      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)', 'typescript');
       expect(query).toBeInstanceOf(QueryWrapper);
     });
 
     it('throws TreeSitterQueryError for invalid pattern', () => {
-      expect(() => createQuery(lang, '(((invalid_unclosed')).toThrow(TreeSitterQueryError);
+      expect(() => createQuery(lang, '(((invalid_unclosed', 'typescript')).toThrow(TreeSitterQueryError);
     });
 
     it('error includes the pattern and language', () => {
       try {
-        createQuery(lang, '(((bad_pattern');
+        createQuery(lang, '(((bad_pattern', 'typescript');
         fail('should have thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(TreeSitterQueryError);
@@ -39,7 +39,7 @@ describe('QueryWrapper', () => {
         function foo() { return 1; }
         function bar() { return 2; }
       `);
-      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)');
+      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)', 'typescript');
       const matches = query.matches(result.tree.rootNode);
       expect(matches.length).toBe(2);
       expect(matches[0].captures.length).toBeGreaterThan(0);
@@ -48,7 +48,7 @@ describe('QueryWrapper', () => {
 
     it('captures are NodeWrapper instances', () => {
       const result = parser.parse('function test() {}');
-      const query = createQuery(lang, '(function_declaration name: (identifier) @name)');
+      const query = createQuery(lang, '(function_declaration name: (identifier) @name)', 'typescript');
       const matches = query.matches(result.tree.rootNode);
       expect(matches[0].captures[0].node).toBeInstanceOf(NodeWrapper);
       expect(matches[0].captures[0].node.text).toBe('test');
@@ -56,7 +56,7 @@ describe('QueryWrapper', () => {
 
     it('returns empty array when no matches', () => {
       const result = parser.parse('const x = 1;');
-      const query = createQuery(lang, '(class_declaration name: (type_identifier) @class.name)');
+      const query = createQuery(lang, '(class_declaration name: (type_identifier) @class.name)', 'typescript');
       const matches = query.matches(result.tree.rootNode);
       expect(matches).toEqual([]);
     });
@@ -68,7 +68,7 @@ describe('QueryWrapper', () => {
         function foo() {}
         function bar() {}
       `);
-      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)');
+      const query = createQuery(lang, '(function_declaration name: (identifier) @func.name)', 'typescript');
       const captures = query.captures(result.tree.rootNode);
       expect(captures.length).toBe(2);
       expect(captures[0].name).toBe('func.name');

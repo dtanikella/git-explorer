@@ -1,6 +1,7 @@
+import TreeSitterParser from 'tree-sitter';
 import { TreeSitterLanguageError } from './types';
 
-type Language = ReturnType<typeof require>;
+type Language = InstanceType<typeof TreeSitterParser>['getLanguage'] extends () => infer R ? R : never;
 
 interface LanguageMapping {
   module: string;

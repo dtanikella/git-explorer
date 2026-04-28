@@ -43,7 +43,7 @@ export class QueryWrapper {
   }
 }
 
-export function createQuery(language: Language, pattern: string, languageName = 'typescript'): QueryWrapper {
+export function createQuery(language: Language, pattern: string, languageName: string): QueryWrapper {
   let query: TreeSitterParser.Query;
   try {
     query = new TreeSitterParser.Query(language, pattern);

@@ -61,6 +61,7 @@ describe('tree-sitter integration', () => {
     const query = createQuery(
       lang,
       '(function_declaration name: (identifier) @func.name)',
+      'typescript',
     );
     const captures = query.captures(root);
     const funcNames = captures.map(c => c.node.text);
