@@ -222,8 +222,27 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
       const fromName = sourceNode?.name ?? '';
       const fromSymbol = sourceNode?.scipSymbol ?? '';
 
-      // Dedup by fromSymbol + toSymbol + kind
-      const dedupeKey = `${fromSymbol}|${occ.symbol}|${kind}`;
+      // Populate referencedAt/outboundRefs for every occurrence (not gated by dedup)
+      if (targetNode) {
+        targetNode.referencedAt.push({
+          filePath,
+          line,
+          col,
+          scipSymbol: fromSymbol,
+        });
+      }
+
+      if (sourceNode) {
+        sourceNode.outboundRefs.push({
+          filePath: toFile ?? '',
+          line,
+          col,
+          scipSymbol: occ.symbol,
+        });
+      }
+
+      // Dedup edges by file + fromSymbol + toSymbol + kind
+      const dedupeKey = `${filePath}:${fromSymbol}|${occ.symbol}|${kind}`;
       if (edgeDedup.has(dedupeKey)) continue;
       edgeDedup.add(dedupeKey);
 
@@ -243,26 +262,6 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
       };
 
       edges.push(edge);
-
-      // Populate referencedAt on target node inline
-      if (targetNode) {
-        targetNode.referencedAt.push({
-          filePath,
-          line,
-          col,
-          scipSymbol: fromSymbol,
-        });
-      }
-
-      // Populate outboundRefs on source node inline
-      if (sourceNode) {
-        sourceNode.outboundRefs.push({
-          filePath: toFile ?? '',
-          line,
-          col,
-          scipSymbol: occ.symbol,
-        });
-      }
     }
   }
 

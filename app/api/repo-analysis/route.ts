@@ -3,8 +3,17 @@ import { analyzeRepo } from '@/app/services/analysis/controller';
 import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
 
 export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Invalid JSON in request body' },
+      { status: 400 },
+    );
+  }
+
+  try {
     const { repoPath, hideTestFiles } = body;
 
     if (!repoPath || typeof repoPath !== 'string') {
