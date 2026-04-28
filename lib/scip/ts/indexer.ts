@@ -7,7 +7,16 @@ import { getCachedIndex, saveCachedIndex } from '../cache';
 const DEFAULT_TIMEOUT = 60_000;
 
 function resolveScipBinary(): string {
-  return require.resolve('@sourcegraph/scip-typescript/dist/src/main.js');
+  // Construct path manually to avoid Turbopack mangling require.resolve()
+  return path.join(
+    process.cwd(),
+    'node_modules',
+    '@sourcegraph',
+    'scip-typescript',
+    'dist',
+    'src',
+    'main.js',
+  );
 }
 
 function runScipIndex(
