@@ -18,4 +18,8 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(d3-|@c4312/|@bufbuild/))',
   ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/fixtures/',
+  ],
 };
