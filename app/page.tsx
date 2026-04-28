@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
-import TsGraph from './components/ts-graph/TsGraph';
+import RepoGraph from './components/repo-graph/RepoGraph';
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
@@ -75,10 +75,10 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Row 3: TsGraph — fills all remaining space */}
+      {/* Row 3: RepoGraph — fills all remaining space */}
       <div className="flex-1 min-h-0">
         {repoPath ? (
-          <TsGraph
+          <RepoGraph
             repoPath={repoPath}
             hideTestFiles={hideTestFiles}
             onSearchNode={handleRegisterSearch}
