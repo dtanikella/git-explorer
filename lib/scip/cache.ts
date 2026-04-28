@@ -61,7 +61,7 @@ export async function getCachedIndex(repoPath: string): Promise<CacheResult | nu
   };
 }
 
-export async function saveCachedIndex(repoPath: string, indexPath: string): Promise<void> {
+export async function saveCachedIndex(repoPath: string, _indexPath: string): Promise<void> {
   const { cacheDir, metaPath } = getCachePaths(repoPath);
 
   let headSha: string;
