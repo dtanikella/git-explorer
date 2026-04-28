@@ -16,6 +16,6 @@ module.exports = {
     '^.+\\.(ts|tsx)$': 'ts-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!d3-)',
+    'node_modules/(?!(d3-|@c4312/|@bufbuild/))',
   ],
 };
