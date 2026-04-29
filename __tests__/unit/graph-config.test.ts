@@ -5,6 +5,7 @@ import {
   DEFAULT_EDGE_FORCES,
   DEFAULT_SIMULATION,
   DEFAULT_REPO_GRAPH_CONFIG,
+  combineFilters,
 } from '@/lib/analysis/graph-config';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
@@ -178,5 +179,32 @@ describe('DEFAULT_REPO_GRAPH_CONFIG', () => {
 
   it('has default simulation params', () => {
     expect(DEFAULT_REPO_GRAPH_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
+  });
+});
+
+describe('combineFilters', () => {
+  it('returns a predicate that ANDs all predicates together', () => {
+    const isExported = (n: AnalysisNode) => n.isExported;
+    const isNotTest = (n: AnalysisNode) => !n.inTestFile;
+    const combined = combineFilters(isExported, isNotTest);
+
+    expect(combined(makeNode({ isExported: true, inTestFile: false }))).toBe(true);
+    expect(combined(makeNode({ isExported: false, inTestFile: false }))).toBe(false);
+    expect(combined(makeNode({ isExported: true, inTestFile: true }))).toBe(false);
+  });
+
+  it('returns true for all inputs when no predicates are provided', () => {
+    const combined = combineFilters<AnalysisNode>();
+    expect(combined(makeNode())).toBe(true);
+  });
+
+  it('works with edge predicates', () => {
+    const isNotExternal = (e: AnalysisEdge) => !e.isExternal;
+    const isCalls = (e: AnalysisEdge) => e.kind === EdgeKind.CALLS;
+    const combined = combineFilters(isNotExternal, isCalls);
+
+    expect(combined(makeEdge({ isExternal: false, kind: EdgeKind.CALLS }))).toBe(true);
+    expect(combined(makeEdge({ isExternal: true, kind: EdgeKind.CALLS }))).toBe(false);
+    expect(combined(makeEdge({ isExternal: false, kind: EdgeKind.IMPORTS }))).toBe(false);
   });
 });

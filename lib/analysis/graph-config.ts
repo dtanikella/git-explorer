@@ -123,3 +123,8 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
+
+export function combineFilters<T>(...predicates: Array<(item: T) => boolean>): (item: T) => boolean {
+  if (predicates.length === 0) return () => true;
+  return (item: T) => predicates.every((p) => p(item));
+}
