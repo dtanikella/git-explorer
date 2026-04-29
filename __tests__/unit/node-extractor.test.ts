@@ -196,4 +196,72 @@ describe('extractNodes', () => {
     const output = extractNodes(input);
     expect(output.nodes).toHaveLength(0);
   });
+
+  it('skips nodes with no SCIP definition match (empty symbol)', () => {
+    const source = 'function orphan(): void {}';
+    const tree = parseTs(source);
+
+    // No SCIP occurrences — the node has no matching definition
+    const scipDoc = mockScipDoc('src/orphan.ts', []);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/orphan.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    expect(output.nodes).toHaveLength(0);
+    expect(output.nodeMap.size).toBe(0);
+  });
+
+  it('qualifies local SCIP symbols with file path', () => {
+    const source = 'function inner(): void {}';
+    const tree = parseTs(source);
+
+    const scipDoc = mockScipDoc('src/helpers.ts', [
+      { range: [0, 9, 14], symbol: 'local 3', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/helpers.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    expect(output.nodes).toHaveLength(1);
+    expect(output.nodes[0].scipSymbol).toBe('src/helpers.ts#local 3');
+    expect(output.nodeMap.has('src/helpers.ts#local 3')).toBe(true);
+  });
+
+  it('does not collide local symbols across files', () => {
+    const sourceA = 'function foo(): void {}';
+    const sourceB = 'function bar(): void {}';
+    const treeA = parseTs(sourceA);
+    const treeB = parseTs(sourceB);
+
+    const scipDocA = mockScipDoc('src/a.ts', [
+      { range: [0, 9, 12], symbol: 'local 3', symbolRoles: 1 },
+    ]);
+    const scipDocB = mockScipDoc('src/b.ts', [
+      { range: [0, 9, 12], symbol: 'local 3', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([
+        ['src/a.ts', { tree: treeA, source: sourceA }],
+        ['src/b.ts', { tree: treeB, source: sourceB }],
+      ]),
+      scipDocuments: [scipDocA, scipDocB],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    expect(output.nodes).toHaveLength(2);
+    expect(output.nodeMap.has('src/a.ts#local 3')).toBe(true);
+    expect(output.nodeMap.has('src/b.ts#local 3')).toBe(true);
+    expect(output.nodeMap.get('src/a.ts#local 3')!.name).toBe('foo');
+    expect(output.nodeMap.get('src/b.ts#local 3')!.name).toBe('bar');
+  });
 });
