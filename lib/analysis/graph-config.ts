@@ -150,12 +150,12 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
       return { ...DEFAULT_NODE_FORCES, charge, collideRadius: radius + 2 };
     },
     edge: createEdgeForcer({
-      [EdgeKind.CALLS]: { distance: 30, strength: 0.8 },
-      [EdgeKind.INSTANTIATES]: { distance: 50, strength: 0.6 },
-      [EdgeKind.EXTENDS]: { distance: 50, strength: 0.6 },
-      [EdgeKind.IMPLEMENTS]: { distance: 50, strength: 0.6 },
-      [EdgeKind.IMPORTS]: { distance: 100, strength: 0.3 },
-      [EdgeKind.USES_TYPE]: { distance: 100, strength: 0.3 },
+      [EdgeKind.CALLS]: { distance: 60, strength: 0.5 },
+      [EdgeKind.INSTANTIATES]: { distance: 100, strength: 0.3 },
+      [EdgeKind.EXTENDS]: { distance: 100, strength: 0.3 },
+      [EdgeKind.IMPLEMENTS]: { distance: 100, strength: 0.3 },
+      [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
+      [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
     }),
   },
   simulation: { ...DEFAULT_SIMULATION },

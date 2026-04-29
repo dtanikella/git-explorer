@@ -463,40 +463,40 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
   });
 
   describe('edge forces', () => {
-    it('CALLS edges have distance 30 and strength 0.8', () => {
+    it('CALLS edges have distance 60 and strength 0.5', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.CALLS }));
-      expect(forces.distance).toBe(30);
-      expect(forces.strength).toBe(0.8);
+      expect(forces.distance).toBe(60);
+      expect(forces.strength).toBe(0.5);
     });
 
-    it('EXTENDS edges have distance 50 and strength 0.6', () => {
+    it('EXTENDS edges have distance 100 and strength 0.3', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.EXTENDS }));
-      expect(forces.distance).toBe(50);
-      expect(forces.strength).toBe(0.6);
+      expect(forces.distance).toBe(100);
+      expect(forces.strength).toBe(0.3);
     });
 
-    it('IMPLEMENTS edges have distance 50 and strength 0.6', () => {
+    it('IMPLEMENTS edges have distance 100 and strength 0.3', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.IMPLEMENTS }));
-      expect(forces.distance).toBe(50);
-      expect(forces.strength).toBe(0.6);
+      expect(forces.distance).toBe(100);
+      expect(forces.strength).toBe(0.3);
     });
 
-    it('INSTANTIATES edges have distance 50 and strength 0.6', () => {
+    it('INSTANTIATES edges have distance 100 and strength 0.3', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.INSTANTIATES }));
-      expect(forces.distance).toBe(50);
-      expect(forces.strength).toBe(0.6);
+      expect(forces.distance).toBe(100);
+      expect(forces.strength).toBe(0.3);
     });
 
-    it('IMPORTS edges have distance 100 and strength 0.3', () => {
+    it('IMPORTS edges have distance 200 and strength 0.1', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.IMPORTS }));
-      expect(forces.distance).toBe(100);
-      expect(forces.strength).toBe(0.3);
+      expect(forces.distance).toBe(200);
+      expect(forces.strength).toBe(0.1);
     });
 
-    it('USES_TYPE edges have distance 100 and strength 0.3', () => {
+    it('USES_TYPE edges have distance 200 and strength 0.1', () => {
       const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.USES_TYPE }));
-      expect(forces.distance).toBe(100);
-      expect(forces.strength).toBe(0.3);
+      expect(forces.distance).toBe(200);
+      expect(forces.strength).toBe(0.1);
     });
   });
 
