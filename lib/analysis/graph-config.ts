@@ -147,7 +147,7 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
     node: (node: AnalysisNode): NodeForces => {
       const charge = Math.max(-(300 + node.referencedAt.length * 60), -1800);
       const radius = Math.min(Math.max(3 + node.outboundRefs.length, 3), 30);
-      return { ...DEFAULT_NODE_FORCES, charge, collideRadius: radius + 2 };
+      return { ...DEFAULT_NODE_FORCES, charge, collideRadius: radius + 15 };
     },
     edge: createEdgeForcer({
       [EdgeKind.CALLS]: { distance: 60, strength: 0.5 },
