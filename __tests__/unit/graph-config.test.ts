@@ -5,6 +5,7 @@ import {
   DEFAULT_EDGE_FORCES,
   DEFAULT_SIMULATION,
   DEFAULT_REPO_GRAPH_CONFIG,
+  INTERNAL_PROCESSING_CONFIG,
   combineFilters,
   createNodeStyler,
   createEdgeForcer,
@@ -347,5 +348,161 @@ describe('mergeConfigs', () => {
     expect(result.style.node).toBe(customNodeStyler);
     const edgeStyle = result.style.edge(makeEdge());
     expect(edgeStyle).toEqual(DEFAULT_EDGE_STYLE);
+  });
+});
+
+describe('INTERNAL_PROCESSING_CONFIG', () => {
+  describe('node filter', () => {
+    it('accepts FUNCTION nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.FUNCTION }))).toBe(true);
+    });
+
+    it('accepts METHOD nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.METHOD }))).toBe(true);
+    });
+
+    it('accepts CLASS nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.CLASS }))).toBe(true);
+    });
+
+    it('rejects INTERFACE nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.INTERFACE }))).toBe(false);
+    });
+
+    it('rejects TYPE_ALIAS nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.TYPE_ALIAS }))).toBe(false);
+    });
+
+    it('rejects MODULE nodes', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.MODULE }))).toBe(false);
+    });
+  });
+
+  describe('edge filter', () => {
+    it('accepts non-external edges', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.edge(makeEdge({ isExternal: false }))).toBe(true);
+    });
+
+    it('rejects external edges', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.edge(makeEdge({ isExternal: true }))).toBe(false);
+    });
+  });
+
+  describe('node style', () => {
+    it('scales radius with outboundRefs count', () => {
+      const nodeWith0 = makeNode({ outboundRefs: [] });
+      const nodeWith5 = makeNode({
+        outboundRefs: Array.from({ length: 5 }, (_, i) => ({
+          filePath: '/src/x.ts', line: i, col: 0, scipSymbol: `test#x${i}.`,
+        })),
+      });
+      const style0 = INTERNAL_PROCESSING_CONFIG.style.node(nodeWith0, 0);
+      const style5 = INTERNAL_PROCESSING_CONFIG.style.node(nodeWith5, 0);
+      expect(style5.radius).toBeGreaterThan(style0.radius);
+    });
+
+    it('clamps radius to a minimum of 3', () => {
+      const node = makeNode({ outboundRefs: [] });
+      const style = INTERNAL_PROCESSING_CONFIG.style.node(node, 0);
+      expect(style.radius).toBeGreaterThanOrEqual(3);
+    });
+
+    it('clamps radius to a maximum of 30', () => {
+      const manyRefs = Array.from({ length: 1000 }, (_, i) => ({
+        filePath: '/src/x.ts',
+        line: i,
+        col: 0,
+        scipSymbol: `test#x${i}.`,
+      }));
+      const node = makeNode({ outboundRefs: manyRefs });
+      const style = INTERNAL_PROCESSING_CONFIG.style.node(node, 0);
+      expect(style.radius).toBeLessThanOrEqual(30);
+    });
+
+    it('uses syntax type colors (FUNCTION → blue)', () => {
+      const node = makeNode({ syntaxType: SyntaxType.FUNCTION });
+      const style = INTERNAL_PROCESSING_CONFIG.style.node(node, 0);
+      expect(style.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(style.color).not.toBe(DEFAULT_NODE_STYLE.color);
+    });
+
+    it('uses syntax type colors (CLASS)', () => {
+      const node = makeNode({ syntaxType: SyntaxType.CLASS });
+      const style = INTERNAL_PROCESSING_CONFIG.style.node(node, 0);
+      expect(style.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    });
+  });
+
+  describe('node forces', () => {
+    it('uses base charge of -100 for a node with no references', () => {
+      const node = makeNode({ referencedAt: [] });
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.node(node);
+      expect(forces.charge).toBe(-100);
+    });
+
+    it('scales charge with referencedAt count', () => {
+      const refs = [{ filePath: '/src/x.ts', line: 1, col: 0, scipSymbol: 'test#x.' }];
+      const nodeOne = makeNode({ referencedAt: refs });
+      const nodeZero = makeNode({ referencedAt: [] });
+      const forcesOne = INTERNAL_PROCESSING_CONFIG.forces.node(nodeOne);
+      const forcesZero = INTERNAL_PROCESSING_CONFIG.forces.node(nodeZero);
+      expect(forcesOne.charge).toBeLessThan(forcesZero.charge);
+    });
+
+    it('clamps charge to a minimum of -600', () => {
+      const manyRefs = Array.from({ length: 1000 }, (_, i) => ({
+        filePath: '/src/x.ts',
+        line: i,
+        col: 0,
+        scipSymbol: `test#x${i}.`,
+      }));
+      const node = makeNode({ referencedAt: manyRefs });
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.node(node);
+      expect(forces.charge).toBeGreaterThanOrEqual(-600);
+    });
+  });
+
+  describe('edge forces', () => {
+    it('CALLS edges have distance 30 and strength 0.8', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.CALLS }));
+      expect(forces.distance).toBe(30);
+      expect(forces.strength).toBe(0.8);
+    });
+
+    it('EXTENDS edges have distance 50 and strength 0.6', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.EXTENDS }));
+      expect(forces.distance).toBe(50);
+      expect(forces.strength).toBe(0.6);
+    });
+
+    it('IMPLEMENTS edges have distance 50 and strength 0.6', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.IMPLEMENTS }));
+      expect(forces.distance).toBe(50);
+      expect(forces.strength).toBe(0.6);
+    });
+
+    it('INSTANTIATES edges have distance 50 and strength 0.6', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.INSTANTIATES }));
+      expect(forces.distance).toBe(50);
+      expect(forces.strength).toBe(0.6);
+    });
+
+    it('IMPORTS edges have distance 100 and strength 0.3', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.IMPORTS }));
+      expect(forces.distance).toBe(100);
+      expect(forces.strength).toBe(0.3);
+    });
+
+    it('USES_TYPE edges have distance 100 and strength 0.3', () => {
+      const forces = INTERNAL_PROCESSING_CONFIG.forces.edge(makeEdge({ kind: EdgeKind.USES_TYPE }));
+      expect(forces.distance).toBe(100);
+      expect(forces.strength).toBe(0.3);
+    });
+  });
+
+  describe('simulation', () => {
+    it('uses DEFAULT_SIMULATION params', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
+    });
   });
 });
