@@ -105,6 +105,12 @@ const SYNTAX_TYPE_COLORS: Partial<Record<SyntaxType, string>> = {
   [SyntaxType.MODULE]: '#ec4899',
 };
 
+const PROCESSING_NODE_TYPES = new Set<SyntaxType>([
+  SyntaxType.FUNCTION,
+  SyntaxType.METHOD,
+  SyntaxType.CLASS,
+]);
+
 export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   filters: {
     node: () => true,
@@ -120,6 +126,37 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   forces: {
     node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
     edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
+  },
+  simulation: { ...DEFAULT_SIMULATION },
+};
+
+export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
+  filters: {
+    node: (node: AnalysisNode) => PROCESSING_NODE_TYPES.has(node.syntaxType),
+    edge: (edge: AnalysisEdge) => !edge.isExternal,
+  },
+  style: {
+    node: (node: AnalysisNode, _degree: number): NodeStyle => {
+      const color = SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
+      const radius = Math.min(Math.max(3 + node.outboundRefs.length, 3), 30);
+      return { ...DEFAULT_NODE_STYLE, color, radius };
+    },
+    edge: (): EdgeStyle => ({ ...DEFAULT_EDGE_STYLE }),
+  },
+  forces: {
+    node: (node: AnalysisNode): NodeForces => {
+      const charge = Math.max(-(100 + node.referencedAt.length * 20), -600);
+      const radius = Math.min(Math.max(3 + node.outboundRefs.length, 3), 30);
+      return { ...DEFAULT_NODE_FORCES, charge, collideRadius: radius + 2 };
+    },
+    edge: createEdgeForcer({
+      [EdgeKind.CALLS]: { distance: 30, strength: 0.8 },
+      [EdgeKind.INSTANTIATES]: { distance: 50, strength: 0.6 },
+      [EdgeKind.EXTENDS]: { distance: 50, strength: 0.6 },
+      [EdgeKind.IMPLEMENTS]: { distance: 50, strength: 0.6 },
+      [EdgeKind.IMPORTS]: { distance: 100, strength: 0.3 },
+      [EdgeKind.USES_TYPE]: { distance: 100, strength: 0.3 },
+    }),
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
