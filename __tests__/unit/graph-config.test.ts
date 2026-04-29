@@ -7,6 +7,7 @@ import {
   DEFAULT_REPO_GRAPH_CONFIG,
   combineFilters,
   createNodeStyler,
+  createEdgeForcer,
 } from '@/lib/analysis/graph-config';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
@@ -254,5 +255,39 @@ describe('createNodeStyler', () => {
     const styler = createNodeStyler({});
     const style = styler(makeNode(), 0);
     expect(style).toEqual(DEFAULT_NODE_STYLE);
+  });
+});
+
+describe('createEdgeForcer', () => {
+  it('returns overridden forces for mapped EdgeKind', () => {
+    const forcer = createEdgeForcer({
+      [EdgeKind.CALLS]: { distance: 30, strength: 0.8 },
+    });
+    const forces = forcer(makeEdge({ kind: EdgeKind.CALLS }));
+    expect(forces.distance).toBe(30);
+    expect(forces.strength).toBe(0.8);
+  });
+
+  it('returns default forces for unmapped EdgeKind', () => {
+    const forcer = createEdgeForcer({
+      [EdgeKind.CALLS]: { distance: 30 },
+    });
+    const forces = forcer(makeEdge({ kind: EdgeKind.IMPORTS }));
+    expect(forces).toEqual(DEFAULT_EDGE_FORCES);
+  });
+
+  it('partially overrides — fills remaining from defaults', () => {
+    const forcer = createEdgeForcer({
+      [EdgeKind.USES_TYPE]: { distance: 120 },
+    });
+    const forces = forcer(makeEdge({ kind: EdgeKind.USES_TYPE }));
+    expect(forces.distance).toBe(120);
+    expect(forces.strength).toBe(DEFAULT_EDGE_FORCES.strength);
+  });
+
+  it('handles empty mapping', () => {
+    const forcer = createEdgeForcer({});
+    const forces = forcer(makeEdge());
+    expect(forces).toEqual(DEFAULT_EDGE_FORCES);
   });
 });

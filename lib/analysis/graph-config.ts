@@ -145,3 +145,13 @@ export function combineFilters<T>(...predicates: Array<(item: T) => boolean>): (
   if (predicates.length === 0) return () => true;
   return (item: T) => predicates.every((p) => p(item));
 }
+
+export function createEdgeForcer(
+  mapping: Partial<Record<EdgeKind, Partial<EdgeForces>>>,
+): EdgeForcer {
+  return (edge: AnalysisEdge): EdgeForces => {
+    const overrides = mapping[edge.kind];
+    if (!overrides) return { ...DEFAULT_EDGE_FORCES };
+    return { ...DEFAULT_EDGE_FORCES, ...overrides };
+  };
+}
