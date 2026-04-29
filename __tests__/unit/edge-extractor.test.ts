@@ -46,7 +46,8 @@ describe('extractEdges', () => {
     const tree = parseTs(source);
 
     const addNode = makeNode({ name: 'add', scipSymbol: 'sym:add', filePath: 'src/utils.ts' });
-    const mainNode = makeNode({ name: 'main', scipSymbol: 'sym:main', filePath: 'src/index.ts' });
+    // "main" identifier starts at line 1, col 9 (after "function ")
+    const mainNode = makeNode({ name: 'main', scipSymbol: 'sym:main', filePath: 'src/index.ts', startLine: 1, startCol: 9 });
     const nodeMap = new Map([['sym:add', addNode], ['sym:main', mainNode]]);
 
     const scipDoc = mockScipDoc('src/index.ts', [
@@ -70,15 +71,18 @@ describe('extractEdges', () => {
   });
 
   it('produces an INSTANTIATES edge for new expression', () => {
-    const source = 'const u = new User("alice");';
+    // Wrap in a function so the reference has an enclosing node
+    const source = 'function build() {\n  const u = new User("alice");\n}';
     const tree = parseTs(source);
 
     const userNode = makeNode({ name: 'User', scipSymbol: 'sym:User', syntaxType: SyntaxType.CLASS, filePath: 'src/models.ts' });
-    const nodeMap = new Map([['sym:User', userNode]]);
+    // "build" starts at line 0, col 9 (after "function ")
+    const buildNode = makeNode({ name: 'build', scipSymbol: 'sym:build', filePath: 'src/index.ts', startLine: 0, startCol: 9 });
+    const nodeMap = new Map([['sym:User', userNode], ['sym:build', buildNode]]);
 
     const scipDoc = mockScipDoc('src/index.ts', [
-      // "User" reference at line 0, col 14 (inside new_expression)
-      { range: [0, 14, 18], symbol: 'sym:User', symbolRoles: 8 },
+      // "User" reference at line 1, col 16 (inside new_expression)
+      { range: [1, 16, 20], symbol: 'sym:User', symbolRoles: 8 },
     ]);
 
     const input: EdgeExtractionInput = {
@@ -99,7 +103,9 @@ describe('extractEdges', () => {
     const tree = parseTs(source);
 
     const userNode = makeNode({ name: 'User', scipSymbol: 'sym:User', syntaxType: SyntaxType.CLASS, filePath: 'src/models.ts' });
-    const nodeMap = new Map([['sym:User', userNode]]);
+    // "greet" starts at line 0, col 9 (after "function ")
+    const greetNode = makeNode({ name: 'greet', scipSymbol: 'sym:greet', filePath: 'src/index.ts', startLine: 0, startCol: 9 });
+    const nodeMap = new Map([['sym:User', userNode], ['sym:greet', greetNode]]);
 
     // "User" in return type annotation at line 0, col 30
     const scipDoc = mockScipDoc('src/index.ts', [
@@ -166,6 +172,96 @@ describe('extractEdges', () => {
   });
 
   it('populates referencedAt on target node inline', () => {
+    const source = 'function caller() {\n  add(1, 2);\n}';
+    const tree = parseTs(source);
+
+    const addNode = makeNode({ name: 'add', scipSymbol: 'sym:add', filePath: 'src/utils.ts' });
+    const callerNode = makeNode({ name: 'caller', scipSymbol: 'sym:caller', filePath: 'src/index.ts', startLine: 0, startCol: 9 });
+    const nodeMap = new Map([['sym:add', addNode], ['sym:caller', callerNode]]);
+
+    const scipDoc = mockScipDoc('src/index.ts', [
+      { range: [0, 9, 15], symbol: 'sym:caller', symbolRoles: 1 },
+      { range: [1, 2, 5], symbol: 'sym:add', symbolRoles: 8 },
+    ]);
+
+    const input: EdgeExtractionInput = {
+      parsedFiles: new Map([['src/index.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      nodeMap,
+      repoPath: '/repo',
+    };
+
+    extractEdges(input);
+    expect(addNode.referencedAt.length).toBeGreaterThan(0);
+    expect(addNode.referencedAt[0].filePath).toBe('src/index.ts');
+  });
+
+  it('skips edges with empty target symbol', () => {
+    const source = 'foo();';
+    const tree = parseTs(source);
+
+    const nodeMap = new Map<string, AnalysisNode>();
+
+    const scipDoc = mockScipDoc('src/index.ts', [
+      { range: [0, 0, 3], symbol: '', symbolRoles: 8 },
+    ]);
+
+    const input: EdgeExtractionInput = {
+      parsedFiles: new Map([['src/index.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      nodeMap,
+      repoPath: '/repo',
+    };
+
+    const edges = extractEdges(input);
+    expect(edges).toHaveLength(0);
+  });
+
+  it('qualifies local target symbols with file path in toSymbol', () => {
+    const source = 'function caller() {\n  inner();\n}';
+    const tree = parseTs(source);
+
+    const innerNode = makeNode({
+      name: 'inner',
+      scipSymbol: 'src/mod.ts#local 5',
+      filePath: 'src/mod.ts',
+      startLine: 0,
+      startCol: 0,
+    });
+    const callerNode = makeNode({
+      name: 'caller',
+      scipSymbol: 'scip-ts npm . . mod.ts/caller().',
+      filePath: 'src/mod.ts',
+      startLine: 0,
+      startCol: 9,
+    });
+    const nodeMap = new Map<string, AnalysisNode>([
+      ['src/mod.ts#local 5', innerNode],
+      ['scip-ts npm . . mod.ts/caller().', callerNode],
+    ]);
+
+    const scipDoc = mockScipDoc('src/mod.ts', [
+      // Definition of caller at line 0, col 9
+      { range: [0, 9, 15], symbol: 'scip-ts npm . . mod.ts/caller().', symbolRoles: 1 },
+      // Reference to inner (local 5) at line 1, col 2
+      { range: [1, 2, 7], symbol: 'local 5', symbolRoles: 8 },
+    ]);
+
+    const input: EdgeExtractionInput = {
+      parsedFiles: new Map([['src/mod.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      nodeMap,
+      repoPath: '/repo',
+    };
+
+    const edges = extractEdges(input);
+    const edge = edges.find(e => e.toName === 'inner');
+    expect(edge).toBeDefined();
+    expect(edge!.toSymbol).toBe('src/mod.ts#local 5');
+  });
+
+  it('skips edges where source node has no scipSymbol', () => {
+    // Simulate: reference occurs at top-level (no enclosing function found)
     const source = 'add(1, 2);';
     const tree = parseTs(source);
 
@@ -183,8 +279,8 @@ describe('extractEdges', () => {
       repoPath: '/repo',
     };
 
-    extractEdges(input);
-    expect(addNode.referencedAt.length).toBeGreaterThan(0);
-    expect(addNode.referencedAt[0].filePath).toBe('src/index.ts');
+    const edges = extractEdges(input);
+    // No enclosing node → fromSymbol is '' → edge should be skipped
+    expect(edges).toHaveLength(0);
   });
 });

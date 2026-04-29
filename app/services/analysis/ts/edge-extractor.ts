@@ -4,6 +4,7 @@ import {
   type AnalysisEdge,
   type AnalysisNode,
 } from '@/lib/analysis/types';
+import { qualifySymbol } from './symbol-utils';
 
 // ============================================================================
 // Types
@@ -209,8 +210,11 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
       const line = occ.range[0];
       const col = occ.range[1];
 
+      const qualifiedTarget = qualifySymbol(filePath, occ.symbol);
+      if (qualifiedTarget === null) continue;
+
       const kind = classifyEdgeKind(tree, line, col, occ.symbolRoles);
-      const targetNode = input.nodeMap.get(occ.symbol);
+      const targetNode = input.nodeMap.get(qualifiedTarget);
 
       const isExternal = !targetNode;
       const toFile = targetNode?.filePath ?? null;
@@ -221,6 +225,10 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
 
       const fromName = sourceNode?.name ?? '';
       const fromSymbol = sourceNode?.scipSymbol ?? '';
+
+      // Skip edges from nodes with no SCIP identity
+      // (import-role occurrences are module-level and don't require an enclosing node)
+      if (!fromSymbol && (occ.symbolRoles & SCIP_IMPORT) === 0) continue;
 
       // Populate referencedAt/outboundRefs for every occurrence (not gated by dedup)
       if (targetNode) {
@@ -237,12 +245,12 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
           filePath: toFile ?? '',
           line,
           col,
-          scipSymbol: occ.symbol,
+          scipSymbol: qualifiedTarget,
         });
       }
 
       // Dedup edges by file + fromSymbol + toSymbol + kind
-      const dedupeKey = `${filePath}:${fromSymbol}|${occ.symbol}|${kind}`;
+      const dedupeKey = `${filePath}:${fromSymbol}|${qualifiedTarget}|${kind}`;
       if (edgeDedup.has(dedupeKey)) continue;
       edgeDedup.add(dedupeKey);
 
@@ -254,7 +262,7 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
         toText: toName,
         toFile,
         toName,
-        toSymbol: occ.symbol,
+        toSymbol: qualifiedTarget,
         isExternal,
         edgePosition: { line, col },
         isOptionalChain: isOptionalChainContext(tree, line, col),
