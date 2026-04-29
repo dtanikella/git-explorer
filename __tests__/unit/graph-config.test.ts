@@ -6,6 +6,7 @@ import {
   DEFAULT_SIMULATION,
   DEFAULT_REPO_GRAPH_CONFIG,
   combineFilters,
+  createNodeStyler,
 } from '@/lib/analysis/graph-config';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
@@ -206,5 +207,52 @@ describe('combineFilters', () => {
     expect(combined(makeEdge({ isExternal: false, kind: EdgeKind.CALLS }))).toBe(true);
     expect(combined(makeEdge({ isExternal: true, kind: EdgeKind.CALLS }))).toBe(false);
     expect(combined(makeEdge({ isExternal: false, kind: EdgeKind.IMPORTS }))).toBe(false);
+  });
+});
+
+describe('createNodeStyler', () => {
+  it('returns overridden style for mapped SyntaxType', () => {
+    const styler = createNodeStyler({
+      [SyntaxType.CLASS]: { color: '#ef4444', radius: 14 },
+    });
+    const style = styler(makeNode({ syntaxType: SyntaxType.CLASS }), 5);
+    expect(style.color).toBe('#ef4444');
+    expect(style.radius).toBe(14);
+    expect(style.opacity).toBe(DEFAULT_NODE_STYLE.opacity);
+    expect(style.label).toBe(DEFAULT_NODE_STYLE.label);
+  });
+
+  it('returns default style for unmapped SyntaxType', () => {
+    const styler = createNodeStyler({
+      [SyntaxType.CLASS]: { color: '#ef4444' },
+    });
+    const style = styler(makeNode({ syntaxType: SyntaxType.FUNCTION }), 5);
+    expect(style).toEqual(DEFAULT_NODE_STYLE);
+  });
+
+  it('uses sizeFn to override radius for all nodes', () => {
+    const styler = createNodeStyler(
+      { [SyntaxType.FUNCTION]: { color: '#3b82f6' } },
+      (degree) => degree * 2 + 4,
+    );
+    const style = styler(makeNode({ syntaxType: SyntaxType.FUNCTION }), 10);
+    expect(style.radius).toBe(24);
+    expect(style.color).toBe('#3b82f6');
+  });
+
+  it('applies sizeFn even for unmapped types', () => {
+    const styler = createNodeStyler(
+      {},
+      (degree) => degree + 1,
+    );
+    const style = styler(makeNode({ syntaxType: SyntaxType.MODULE }), 5);
+    expect(style.radius).toBe(6);
+    expect(style.color).toBe(DEFAULT_NODE_STYLE.color);
+  });
+
+  it('handles empty mapping', () => {
+    const styler = createNodeStyler({});
+    const style = styler(makeNode(), 0);
+    expect(style).toEqual(DEFAULT_NODE_STYLE);
   });
 });

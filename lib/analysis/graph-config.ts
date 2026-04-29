@@ -124,6 +124,23 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   simulation: { ...DEFAULT_SIMULATION },
 };
 
+
+export function createNodeStyler(
+  mapping: Partial<Record<SyntaxType, Partial<NodeStyle>>>,
+  sizeFn?: (degree: number) => number,
+): NodeStyler {
+  return (node: AnalysisNode, degree: number): NodeStyle => {
+    const overrides = mapping[node.syntaxType];
+    const base = overrides
+      ? { ...DEFAULT_NODE_STYLE, ...overrides }
+      : { ...DEFAULT_NODE_STYLE };
+    if (sizeFn) {
+      base.radius = sizeFn(degree);
+    }
+    return base;
+  };
+}
+
 export function combineFilters<T>(...predicates: Array<(item: T) => boolean>): (item: T) => boolean {
   if (predicates.length === 0) return () => true;
   return (item: T) => predicates.every((p) => p(item));
