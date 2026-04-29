@@ -18,7 +18,7 @@ jest.mock('d3', () => {
   const simMethods = (): any => {
     let tickHandler: (() => void) | null = null;
     const obj: Record<string, any> = {};
-    ['force', 'alpha', 'alphaTarget', 'restart', 'stop'].forEach((m) => {
+    ['force', 'alpha', 'alphaTarget', 'alphaDecay', 'velocityDecay', 'restart', 'stop'].forEach((m) => {
       obj[m] = jest.fn(() => obj);
     });
     obj.on = jest.fn((event: string, handler: () => void) => {
@@ -54,7 +54,7 @@ jest.mock('d3', () => {
     forceLink: jest.fn(() => linkForce()),
     forceManyBody: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
     forceCollide: jest.fn(() => ({ radius: jest.fn().mockReturnThis() })),
-    forceCenter: jest.fn(),
+    forceCenter: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
     zoom: jest.fn(() => zoomBehavior()),
     zoomIdentity: { k: 1, x: 0, y: 0, translate: jest.fn().mockReturnThis(), scale: jest.fn().mockReturnThis() },
     __getLastSim: () => lastSim,
@@ -72,10 +72,13 @@ const mockCtx = {
   save: jest.fn(),
   restore: jest.fn(),
   setTransform: jest.fn(),
+  fillText: jest.fn(),
   globalAlpha: 1,
   fillStyle: '',
   strokeStyle: '',
   lineWidth: 1,
+  font: '',
+  textAlign: '',
 };
 
 beforeAll(() => {

@@ -2,32 +2,33 @@
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
-import type { AnalysisResult } from '@/lib/analysis/types';
+import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
+import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
+import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 
 interface RepoGraphProps {
   repoPath: string;
   hideTestFiles: boolean;
+  config?: RepoGraphConfig;
   onSearchNode?: (handler: (query: string) => boolean) => void;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
   id: string;
   name: string;
+  data: AnalysisNode;
+  degree: number;
 }
 
 interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   source: string;
   target: string;
+  data: AnalysisEdge;
 }
 
-const NODE_RADIUS = 6;
-const NODE_COLOR = '#999999';
-const EDGE_COLOR = '#999999';
-const EDGE_WIDTH = 1;
-const EDGE_OPACITY = 0.6;
 const HIGHLIGHT_COLOR = '#facc15';
 
-export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -38,6 +39,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
   const highlightedNodeIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
+  const configRef = useRef<RepoGraphConfig>(config ?? DEFAULT_REPO_GRAPH_CONFIG);
 
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(!!repoPath);
@@ -64,6 +66,10 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
       tooltipRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    configRef.current = config ?? DEFAULT_REPO_GRAPH_CONFIG;
+  }, [config]);
 
   // Fetch data from /api/repo-analysis
   useEffect(() => {
@@ -102,24 +108,45 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
   // Adapter: AnalysisResult → SimpleNode[] + SimpleEdge[]
   const simNodes: SimpleNode[] = useMemo(() => {
     if (!analysisData) return [];
-    return analysisData.nodes.map((n) => ({
-      id: n.scipSymbol,
-      name: n.name,
-    }));
-  }, [analysisData]);
+    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
+    return analysisData.nodes
+      .filter(cfg.filters.node)
+      .map((n) => ({
+        id: n.scipSymbol,
+        name: n.name,
+        data: n,
+        degree: 0,
+      }));
+  }, [analysisData, config]);
 
   const simEdges: SimpleEdge[] = useMemo(() => {
     if (!analysisData) return [];
+    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
     const nodeIds = new Set(simNodes.map((n) => n.id));
     return analysisData.edges
-      .filter((e) => nodeIds.has(e.fromSymbol) && nodeIds.has(e.toSymbol))
+      .filter((e) =>
+        cfg.filters.edge(e) &&
+        nodeIds.has(e.fromSymbol) && nodeIds.has(e.toSymbol)
+      )
       .map((e) => ({
         source: e.fromSymbol,
         target: e.toSymbol,
+        data: e,
       }));
-  }, [analysisData, simNodes]);
+  }, [analysisData, simNodes, config]);
 
   useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
+
+  useEffect(() => {
+    const degreeCounts = new Map<string, number>();
+    for (const e of simEdges) {
+      degreeCounts.set(e.source as string, (degreeCounts.get(e.source as string) ?? 0) + 1);
+      degreeCounts.set(e.target as string, (degreeCounts.get(e.target as string) ?? 0) + 1);
+    }
+    for (const n of simNodes) {
+      n.degree = degreeCounts.get(n.id) ?? 0;
+    }
+  }, [simNodes, simEdges]);
 
   // Mouse handlers
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -137,7 +164,9 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
       if (n.x == null || n.y == null) continue;
       const dx = mx - n.x;
       const dy = my - n.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= NODE_RADIUS) {
+      const cfg = configRef.current;
+      const nStyle = cfg.style.node(n.data, n.degree);
+      if (Math.sqrt(dx * dx + dy * dy) <= nStyle.radius) {
         found = n;
         break;
       }
@@ -190,6 +219,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
       const cv = canvasRef.current;
       if (!c || !cv) return;
       const t = zoomTransformRef.current;
+      const cfg = configRef.current;
 
       c.clearRect(0, 0, cv.width, cv.height);
       c.save();
@@ -200,12 +230,13 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
         const src = e.source as unknown as SimpleNode;
         const tgt = e.target as unknown as SimpleNode;
         if (src.x == null || src.y == null || tgt.x == null || tgt.y == null) continue;
+        const eStyle = cfg.style.edge(e.data);
         c.beginPath();
         c.moveTo(src.x, src.y);
         c.lineTo(tgt.x, tgt.y);
-        c.strokeStyle = EDGE_COLOR;
-        c.lineWidth = EDGE_WIDTH;
-        c.globalAlpha = EDGE_OPACITY;
+        c.strokeStyle = eStyle.color;
+        c.lineWidth = eStyle.width;
+        c.globalAlpha = eStyle.opacity;
         c.stroke();
         c.globalAlpha = 1.0;
       }
@@ -213,16 +244,25 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
       // Draw nodes
       for (const n of simNodes) {
         if (n.x == null || n.y == null) continue;
+        const nStyle = cfg.style.node(n.data, n.degree);
         c.beginPath();
-        c.arc(n.x, n.y, NODE_RADIUS, 0, 2 * Math.PI);
-        c.fillStyle = NODE_COLOR;
+        c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
+        c.fillStyle = nStyle.color;
+        c.globalAlpha = nStyle.opacity;
         c.fill();
+        c.globalAlpha = 1.0;
         c.strokeStyle = '#fff';
         c.lineWidth = 1;
         c.stroke();
+        if (nStyle.label) {
+          c.fillStyle = '#374151';
+          c.font = '10px sans-serif';
+          c.textAlign = 'center';
+          c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
+        }
         if (highlightedNodeIdRef.current === n.id) {
           c.beginPath();
-          c.arc(n.x, n.y, NODE_RADIUS + 2, 0, 2 * Math.PI);
+          c.arc(n.x, n.y, nStyle.radius + 2, 0, 2 * Math.PI);
           c.strokeStyle = HIGHLIGHT_COLOR;
           c.lineWidth = 4;
           c.stroke();
@@ -234,6 +274,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
 
     drawFrameRef.current = drawFrame;
 
+    const cfg = configRef.current;
+
     const simulation = d3
       .forceSimulation<SimpleNode>(simNodes)
       .force(
@@ -241,12 +283,21 @@ export default function RepoGraph({ repoPath, hideTestFiles, onSearchNode }: Rep
         d3
           .forceLink<SimpleNode, SimpleEdge>(simEdges)
           .id((d) => d.id)
-          .distance(80)
-          .strength(0.5)
+          .distance((d: any) => cfg.forces.edge(d.data).distance)
+          .strength((d: any) => cfg.forces.edge(d.data).strength)
       )
-      .force('charge', d3.forceManyBody<SimpleNode>().strength(-150))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collide', d3.forceCollide<SimpleNode>().radius(NODE_RADIUS + 3));
+      .force('charge', d3.forceManyBody<SimpleNode>()
+        .strength((d: any) => cfg.forces.node(d.data).charge))
+      .force('center', d3.forceCenter(width / 2, height / 2)
+        .strength(cfg.simulation.centerStrength))
+      .force('collide', d3.forceCollide<SimpleNode>()
+        .radius((d: any) => {
+          const nStyle = cfg.style.node(d.data, d.degree);
+          return nStyle.radius + cfg.simulation.collisionPadding;
+        }));
+
+    simulation.alphaDecay(cfg.simulation.alphaDecay);
+    simulation.velocityDecay(cfg.simulation.velocityDecay);
 
     simulationRef.current = simulation;
     simulation.on('tick', drawFrame);
