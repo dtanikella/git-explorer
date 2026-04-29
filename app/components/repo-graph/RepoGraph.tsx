@@ -143,9 +143,9 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       degreeCounts.set(e.source as string, (degreeCounts.get(e.source as string) ?? 0) + 1);
       degreeCounts.set(e.target as string, (degreeCounts.get(e.target as string) ?? 0) + 1);
     }
-    for (const n of simNodes) {
-      n.degree = degreeCounts.get(n.id) ?? 0;
-    }
+    simNodes.forEach((n) => {
+      (n as { degree: number }).degree = degreeCounts.get(n.id) ?? 0;
+    });
   }, [simNodes, simEdges]);
 
   // Mouse handlers

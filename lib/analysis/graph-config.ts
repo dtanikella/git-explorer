@@ -157,6 +157,7 @@ export function createEdgeForcer(
 }
 
 type DeepPartial<T> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in keyof T]?: T[K] extends (...args: any[]) => any
     ? T[K]
     : T[K] extends object
@@ -170,7 +171,7 @@ export function mergeConfigs(
   base: RepoGraphConfig,
   ...overrides: DeepPartial<RepoGraphConfig>[]
 ): RepoGraphConfig {
-  let result: RepoGraphConfig = {
+  const result: RepoGraphConfig = {
     filters: { ...base.filters },
     style: { ...base.style },
     forces: { ...base.forces },
