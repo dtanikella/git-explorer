@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
+import { INTERNAL_PROCESSING_CONFIG } from '@/lib/analysis/graph-config';
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
@@ -81,6 +82,7 @@ export default function HomePage() {
           <RepoGraph
             repoPath={repoPath}
             hideTestFiles={hideTestFiles}
+            config={INTERNAL_PROCESSING_CONFIG}
             onSearchNode={handleRegisterSearch}
           />
         ) : (
