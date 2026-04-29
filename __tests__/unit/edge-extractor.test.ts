@@ -124,7 +124,7 @@ describe('extractEdges', () => {
     expect(edge).toBeDefined();
   });
 
-  it('produces an IMPORTS edge for import declarations', () => {
+  it('skips IMPORTS edges at module level (no enclosing node)', () => {
     const source = 'import { add } from "./utils";';
     const tree = parseTs(source);
 
@@ -144,8 +144,8 @@ describe('extractEdges', () => {
     };
 
     const edges = extractEdges(input);
-    const edge = edges.find(e => e.kind === EdgeKind.IMPORTS);
-    expect(edge).toBeDefined();
+    // Module-level imports have no enclosing node → fromSymbol is '' → edge skipped
+    expect(edges).toHaveLength(0);
   });
 
   it('marks external edges when target node not in nodeMap', () => {

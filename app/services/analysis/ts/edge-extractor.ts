@@ -227,8 +227,7 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
       const fromSymbol = sourceNode?.scipSymbol ?? '';
 
       // Skip edges from nodes with no SCIP identity
-      // (import-role occurrences are module-level and don't require an enclosing node)
-      if (!fromSymbol && (occ.symbolRoles & SCIP_IMPORT) === 0) continue;
+      if (!fromSymbol) continue;
 
       // Populate referencedAt/outboundRefs for every occurrence (not gated by dedup)
       if (targetNode) {
