@@ -155,3 +155,51 @@ export function createEdgeForcer(
     return { ...DEFAULT_EDGE_FORCES, ...overrides };
   };
 }
+
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends (...args: any[]) => any
+    ? T[K]
+    : T[K] extends object
+      ? DeepPartial<T[K]>
+      : T[K];
+};
+
+export type { DeepPartial };
+
+export function mergeConfigs(
+  base: RepoGraphConfig,
+  ...overrides: DeepPartial<RepoGraphConfig>[]
+): RepoGraphConfig {
+  let result: RepoGraphConfig = {
+    filters: { ...base.filters },
+    style: { ...base.style },
+    forces: { ...base.forces },
+    simulation: { ...base.simulation },
+  };
+
+  for (const override of overrides) {
+    if (override.filters) {
+      result.filters = {
+        node: override.filters.node ?? result.filters.node,
+        edge: override.filters.edge ?? result.filters.edge,
+      };
+    }
+    if (override.style) {
+      result.style = {
+        node: override.style.node ?? result.style.node,
+        edge: override.style.edge ?? result.style.edge,
+      };
+    }
+    if (override.forces) {
+      result.forces = {
+        node: override.forces.node ?? result.forces.node,
+        edge: override.forces.edge ?? result.forces.edge,
+      };
+    }
+    if (override.simulation) {
+      result.simulation = { ...result.simulation, ...override.simulation };
+    }
+  }
+
+  return result;
+}

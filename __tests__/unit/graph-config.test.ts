@@ -8,6 +8,8 @@ import {
   combineFilters,
   createNodeStyler,
   createEdgeForcer,
+  mergeConfigs,
+  type NodeStyler,
 } from '@/lib/analysis/graph-config';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
@@ -289,5 +291,61 @@ describe('createEdgeForcer', () => {
     const forcer = createEdgeForcer({});
     const forces = forcer(makeEdge());
     expect(forces).toEqual(DEFAULT_EDGE_FORCES);
+  });
+});
+
+describe('mergeConfigs', () => {
+  it('returns base config when no overrides are provided', () => {
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG);
+    expect(result.simulation).toEqual(DEFAULT_SIMULATION);
+    expect(result.filters.node(makeNode())).toBe(true);
+  });
+
+  it('overrides simulation params', () => {
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+      simulation: { centerStrength: 0.5 },
+    });
+    expect(result.simulation.centerStrength).toBe(0.5);
+    expect(result.simulation.collisionPadding).toBe(DEFAULT_SIMULATION.collisionPadding);
+    expect(result.simulation.alphaDecay).toBe(DEFAULT_SIMULATION.alphaDecay);
+    expect(result.simulation.velocityDecay).toBe(DEFAULT_SIMULATION.velocityDecay);
+  });
+
+  it('replaces accessor functions entirely', () => {
+    const customFilter = (n: AnalysisNode) => n.isExported;
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+      filters: { node: customFilter },
+    });
+    expect(result.filters.node).toBe(customFilter);
+    expect(result.filters.edge(makeEdge())).toBe(true);
+  });
+
+  it('applies multiple overrides in order (last wins)', () => {
+    const result = mergeConfigs(
+      DEFAULT_REPO_GRAPH_CONFIG,
+      { simulation: { centerStrength: 0.3 } },
+      { simulation: { centerStrength: 0.9 } },
+    );
+    expect(result.simulation.centerStrength).toBe(0.9);
+  });
+
+  it('does not mutate the base config', () => {
+    const originalCenter = DEFAULT_REPO_GRAPH_CONFIG.simulation.centerStrength;
+    mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+      simulation: { centerStrength: 99 },
+    });
+    expect(DEFAULT_REPO_GRAPH_CONFIG.simulation.centerStrength).toBe(originalCenter);
+  });
+
+  it('merges style layer with node override only', () => {
+    const customNodeStyler: NodeStyler = (_node, _degree) => ({
+      color: '#ff0000', radius: 20, opacity: 0.5, label: true,
+    });
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+      style: { node: customNodeStyler },
+    });
+    expect(result.style.node).toBe(customNodeStyler);
+    const edgeStyle = result.style.edge(makeEdge());
+    expect(edgeStyle).toEqual(DEFAULT_EDGE_STYLE);
   });
 });
