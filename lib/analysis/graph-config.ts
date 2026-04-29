@@ -95,3 +95,31 @@ export const DEFAULT_SIMULATION: SimulationParams = {
   alphaDecay: 0.0228,
   velocityDecay: 0.4,
 };
+
+const SYNTAX_TYPE_COLORS: Partial<Record<SyntaxType, string>> = {
+  [SyntaxType.FUNCTION]: '#3b82f6',
+  [SyntaxType.METHOD]: '#60a5fa',
+  [SyntaxType.CLASS]: '#8b5cf6',
+  [SyntaxType.INTERFACE]: '#10b981',
+  [SyntaxType.TYPE_ALIAS]: '#f59e0b',
+  [SyntaxType.MODULE]: '#ec4899',
+};
+
+export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
+  filters: {
+    node: () => true,
+    edge: () => true,
+  },
+  style: {
+    node: (node: AnalysisNode, _degree: number): NodeStyle => {
+      const color = SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
+      return { ...DEFAULT_NODE_STYLE, color };
+    },
+    edge: (): EdgeStyle => ({ ...DEFAULT_EDGE_STYLE }),
+  },
+  forces: {
+    node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
+    edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
+  },
+  simulation: { ...DEFAULT_SIMULATION },
+};
