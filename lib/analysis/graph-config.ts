@@ -132,36 +132,19 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
 
 export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
   filters: {
-    node: (node: AnalysisNode) => {
-      if (!PROCESSING_NODE_TYPES.has(node.syntaxType)) return false;
-      const hasCrossFileRef = node.referencedAt.some((r) => r.filePath !== node.filePath);
-      const hasCrossFileOut = node.outboundRefs.some((r) => r.filePath !== node.filePath);
-      return hasCrossFileRef || hasCrossFileOut;
-    },
+    node: (node: AnalysisNode) => PROCESSING_NODE_TYPES.has(node.syntaxType),
     edge: (edge: AnalysisEdge) => !edge.isExternal,
   },
   style: {
     node: (node: AnalysisNode, _degree: number): NodeStyle => {
       const color = SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
-      const radius = Math.min(Math.max(3 + node.outboundRefs.length, 3), 30);
-      return { ...DEFAULT_NODE_STYLE, color, radius };
+      return { ...DEFAULT_NODE_STYLE, color };
     },
     edge: (): EdgeStyle => ({ ...DEFAULT_EDGE_STYLE }),
   },
   forces: {
-    node: (node: AnalysisNode): NodeForces => {
-      const charge = Math.max(-(300 + node.referencedAt.length * 60), -1800);
-      const radius = Math.min(Math.max(3 + node.outboundRefs.length, 3), 30);
-      return { ...DEFAULT_NODE_FORCES, charge, collideRadius: radius + 15 };
-    },
-    edge: createEdgeForcer({
-      [EdgeKind.CALLS]: { distance: 60, strength: 0.5 },
-      [EdgeKind.INSTANTIATES]: { distance: 100, strength: 0.3 },
-      [EdgeKind.EXTENDS]: { distance: 100, strength: 0.3 },
-      [EdgeKind.IMPLEMENTS]: { distance: 100, strength: 0.3 },
-      [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
-      [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
-    }),
+    node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
+    edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
