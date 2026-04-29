@@ -106,34 +106,41 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   }, [repoPath, hideTestFiles]);
 
   // Adapter: AnalysisResult → SimpleNode[] + SimpleEdge[]
-  const simNodes: SimpleNode[] = useMemo(() => {
-    if (!analysisData) return [];
-    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
-    return analysisData.nodes
-      .filter(cfg.filters.node)
-      .map((n) => ({
-        id: n.scipSymbol,
-        name: n.name,
-        data: n,
-        degree: 0,
-      }));
-  }, [analysisData, config]);
-
   const simEdges: SimpleEdge[] = useMemo(() => {
     if (!analysisData) return [];
     const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
-    const nodeIds = new Set(simNodes.map((n) => n.id));
+    const candidateIds = new Set(
+      analysisData.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol)
+    );
     return analysisData.edges
       .filter((e) =>
         cfg.filters.edge(e) &&
-        nodeIds.has(e.fromSymbol) && nodeIds.has(e.toSymbol)
+        candidateIds.has(e.fromSymbol) && candidateIds.has(e.toSymbol)
       )
       .map((e) => ({
         source: e.fromSymbol,
         target: e.toSymbol,
         data: e,
       }));
-  }, [analysisData, simNodes, config]);
+  }, [analysisData, config]);
+
+  const simNodes: SimpleNode[] = useMemo(() => {
+    if (!analysisData) return [];
+    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
+    const connectedIds = new Set<string>();
+    for (const e of simEdges) {
+      connectedIds.add(e.source as string);
+      connectedIds.add(e.target as string);
+    }
+    return analysisData.nodes
+      .filter((n) => cfg.filters.node(n) && connectedIds.has(n.scipSymbol))
+      .map((n) => ({
+        id: n.scipSymbol,
+        name: n.name,
+        data: n,
+        degree: 0,
+      }));
+  }, [analysisData, simEdges, config]);
 
   useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
 
