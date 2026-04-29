@@ -434,10 +434,10 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
   });
 
   describe('node forces', () => {
-    it('uses base charge of -100 for a node with no references', () => {
+    it('has base charge of -300 for unreferenced nodes', () => {
       const node = makeNode({ referencedAt: [] });
       const forces = INTERNAL_PROCESSING_CONFIG.forces.node(node);
-      expect(forces.charge).toBe(-100);
+      expect(forces.charge).toBe(-300);
     });
 
     it('scales charge with referencedAt count', () => {
@@ -449,7 +449,7 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
       expect(forcesOne.charge).toBeLessThan(forcesZero.charge);
     });
 
-    it('clamps charge to a minimum of -600', () => {
+    it('clamps charge to a minimum of -1800', () => {
       const manyRefs = Array.from({ length: 1000 }, (_, i) => ({
         filePath: '/src/x.ts',
         line: i,
@@ -458,7 +458,7 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
       }));
       const node = makeNode({ referencedAt: manyRefs });
       const forces = INTERNAL_PROCESSING_CONFIG.forces.node(node);
-      expect(forces.charge).toBeGreaterThanOrEqual(-600);
+      expect(forces.charge).toBeGreaterThanOrEqual(-1800);
     });
   });
 
