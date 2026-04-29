@@ -353,16 +353,42 @@ describe('mergeConfigs', () => {
 
 describe('INTERNAL_PROCESSING_CONFIG', () => {
   describe('node filter', () => {
-    it('accepts FUNCTION nodes', () => {
-      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.FUNCTION }))).toBe(true);
+    it('accepts FUNCTION nodes with cross-file references', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({
+        syntaxType: SyntaxType.FUNCTION,
+        outboundRefs: [{ filePath: '/src/other.ts', line: 1, col: 0, scipSymbol: 's1' }],
+      }))).toBe(true);
     });
 
-    it('accepts METHOD nodes', () => {
-      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.METHOD }))).toBe(true);
+    it('accepts METHOD nodes with cross-file references', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({
+        syntaxType: SyntaxType.METHOD,
+        referencedAt: [{ filePath: '/src/other.ts', line: 1, col: 0, scipSymbol: 's1' }],
+      }))).toBe(true);
     });
 
-    it('accepts CLASS nodes', () => {
-      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({ syntaxType: SyntaxType.CLASS }))).toBe(true);
+    it('accepts CLASS nodes with cross-file references', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({
+        syntaxType: SyntaxType.CLASS,
+        referencedAt: [{ filePath: '/src/other.ts', line: 1, col: 0, scipSymbol: 's1' }],
+      }))).toBe(true);
+    });
+
+    it('rejects FUNCTION nodes with only same-file references', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({
+        syntaxType: SyntaxType.FUNCTION,
+        filePath: '/src/test.ts',
+        referencedAt: [{ filePath: '/src/test.ts', line: 5, col: 0, scipSymbol: 's1' }],
+        outboundRefs: [{ filePath: '/src/test.ts', line: 10, col: 0, scipSymbol: 's2' }],
+      }))).toBe(false);
+    });
+
+    it('rejects FUNCTION nodes with no references at all', () => {
+      expect(INTERNAL_PROCESSING_CONFIG.filters.node(makeNode({
+        syntaxType: SyntaxType.FUNCTION,
+        referencedAt: [],
+        outboundRefs: [],
+      }))).toBe(false);
     });
 
     it('rejects INTERFACE nodes', () => {

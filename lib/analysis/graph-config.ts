@@ -132,7 +132,12 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
 
 export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
   filters: {
-    node: (node: AnalysisNode) => PROCESSING_NODE_TYPES.has(node.syntaxType),
+    node: (node: AnalysisNode) => {
+      if (!PROCESSING_NODE_TYPES.has(node.syntaxType)) return false;
+      const hasCrossFileRef = node.referencedAt.some((r) => r.filePath !== node.filePath);
+      const hasCrossFileOut = node.outboundRefs.some((r) => r.filePath !== node.filePath);
+      return hasCrossFileRef || hasCrossFileOut;
+    },
     edge: (edge: AnalysisEdge) => !edge.isExternal,
   },
   style: {
