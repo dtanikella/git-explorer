@@ -61,8 +61,8 @@ export async function getCachedIndex(repoPath: string): Promise<CacheResult | nu
   };
 }
 
-export async function saveCachedIndex(repoPath: string, _indexPath: string): Promise<void> {
-  const { cacheDir, metaPath } = getCachePaths(repoPath);
+export async function saveCachedIndex(repoPath: string, indexPath: string): Promise<void> {
+  const { cacheDir, indexPath: cachedIndexPath, metaPath } = getCachePaths(repoPath);
 
   let headSha: string;
   try {
@@ -76,14 +76,25 @@ export async function saveCachedIndex(repoPath: string, _indexPath: string): Pro
 
   try {
     await fs.mkdir(cacheDir, { recursive: true });
+
+    const resolvedSource = path.resolve(indexPath);
+    const resolvedDest = path.resolve(cachedIndexPath);
+    if (resolvedSource !== resolvedDest) {
+      await fs.copyFile(indexPath, cachedIndexPath);
+    }
+
+    // Verify the index file is present before writing metadata
+    await fs.access(cachedIndexPath);
+
     const meta: CacheMeta = {
       headSha,
       indexedAt: new Date().toISOString(),
     };
     await fs.writeFile(metaPath, JSON.stringify(meta));
   } catch (err) {
+    if (err instanceof ScipCacheError) throw err;
     throw new ScipCacheError(
-      `Failed to save cache metadata: ${(err as Error).message}`,
+      `Failed to save cache: ${(err as Error).message}`,
       repoPath,
     );
   }
