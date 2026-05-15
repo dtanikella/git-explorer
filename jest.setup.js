@@ -1,5 +1,12 @@
 require('@testing-library/jest-dom')
 
+// Polyfill TextEncoder/TextDecoder for jsdom
+if (typeof globalThis.TextEncoder === 'undefined') {
+  const { TextEncoder, TextDecoder } = require('util');
+  globalThis.TextEncoder = TextEncoder;
+  globalThis.TextDecoder = TextDecoder;
+}
+
 // Mock d3 modules globally for all tests
 jest.mock('d3-force', () => ({
   forceSimulation: jest.fn(() => {
