@@ -76,18 +76,41 @@ describe('saveCachedIndex', () => {
     jest.clearAllMocks();
   });
 
-  it('creates cache dir and writes meta file', async () => {
+  it('creates cache dir, verifies index file, and writes meta file', async () => {
     simpleGit().revparse.mockResolvedValue('abc123');
     fs.mkdir.mockResolvedValue(undefined);
+    fs.access.mockResolvedValue(undefined);
     fs.writeFile.mockResolvedValue(undefined);
 
     await saveCachedIndex(REPO, INDEX_PATH);
 
     expect(fs.mkdir).toHaveBeenCalledWith(CACHE_DIR, { recursive: true });
+    expect(fs.access).toHaveBeenCalledWith(INDEX_PATH);
     expect(fs.writeFile).toHaveBeenCalledWith(
       META_PATH,
       expect.stringContaining('"headSha":"abc123"'),
     );
+  });
+
+  it('copies index file when source differs from cache location', async () => {
+    const externalPath = '/tmp/output/index.scip';
+    simpleGit().revparse.mockResolvedValue('abc123');
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.copyFile.mockResolvedValue(undefined);
+    fs.access.mockResolvedValue(undefined);
+    fs.writeFile.mockResolvedValue(undefined);
+
+    await saveCachedIndex(REPO, externalPath);
+
+    expect(fs.copyFile).toHaveBeenCalledWith(externalPath, INDEX_PATH);
+  });
+
+  it('throws ScipCacheError when index file is missing', async () => {
+    simpleGit().revparse.mockResolvedValue('abc123');
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.access.mockRejectedValue(new Error('ENOENT'));
+
+    await expect(saveCachedIndex(REPO, INDEX_PATH)).rejects.toThrow('Failed to save cache');
   });
 });
 

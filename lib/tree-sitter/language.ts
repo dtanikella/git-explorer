@@ -1,5 +1,10 @@
+import { createRequire } from 'module';
+import * as path from 'path';
 import TreeSitterParser from 'tree-sitter';
 import { TreeSitterLanguageError } from './types';
+
+// Anchor to real project root — __filename is virtualized by Turbopack
+const nativeRequire = createRequire(path.join(process.cwd(), 'package.json'));
 
 type Language = InstanceType<typeof TreeSitterParser>['getLanguage'] extends () => infer R ? R : never;
 
@@ -31,8 +36,7 @@ export function loadLanguage(name: string): Language {
 
   let grammar: Language;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require(mapping.module);
+    const mod = nativeRequire(mapping.module);
     grammar = mapping.export ? mod[mapping.export] : mod;
   } catch (err) {
     throw new TreeSitterLanguageError(

@@ -5,6 +5,7 @@ import {
   type AnalysisNode,
   type ParamInfo,
 } from '@/lib/analysis/types';
+import { qualifySymbol } from './symbol-utils';
 
 // ============================================================================
 // Types
@@ -155,7 +156,8 @@ function walkDeclarations(
     const line = nameNode.startPosition.row;
     const col = nameNode.startPosition.column;
     const scipDef = defLookup.get(`${line}:${col}`);
-    const scipSymbol = scipDef?.symbol ?? '';
+    const scipSymbol = qualifySymbol(filePath, scipDef?.symbol ?? '');
+    if (scipSymbol === null) continue;
 
     const node: AnalysisNode = {
       syntaxType,
@@ -181,9 +183,7 @@ function walkDeclarations(
     };
 
     nodes.push(node);
-    if (scipSymbol) {
-      nodeMap.set(scipSymbol, node);
-    }
+    nodeMap.set(scipSymbol, node);
   }
 
   // Also handle arrow functions assigned to variables:
@@ -200,7 +200,8 @@ function walkDeclarations(
     const line = nameNode.startPosition.row;
     const col = nameNode.startPosition.column;
     const scipDef = defLookup.get(`${line}:${col}`);
-    const scipSymbol = scipDef?.symbol ?? '';
+    const scipSymbol = qualifySymbol(filePath, scipDef?.symbol ?? '');
+    if (scipSymbol === null) continue;
 
     const varDecl = parent.parent; // variable_declaration
     const exported = varDecl?.parent?.type === 'export_statement';
@@ -223,8 +224,6 @@ function walkDeclarations(
     };
 
     nodes.push(node);
-    if (scipSymbol) {
-      nodeMap.set(scipSymbol, node);
-    }
+    nodeMap.set(scipSymbol, node);
   }
 }
