@@ -59,12 +59,12 @@ describe('Homepage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
 
     expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
-    expect(lastRepoGraphProps?.config).toBe(INTERNAL_PROCESSING_CONFIG);
+    expect(lastRepoGraphProps?.config).toBe(createModulesViewConfig);
 
     fireEvent.change(screen.getByRole('combobox', { name: /view/i }), {
-      target: { value: 'modules' },
+      target: { value: 'internal' },
     });
 
-    expect(lastRepoGraphProps?.config).toBe(createModulesViewConfig);
+    expect(lastRepoGraphProps?.config).toBe(INTERNAL_PROCESSING_CONFIG);
   });
 });

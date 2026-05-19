@@ -273,7 +273,7 @@ export function createModulesViewConfig(
         width: 1.5,
         opacity: 0.6,
         gradientSourceColor: '#d1d5db',
-        gradientTargetColor: '#374151',
+        gradientTargetColor: '#000000',
       }),
     },
     forces: {

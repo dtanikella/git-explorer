@@ -644,7 +644,7 @@ describe('createModulesViewConfig', () => {
 
     it('includes gradient target color (dark gray)', () => {
       const style = config.style.edge(makeEdge());
-      expect(style.gradientTargetColor).toBe('#374151');
+      expect(style.gradientTargetColor).toBe('#000000');
     });
 
     it('has width of 1.5', () => {

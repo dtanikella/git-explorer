@@ -17,7 +17,7 @@ export default function HomePage() {
   const [hideTestFiles, setHideTestFiles] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
-  const [selectedView, setSelectedView] = useState<string>('internal');
+  const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
 
   const handleRepositorySelect = useCallback((path: string) => {
