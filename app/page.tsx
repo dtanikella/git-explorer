@@ -3,13 +3,21 @@
 import { useState, useCallback, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
-import { INTERNAL_PROCESSING_CONFIG } from '@/lib/analysis/graph-config';
+import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analysis/graph-config';
+import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
+import type { AnalysisEdge } from '@/lib/analysis/types';
+
+const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
+  internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
+  modules: { label: 'Modules', config: createModulesViewConfig },
+};
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [hideTestFiles, setHideTestFiles] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
+  const [selectedView, setSelectedView] = useState<string>('internal');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
 
   const handleRepositorySelect = useCallback((path: string) => {
@@ -53,6 +61,20 @@ export default function HomePage() {
           Hide test files
         </label>
 
+        <label className="flex items-center gap-1.5 text-gray-700">
+          View
+          <select
+            value={selectedView}
+            onChange={(e) => setSelectedView(e.target.value)}
+            disabled={!repoPath}
+            className="px-2 py-1 text-sm border border-gray-300 rounded bg-white disabled:bg-gray-100"
+          >
+            {Object.entries(VIEW_OPTIONS).map(([key, { label }]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="flex items-center gap-1 ml-auto">
           <input
             type="text"
@@ -82,7 +104,7 @@ export default function HomePage() {
           <RepoGraph
             repoPath={repoPath}
             hideTestFiles={hideTestFiles}
-            config={INTERNAL_PROCESSING_CONFIG}
+            config={VIEW_OPTIONS[selectedView].config}
             onSearchNode={handleRegisterSearch}
           />
         ) : (

@@ -6,10 +6,12 @@ import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 
+type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
+
 interface RepoGraphProps {
   repoPath: string;
   hideTestFiles: boolean;
-  config?: RepoGraphConfig;
+  config?: ConfigOrFactory;
   onSearchNode?: (handler: (query: string) => boolean) => void;
 }
 
@@ -39,12 +41,24 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
   const highlightedNodeIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
-  const configRef = useRef<RepoGraphConfig>(config ?? DEFAULT_REPO_GRAPH_CONFIG);
+  const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
 
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(!!repoPath);
   const [error, setError] = useState<string | null>(null);
   const [ctxError, setCtxError] = useState(false);
+
+  const resolvedConfig = useMemo(() => {
+    if (!analysisData) {
+      return config && typeof config !== 'function'
+        ? config
+        : DEFAULT_REPO_GRAPH_CONFIG;
+    }
+
+    return typeof config === 'function'
+      ? config(analysisData.edges)
+      : (config ?? DEFAULT_REPO_GRAPH_CONFIG);
+  }, [analysisData, config]);
 
   // Tooltip lifecycle — mount/unmount only
   useEffect(() => {
@@ -68,8 +82,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   }, []);
 
   useEffect(() => {
-    configRef.current = config ?? DEFAULT_REPO_GRAPH_CONFIG;
-  }, [config]);
+    configRef.current = resolvedConfig;
+  }, [resolvedConfig]);
 
   // Fetch data from /api/repo-analysis
   useEffect(() => {
@@ -108,7 +122,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   // Adapter: AnalysisResult → SimpleNode[] + SimpleEdge[]
   const simEdges: SimpleEdge[] = useMemo(() => {
     if (!analysisData) return [];
-    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
+    const cfg = resolvedConfig;
     const candidateIds = new Set(
       analysisData.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol)
     );
@@ -122,11 +136,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         target: e.toSymbol,
         data: e,
       }));
-  }, [analysisData, config]);
+  }, [analysisData, resolvedConfig]);
 
   const simNodes: SimpleNode[] = useMemo(() => {
     if (!analysisData) return [];
-    const cfg = config ?? DEFAULT_REPO_GRAPH_CONFIG;
+    const cfg = resolvedConfig;
     const connectedIds = new Set<string>();
     for (const e of simEdges) {
       connectedIds.add(e.source as string);
@@ -140,7 +154,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         data: n,
         degree: 0,
       }));
-  }, [analysisData, simEdges, config]);
+  }, [analysisData, simEdges, resolvedConfig]);
 
   useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
 

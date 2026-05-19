@@ -91,6 +91,7 @@ beforeAll(() => {
 });
 
 import RepoGraph from '@/app/components/repo-graph/RepoGraph';
+import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 
 const mockFetch = jest.fn();
 
@@ -104,6 +105,29 @@ beforeEach(() => {
 });
 
 describe('RepoGraph — data fetching', () => {
+  it('resolves config factories with loaded edges', async () => {
+    const mockData = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockData }),
+    });
+    const configFactory = jest.fn(() => DEFAULT_REPO_GRAPH_CONFIG);
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} />);
+
+    await waitFor(() => expect(configFactory).toHaveBeenCalledWith(mockData.edges));
+    await act(async () => {});
+  });
+
   it('fetches from /api/repo-analysis with hideTestFiles=true', async () => {
     render(<RepoGraph repoPath="/some/repo" hideTestFiles={true} />);
 
