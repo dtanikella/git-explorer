@@ -10,7 +10,11 @@ import {
   createNodeStyler,
   createEdgeForcer,
   mergeConfigs,
+  scaledValue,
+  countOutboundCalls,
+  countInboundCalls,
   type NodeStyler,
+  type ScaleFn,
 } from '@/lib/analysis/graph-config';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
@@ -530,5 +534,93 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
     it('uses DEFAULT_SIMULATION params', () => {
       expect(INTERNAL_PROCESSING_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
     });
+  });
+});
+
+describe('scaledValue', () => {
+  it('returns min when count is 0', () => {
+    expect(scaledValue(0, 4, 30)).toBe(4);
+  });
+
+  it('returns a value between min and max for moderate count', () => {
+    const result = scaledValue(5, 4, 30);
+    expect(result).toBeGreaterThan(4);
+    expect(result).toBeLessThanOrEqual(30);
+  });
+
+  it('clamps to max for very large count', () => {
+    const result = scaledValue(100000, 4, 30);
+    expect(result).toBeLessThanOrEqual(30);
+  });
+
+  it('uses log2 scaling by default', () => {
+    const r4 = scaledValue(4, 0, 100);
+    const r8 = scaledValue(8, 0, 100);
+    expect(r8).toBeGreaterThan(r4);
+    expect(r8 - r4).toBeLessThan(r4);
+  });
+
+  it('accepts a custom scale function', () => {
+    const linear: ScaleFn = (n) => n;
+    const r4 = scaledValue(4, 0, 100, linear);
+    const r8 = scaledValue(8, 0, 100, linear);
+    expect(r8).toBeGreaterThan(r4 * 1.5);
+  });
+
+  it('returns min when min equals max', () => {
+    expect(scaledValue(10, 5, 5)).toBe(5);
+  });
+});
+
+describe('countOutboundCalls', () => {
+  it('counts CALLS edges from the node', () => {
+    const node = makeNode({ scipSymbol: 'test#foo.' });
+    const edges = [
+      makeEdge({ fromSymbol: 'test#foo.', kind: EdgeKind.CALLS }),
+      makeEdge({ fromSymbol: 'test#foo.', kind: EdgeKind.CALLS }),
+      makeEdge({ fromSymbol: 'test#bar.', kind: EdgeKind.CALLS }),
+    ];
+    expect(countOutboundCalls(node, edges)).toBe(2);
+  });
+
+  it('ignores non-CALLS edges from the node', () => {
+    const node = makeNode({ scipSymbol: 'test#foo.' });
+    const edges = [
+      makeEdge({ fromSymbol: 'test#foo.', kind: EdgeKind.CALLS }),
+      makeEdge({ fromSymbol: 'test#foo.', kind: EdgeKind.IMPORTS }),
+      makeEdge({ fromSymbol: 'test#foo.', kind: EdgeKind.USES_TYPE }),
+    ];
+    expect(countOutboundCalls(node, edges)).toBe(1);
+  });
+
+  it('returns 0 when node has no outbound CALLS', () => {
+    const node = makeNode({ scipSymbol: 'test#foo.' });
+    const edges = [
+      makeEdge({ fromSymbol: 'test#bar.', kind: EdgeKind.CALLS }),
+    ];
+    expect(countOutboundCalls(node, edges)).toBe(0);
+  });
+
+  it('returns 0 for empty edges array', () => {
+    const node = makeNode({ scipSymbol: 'test#foo.' });
+    expect(countOutboundCalls(node, [])).toBe(0);
+  });
+});
+
+describe('countInboundCalls', () => {
+  it('returns referencedAt length', () => {
+    const node = makeNode({
+      referencedAt: [
+        { filePath: '/src/a.ts', line: 1, col: 0, scipSymbol: 's1' },
+        { filePath: '/src/b.ts', line: 5, col: 0, scipSymbol: 's2' },
+        { filePath: '/src/c.ts', line: 10, col: 0, scipSymbol: 's3' },
+      ],
+    });
+    expect(countInboundCalls(node)).toBe(3);
+  });
+
+  it('returns 0 for node with no references', () => {
+    const node = makeNode({ referencedAt: [] });
+    expect(countInboundCalls(node)).toBe(0);
   });
 });

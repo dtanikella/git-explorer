@@ -14,6 +14,8 @@ export interface EdgeStyle {
   color: string;
   width: number;
   opacity: number;
+  gradientSourceColor?: string;
+  gradientTargetColor?: string;
 }
 
 export interface NodeForces {
@@ -191,6 +193,42 @@ type DeepPartial<T> = {
 };
 
 export type { DeepPartial };
+
+// ── Scaling helpers ──
+
+export type ScaleFn = (count: number) => number;
+
+const DEFAULT_SCALE_FN: ScaleFn = (count: number) => Math.log2(count + 1);
+
+export function scaledValue(
+  count: number,
+  min: number,
+  max: number,
+  scaleFn: ScaleFn = DEFAULT_SCALE_FN,
+): number {
+  if (min >= max) return min;
+  const scaled = scaleFn(count);
+  const maxScaled = scaleFn(1000);
+  const normalized = Math.min(scaled / maxScaled, 1);
+  return min + normalized * (max - min);
+}
+
+export function countOutboundCalls(
+  node: AnalysisNode,
+  edges: AnalysisEdge[],
+): number {
+  let count = 0;
+  for (const e of edges) {
+    if (e.fromSymbol === node.scipSymbol && e.kind === EdgeKind.CALLS) {
+      count++;
+    }
+  }
+  return count;
+}
+
+export function countInboundCalls(node: AnalysisNode): number {
+  return node.referencedAt.length;
+}
 
 export function mergeConfigs(
   base: RepoGraphConfig,
