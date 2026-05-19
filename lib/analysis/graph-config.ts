@@ -208,7 +208,7 @@ export function scaledValue(
 ): number {
   if (min >= max) return min;
   const scaled = scaleFn(count);
-  const maxScaled = scaleFn(1000);
+  const maxScaled = scaleFn(50);
   const normalized = Math.min(scaled / maxScaled, 1);
   return min + normalized * (max - min);
 }
