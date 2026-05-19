@@ -241,7 +241,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         c.beginPath();
         c.moveTo(src.x, src.y);
         c.lineTo(tgt.x, tgt.y);
-        c.strokeStyle = eStyle.color;
+        if (eStyle.gradientSourceColor && eStyle.gradientTargetColor) {
+          const grad = c.createLinearGradient(src.x, src.y, tgt.x, tgt.y);
+          grad.addColorStop(0, eStyle.gradientSourceColor);
+          grad.addColorStop(1, eStyle.gradientTargetColor);
+          c.strokeStyle = grad;
+        } else {
+          c.strokeStyle = eStyle.color;
+        }
         c.lineWidth = eStyle.width;
         c.globalAlpha = eStyle.opacity;
         c.stroke();
