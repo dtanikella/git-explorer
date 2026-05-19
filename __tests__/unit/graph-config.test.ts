@@ -13,6 +13,7 @@ import {
   scaledValue,
   countOutboundCalls,
   countInboundCalls,
+  createModulesViewConfig,
   type NodeStyler,
   type ScaleFn,
 } from '@/lib/analysis/graph-config';
@@ -533,6 +534,159 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
   describe('simulation', () => {
     it('uses DEFAULT_SIMULATION params', () => {
       expect(INTERNAL_PROCESSING_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
+    });
+  });
+});
+
+describe('createModulesViewConfig', () => {
+  const modulesEdges = [
+    makeEdge({ fromSymbol: 'test#foo.', toSymbol: 'test#bar.', kind: EdgeKind.CALLS }),
+    makeEdge({ fromSymbol: 'test#foo.', toSymbol: 'test#baz.', kind: EdgeKind.CALLS }),
+    makeEdge({ fromSymbol: 'test#bar.', toSymbol: 'test#baz.', kind: EdgeKind.CALLS }),
+  ];
+  const config = createModulesViewConfig(modulesEdges);
+
+  describe('node filter', () => {
+    it('accepts FUNCTION nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.FUNCTION });
+      expect(config.filters.node(node)).toBe(true);
+    });
+
+    it('accepts METHOD nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.METHOD });
+      expect(config.filters.node(node)).toBe(true);
+    });
+
+    it('rejects CLASS nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.CLASS });
+      expect(config.filters.node(node)).toBe(false);
+    });
+
+    it('rejects INTERFACE nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.INTERFACE });
+      expect(config.filters.node(node)).toBe(false);
+    });
+
+    it('rejects TYPE_ALIAS nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.TYPE_ALIAS });
+      expect(config.filters.node(node)).toBe(false);
+    });
+
+    it('rejects MODULE nodes', () => {
+      const node = makeNode({ syntaxType: SyntaxType.MODULE });
+      expect(config.filters.node(node)).toBe(false);
+    });
+  });
+
+  describe('edge filter', () => {
+    it('accepts CALLS edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.CALLS, isExternal: false }))).toBe(true);
+    });
+
+    it('rejects IMPORTS edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.IMPORTS }))).toBe(false);
+    });
+
+    it('rejects INSTANTIATES edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.INSTANTIATES }))).toBe(false);
+    });
+
+    it('rejects USES_TYPE edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.USES_TYPE }))).toBe(false);
+    });
+
+    it('rejects EXTENDS edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.EXTENDS }))).toBe(false);
+    });
+
+    it('rejects external CALLS edges', () => {
+      expect(config.filters.edge(makeEdge({ kind: EdgeKind.CALLS, isExternal: true }))).toBe(false);
+    });
+  });
+
+  describe('node style', () => {
+    it('scales radius with outbound CALLS count', () => {
+      const nodeWith0 = makeNode({ scipSymbol: 'test#none.' });
+      const nodeWith2 = makeNode({ scipSymbol: 'test#foo.' });
+      const style0 = config.style.node(nodeWith0, 0);
+      const style2 = config.style.node(nodeWith2, 0);
+      expect(style2.radius).toBeGreaterThan(style0.radius);
+    });
+
+    it('clamps radius to minimum of 4', () => {
+      const node = makeNode({ scipSymbol: 'test#none.' });
+      const style = config.style.node(node, 0);
+      expect(style.radius).toBeGreaterThanOrEqual(4);
+    });
+
+    it('clamps radius to maximum of 30', () => {
+      const manyEdges = Array.from({ length: 500 }, (_, i) =>
+        makeEdge({ fromSymbol: 'test#big.', toSymbol: `test#t${i}.`, kind: EdgeKind.CALLS })
+      );
+      const bigConfig = createModulesViewConfig(manyEdges);
+      const node = makeNode({ scipSymbol: 'test#big.' });
+      const style = bigConfig.style.node(node, 0);
+      expect(style.radius).toBeLessThanOrEqual(30);
+    });
+
+    it('uses SyntaxType colors', () => {
+      const node = makeNode({ syntaxType: SyntaxType.FUNCTION, scipSymbol: 'test#foo.' });
+      const style = config.style.node(node, 0);
+      expect(style.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    });
+  });
+
+  describe('edge style', () => {
+    it('includes gradient source color (light gray)', () => {
+      const style = config.style.edge(makeEdge());
+      expect(style.gradientSourceColor).toBe('#d1d5db');
+    });
+
+    it('includes gradient target color (dark gray)', () => {
+      const style = config.style.edge(makeEdge());
+      expect(style.gradientTargetColor).toBe('#374151');
+    });
+
+    it('has width of 1.5', () => {
+      const style = config.style.edge(makeEdge());
+      expect(style.width).toBe(1.5);
+    });
+  });
+
+  describe('node forces', () => {
+    it('scales collide radius with inbound reference count', () => {
+      const nodeWith0 = makeNode({ referencedAt: [] });
+      const nodeWith3 = makeNode({
+        referencedAt: [
+          { filePath: '/src/a.ts', line: 1, col: 0, scipSymbol: 's1' },
+          { filePath: '/src/b.ts', line: 2, col: 0, scipSymbol: 's2' },
+          { filePath: '/src/c.ts', line: 3, col: 0, scipSymbol: 's3' },
+        ],
+      });
+      const forces0 = config.forces.node(nodeWith0);
+      const forces3 = config.forces.node(nodeWith3);
+      expect(forces3.collideRadius).toBeGreaterThan(forces0.collideRadius);
+    });
+
+    it('clamps collide radius to minimum of 8', () => {
+      const node = makeNode({ referencedAt: [] });
+      const forces = config.forces.node(node);
+      expect(forces.collideRadius).toBeGreaterThanOrEqual(8);
+    });
+
+    it('clamps collide radius to maximum of 40', () => {
+      const manyRefs = Array.from({ length: 1000 }, (_, i) => ({
+        filePath: '/src/x.ts', line: i, col: 0, scipSymbol: `test#x${i}.`,
+      }));
+      const node = makeNode({ referencedAt: manyRefs });
+      const forces = config.forces.node(node);
+      expect(forces.collideRadius).toBeLessThanOrEqual(40);
+    });
+  });
+
+  describe('simulation', () => {
+    it('uses DEFAULT_SIMULATION params', () => {
+      expect(config.simulation).toEqual(DEFAULT_SIMULATION);
     });
   });
 });

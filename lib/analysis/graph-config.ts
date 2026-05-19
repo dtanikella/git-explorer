@@ -230,6 +230,61 @@ export function countInboundCalls(node: AnalysisNode): number {
   return node.referencedAt.length;
 }
 
+// ── Modules View ──
+
+const MODULES_NODE_TYPES = new Set<SyntaxType>([
+  SyntaxType.FUNCTION,
+  SyntaxType.METHOD,
+]);
+
+export function createModulesViewConfig(
+  edges: AnalysisEdge[],
+): RepoGraphConfig {
+  const outboundCallCounts = new Map<string, number>();
+  for (const e of edges) {
+    if (e.kind === EdgeKind.CALLS) {
+      outboundCallCounts.set(
+        e.fromSymbol,
+        (outboundCallCounts.get(e.fromSymbol) ?? 0) + 1,
+      );
+    }
+  }
+
+  return mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+    filters: {
+      node: (node: AnalysisNode) =>
+        MODULES_NODE_TYPES.has(node.syntaxType),
+      edge: (edge: AnalysisEdge) =>
+        edge.kind === EdgeKind.CALLS && !edge.isExternal,
+    },
+    style: {
+      node: (node: AnalysisNode, _degree: number): NodeStyle => {
+        const color =
+          SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
+        const outbound = outboundCallCounts.get(node.scipSymbol) ?? 0;
+        return {
+          ...DEFAULT_NODE_STYLE,
+          color,
+          radius: scaledValue(outbound, 4, 30),
+        };
+      },
+      edge: (_edge: AnalysisEdge): EdgeStyle => ({
+        color: '#9ca3af',
+        width: 1.5,
+        opacity: 0.6,
+        gradientSourceColor: '#d1d5db',
+        gradientTargetColor: '#374151',
+      }),
+    },
+    forces: {
+      node: (node: AnalysisNode): NodeForces => ({
+        ...DEFAULT_NODE_FORCES,
+        collideRadius: scaledValue(countInboundCalls(node), 8, 40),
+      }),
+    },
+  });
+}
+
 export function mergeConfigs(
   base: RepoGraphConfig,
   ...overrides: DeepPartial<RepoGraphConfig>[]
