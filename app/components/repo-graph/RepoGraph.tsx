@@ -354,7 +354,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     setTimeout(() => {
       highlightedNodeIdRef.current = null;
       drawFrameRef.current?.();
-    }, 1500);
+    }, 5000);
 
     return true;
   }, []);
@@ -404,7 +404,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         highlightTimer = setTimeout(() => {
           highlightedNodeIdRef.current = null;
           drawFrameRef.current?.();
-        }, 1500);
+        }, 5000);
       }, 500);
     }
 

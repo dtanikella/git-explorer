@@ -93,7 +93,7 @@ export default function HomePage() {
   // Clear highlight after tab switch completes
   useEffect(() => {
     if (highlightedNodeId && activeTab === 'graph') {
-      const timer = setTimeout(() => setHighlightedNodeId(null), 2000);
+      const timer = setTimeout(() => setHighlightedNodeId(null), 6000);
       return () => clearTimeout(timer);
     }
   }, [highlightedNodeId, activeTab]);
