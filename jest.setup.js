@@ -52,3 +52,11 @@ jest.mock('d3-selection', () => ({
     call: jest.fn(),
   })),
 }));
+
+jest.mock('d3-scale-chromatic', () => ({
+  interpolateReds: jest.fn((t) => {
+    // Returns a simple RGB string based on the normalized value
+    const value = Math.round(t * 255);
+    return `rgb(255, ${value}, ${value})`;
+  }),
+}));
