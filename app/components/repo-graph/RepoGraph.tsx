@@ -367,8 +367,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
   // External highlight (from Stats tab cross-navigation)
   // RepoGraph may remount when switching tabs, so the simulation may not
-  // have positioned nodes yet. Wait for the simulation to exist, then
-  // fast-forward it to completion before zooming to the target node.
+  // have positioned nodes yet. Poll until the target node has coordinates,
+  // but give up after ~2s if the node isn't in the current graph view.
   useEffect(() => {
     if (!highlightedNodeId) return;
     let cancelled = false;
@@ -379,24 +379,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     function tryHighlight() {
       if (cancelled) return;
       attempts++;
+      const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
 
-      if (!simulationRef.current || !canvasRef.current || !zoomRef.current) {
+      if (!match || match.x == null || match.y == null || !canvasRef.current || !zoomRef.current) {
         if (attempts < MAX_ATTEMPTS) {
           setTimeout(tryHighlight, 50);
         }
+        // If max attempts reached, node isn't in this graph view — silently give up
         return;
       }
-
-      // Fast-forward the simulation to its settled state
-      const sim = simulationRef.current;
-      sim.stop();
-      while (sim.alpha() > sim.alphaMin()) {
-        sim.tick();
-      }
-      drawFrameRef.current?.();
-
-      const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
-      if (!match || match.x == null || match.y == null) return;
 
       const canvas = canvasRef.current;
       const w = canvas.offsetWidth || 800;
