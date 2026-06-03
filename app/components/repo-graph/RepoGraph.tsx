@@ -335,6 +335,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     if (!match || match.x == null || match.y == null) return false;
     if (!canvasRef.current || !zoomRef.current) return false;
 
+    // Stop the simulation so the node doesn't drift after we zoom to it
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+    }
+
     const canvas = canvasRef.current;
     const w = canvas.offsetWidth || 800;
     const h = canvas.offsetHeight || 600;
@@ -385,8 +390,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         if (attempts < MAX_ATTEMPTS) {
           setTimeout(tryHighlight, 50);
         }
-        // If max attempts reached, node isn't in this graph view — silently give up
         return;
+      }
+
+      // Stop the simulation so the node doesn't drift after we zoom to it
+      if (simulationRef.current) {
+        simulationRef.current.stop();
       }
 
       const canvas = canvasRef.current;
