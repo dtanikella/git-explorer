@@ -4,6 +4,14 @@ import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analy
 
 let lastRepoGraphProps: Record<string, unknown> | null = null;
 
+// Mock fetch
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, data: { nodes: [], edges: [] } }),
+  })
+) as jest.Mock;
+
 jest.mock('@/app/components/RepositorySelector', () => {
   return function MockRepositorySelector({
     onRepositorySelected,
@@ -29,9 +37,96 @@ jest.mock('@/app/components/repo-graph/RepoGraph', () => {
   };
 });
 
+// Mock TabSidebar
+jest.mock('@/app/components/TabSidebar', () => {
+  return function MockTabSidebar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
+    return (
+      <div data-testid="tab-sidebar">
+        <button onClick={() => onTabChange('graph')}>Graph</button>
+        <button onClick={() => onTabChange('stats')}>Stats</button>
+      </div>
+    );
+  };
+});
+
+// Mock GraphToolbar
+jest.mock('@/app/components/graph/GraphToolbar', () => {
+  return function MockGraphToolbar({
+    hideTestFiles,
+    onHideTestFilesChange,
+    selectedView,
+    onViewChange,
+    viewOptions,
+    searchQuery,
+    onSearchQueryChange,
+    onSearch,
+    searchNotFound,
+    disabled,
+  }: {
+    hideTestFiles: boolean;
+    onHideTestFilesChange: (value: boolean) => void;
+    selectedView: string;
+    onViewChange: (value: string) => void;
+    viewOptions: Record<string, { label: string }>;
+    searchQuery: string;
+    onSearchQueryChange: (value: string) => void;
+    onSearch: () => void;
+    searchNotFound: boolean;
+    disabled: boolean;
+  }) {
+    return (
+      <div data-testid="graph-toolbar">
+        <label>
+          <input
+            type="checkbox"
+            checked={hideTestFiles}
+            onChange={(e) => onHideTestFilesChange(e.target.checked)}
+          />
+          Hide test files
+        </label>
+        <label>
+          View
+          <select value={selectedView} onChange={(e) => onViewChange(e.target.value)} disabled={disabled}>
+            {Object.entries(viewOptions).map(([key, { label }]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <input
+          type="text"
+          placeholder="Search node..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          disabled={disabled}
+        />
+        <button onClick={onSearch} disabled={disabled || !searchQuery.trim()}>
+          Search
+        </button>
+      </div>
+    );
+  };
+});
+
+// Mock StatsToolbar
+jest.mock('@/app/components/stats/StatsToolbar', () => {
+  return function MockStatsToolbar() {
+    return <div data-testid="stats-toolbar" />;
+  };
+});
+
+// Mock StatsTreemap
+jest.mock('@/app/components/stats/StatsTreemap', () => {
+  return function MockStatsTreemap() {
+    return <div data-testid="stats-treemap" />;
+  };
+});
+
 describe('Homepage', () => {
   beforeEach(() => {
     lastRepoGraphProps = null;
+    (global.fetch as jest.Mock).mockClear();
   });
 
   it('renders repository selector', () => {

@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
+import TabSidebar from './components/TabSidebar';
+import type { TabId } from './components/TabSidebar';
+import GraphToolbar from './components/graph/GraphToolbar';
+import StatsToolbar from './components/stats/StatsToolbar';
+import StatsTreemap from './components/stats/StatsTreemap';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import type { AnalysisEdge } from '@/lib/analysis/types';
+import type { AnalysisEdge, AnalysisResult } from '@/lib/analysis/types';
 
 const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
@@ -15,10 +20,54 @@ const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [hideTestFiles, setHideTestFiles] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabId>('graph');
+  const [topN, setTopN] = useState(20);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+
+  // Graph toolbar state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
   const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
+
+  // Lifted data state
+  const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch data when repoPath or hideTestFiles changes
+  useEffect(() => {
+    if (!repoPath) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+
+    fetch('/api/repo-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoPath, hideTestFiles }),
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
+      .then((result) => {
+        if (result.success) {
+          setAnalysisData(result.data);
+        } else {
+          setError(result.error || 'Analysis failed');
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setError(err.message || 'Network error');
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [repoPath, hideTestFiles]);
 
   const handleRepositorySelect = useCallback((path: string) => {
     setRepoPath(path);
@@ -36,9 +85,18 @@ export default function HomePage() {
     }
   }, [searchQuery]);
 
-  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch();
-  }, [handleSearch]);
+  const handleNodeSelect = useCallback((scipSymbol: string) => {
+    setHighlightedNodeId(scipSymbol);
+    setActiveTab('graph');
+  }, []);
+
+  // Clear highlight after tab switch completes
+  useEffect(() => {
+    if (highlightedNodeId && activeTab === 'graph') {
+      const timer = setTimeout(() => setHighlightedNodeId(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedNodeId, activeTab]);
 
   return (
     <main className="h-screen flex flex-col p-2 gap-2 overflow-hidden">
@@ -50,68 +108,75 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Row 2: Tools & Filters */}
-      <div className="shrink-0 flex items-center gap-4 px-2 py-1 bg-gray-50 border border-gray-200 rounded-md text-sm">
-        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
-          <input
-            type="checkbox"
-            checked={hideTestFiles}
-            onChange={(e) => setHideTestFiles(e.target.checked)}
-          />
-          Hide test files
-        </label>
+      {/* Row 2: Tab content area */}
+      <div className="flex-1 min-h-0 flex">
+        {/* Sidebar */}
+        <TabSidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <label className="flex items-center gap-1.5 text-gray-700">
-          View
-          <select
-            value={selectedView}
-            onChange={(e) => setSelectedView(e.target.value)}
-            disabled={!repoPath}
-            className="px-2 py-1 text-sm border border-gray-300 rounded bg-white disabled:bg-gray-100"
-          >
-            {Object.entries(VIEW_OPTIONS).map(([key, { label }]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-        </label>
-
-        <div className="flex items-center gap-1 ml-auto">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setSearchNotFound(false); }}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="Search node..."
-            disabled={!repoPath}
-            className="px-2 py-1 text-sm border border-gray-300 rounded disabled:bg-gray-100"
-          />
-          <button
-            onClick={handleSearch}
-            disabled={!repoPath || !searchQuery.trim()}
-            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            Search
-          </button>
-          {searchNotFound && (
-            <span className="text-red-500 text-xs">Not found</span>
+        {/* Main content */}
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          {/* Toolbar (per-tab) */}
+          {activeTab === 'graph' && (
+            <GraphToolbar
+              hideTestFiles={hideTestFiles}
+              onHideTestFilesChange={setHideTestFiles}
+              selectedView={selectedView}
+              onViewChange={setSelectedView}
+              viewOptions={VIEW_OPTIONS}
+              searchQuery={searchQuery}
+              onSearchQueryChange={(q) => { setSearchQuery(q); setSearchNotFound(false); }}
+              onSearch={handleSearch}
+              searchNotFound={searchNotFound}
+              disabled={!repoPath}
+            />
           )}
-        </div>
-      </div>
+          {activeTab === 'stats' && (
+            <StatsToolbar
+              topN={topN}
+              onTopNChange={setTopN}
+              hideTestFiles={hideTestFiles}
+              onHideTestFilesChange={setHideTestFiles}
+              disabled={!repoPath}
+            />
+          )}
 
-      {/* Row 3: RepoGraph — fills all remaining space */}
-      <div className="flex-1 min-h-0">
-        {repoPath ? (
-          <RepoGraph
-            repoPath={repoPath}
-            hideTestFiles={hideTestFiles}
-            config={VIEW_OPTIONS[selectedView].config}
-            onSearchNode={handleRegisterSearch}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
-            Select a repository to visualize
+          {/* Content */}
+          <div className="flex-1 min-h-0">
+            {!repoPath ? (
+              <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                Select a repository to visualize
+              </div>
+            ) : activeTab === 'graph' ? (
+              <RepoGraph
+                repoPath={repoPath}
+                hideTestFiles={hideTestFiles}
+                config={VIEW_OPTIONS[selectedView].config}
+                onSearchNode={handleRegisterSearch}
+                analysisData={analysisData}
+                loading={loading}
+                error={error}
+                highlightedNodeId={highlightedNodeId}
+              />
+            ) : (
+              analysisData ? (
+                <StatsTreemap
+                  nodes={analysisData.nodes}
+                  topN={topN}
+                  hideTestFiles={hideTestFiles}
+                  onNodeSelect={handleNodeSelect}
+                />
+              ) : loading ? (
+                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                  Analyzing repository...
+                </div>
+              ) : error ? (
+                <div className="w-full h-full flex items-center justify-center text-red-500">
+                  {error}
+                </div>
+              ) : null
+            )}
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

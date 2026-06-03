@@ -3,68 +3,132 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Home from '../../app/page';
 
-// Mock the fetch API
-global.fetch = jest.fn();
+// Mock fetch API
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({
+      success: true,
+      data: {
+        nodes: [
+          { scipSymbol: 'node1', label: 'file1.ts', module: 'src', inDegree: 1, outDegree: 2 },
+          { scipSymbol: 'node2', label: 'file2.ts', module: 'src', inDegree: 2, outDegree: 1 },
+        ],
+        edges: [
+          { source: 'node1', target: 'node2', count: 5 },
+        ],
+      },
+    }),
+  })
+) as jest.Mock;
+
+// Mock all the components
+jest.mock('@/app/components/RepositorySelector', () => {
+  return function MockRepositorySelector({
+    onRepositorySelected,
+  }: {
+    onRepositorySelected: (path: string) => void;
+  }) {
+    return (
+      <button onClick={() => onRepositorySelected('/test/repo')}>
+        Select Repository
+      </button>
+    );
+  };
+});
+
+jest.mock('@/app/components/repo-graph/RepoGraph', () => {
+  return function MockRepoGraph() {
+    return <div data-testid="repo-graph">Graph View</div>;
+  };
+});
+
+jest.mock('@/app/components/TabSidebar', () => {
+  return function MockTabSidebar({
+    activeTab,
+    onTabChange,
+  }: {
+    activeTab: string;
+    onTabChange: (tab: string) => void;
+  }) {
+    return (
+      <div data-testid="tab-sidebar">
+        <button
+          onClick={() => onTabChange('graph')}
+          data-active={activeTab === 'graph'}
+        >
+          Graph Tab
+        </button>
+        <button
+          onClick={() => onTabChange('stats')}
+          data-active={activeTab === 'stats'}
+        >
+          Stats Tab
+        </button>
+      </div>
+    );
+  };
+});
+
+jest.mock('@/app/components/graph/GraphToolbar', () => {
+  return function MockGraphToolbar() {
+    return <div data-testid="graph-toolbar">Graph Toolbar</div>;
+  };
+});
+
+jest.mock('@/app/components/stats/StatsToolbar', () => {
+  return function MockStatsToolbar() {
+    return <div data-testid="stats-toolbar">Stats Toolbar</div>;
+  };
+});
+
+jest.mock('@/app/components/stats/StatsTreemap', () => {
+  return function MockStatsTreemap() {
+    return <div data-testid="stats-treemap">Stats Treemap</div>;
+  };
+});
 
 describe('View Switching Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockResolvedValue({
-      json: jest.fn().mockResolvedValue({
-        success: true,
-        data: {
-          name: 'src',
-          path: 'src',
-          value: 15,
-          isFile: false,
-          children: [
-            {
-              name: 'file1.js',
-              path: 'src/file1.js',
-              value: 10,
-              isFile: true,
-              fileData: {
-                filePath: 'src/file1.js',
-                totalCommitCount: 10,
-                recentCommitCount: 10,
-                frequencyScore: 1.0,
-              },
-            },
-          ],
-        },
-        metadata: {
-          totalFilesAnalyzed: 1,
-          filesDisplayed: 1,
-          totalCommits: 10,
-          analysisDurationMs: 100,
-          timeRange: '2w',
-        },
-      }),
-    });
   });
 
-  it('can switch between heatmap and activity graph views', async () => {
+  it('can switch between graph and stats tabs', async () => {
     render(<Home />);
 
-    // Select repository and analyze
-    const repoInput = screen.getByPlaceholderText('/path/to/your/git/repository');
-    fireEvent.change(repoInput, { target: { value: '/test/repo' } });
-    
-    const analyzeButton = screen.getByRole('button', { name: /analyze repository/i });
-    fireEvent.click(analyzeButton);
+    // Select repository
+    const selectButton = screen.getByRole('button', { name: /select repository/i });
+    fireEvent.click(selectButton);
 
-    // Wait for heatmap to load
+    // Wait for data to load
     await waitFor(() => {
-      expect(screen.getByText('Activity Level')).toBeInTheDocument();
+      expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
     });
 
-    // Switch to activity graph
-    const activityGraphButton = screen.getByLabelText('Activity Graph view');
-    fireEvent.click(activityGraphButton);
+    // Should show graph tab by default
+    expect(screen.getByTestId('graph-toolbar')).toBeInTheDocument();
+    expect(screen.queryByTestId('stats-toolbar')).not.toBeInTheDocument();
 
-    // Should show activity graph
+    // Switch to stats tab
+    const statsButton = screen.getByRole('button', { name: /stats tab/i });
+    fireEvent.click(statsButton);
+
+    // Should show stats toolbar and treemap
     await waitFor(() => {
-      expect(screen.getByText('File Types')).toBeInTheDocument();
+      expect(screen.getByTestId('stats-toolbar')).toBeInTheDocument();
+      expect(screen.getByTestId('stats-treemap')).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('graph-toolbar')).not.toBeInTheDocument();
+
+    // Switch back to graph tab
+    const graphButton = screen.getByRole('button', { name: /graph tab/i });
+    fireEvent.click(graphButton);
+
+    // Should show graph toolbar and graph again
+    await waitFor(() => {
+      expect(screen.getByTestId('graph-toolbar')).toBeInTheDocument();
+      expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('stats-toolbar')).not.toBeInTheDocument();
   });
 });
