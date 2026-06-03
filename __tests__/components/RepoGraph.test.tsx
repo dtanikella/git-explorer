@@ -92,21 +92,29 @@ beforeAll(() => {
 
 import RepoGraph from '@/app/components/repo-graph/RepoGraph';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import type { AnalysisResult } from '@/lib/analysis/types';
 
-const mockFetch = jest.fn();
+const emptyData: AnalysisResult = {
+  nodes: [],
+  edges: [],
+  metadata: {
+    repoPath: '/r',
+    language: 'typescript',
+    nodeCount: 0,
+    edgeCount: 0,
+    analysisDurationMs: 10,
+    missingNodeTypes: [],
+    missingEdgeKinds: []
+  }
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: async () => ({ success: true, data: { nodes: [], edges: [], metadata: { repoPath: '/r', language: 'typescript', nodeCount: 0, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] } } }),
-  });
-  global.fetch = mockFetch;
 });
 
-describe('RepoGraph — data fetching', () => {
+describe('RepoGraph — props and rendering', () => {
   it('resolves config factories with loaded edges', async () => {
-    const mockData = {
+    const mockData: AnalysisResult = {
       nodes: [
         { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
         { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
@@ -116,70 +124,33 @@ describe('RepoGraph — data fetching', () => {
       ],
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: mockData }),
-    });
     const configFactory = jest.fn(() => DEFAULT_REPO_GRAPH_CONFIG);
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} />);
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} analysisData={mockData} loading={false} error={null} />);
 
     await waitFor(() => expect(configFactory).toHaveBeenCalledWith(mockData.edges));
     await act(async () => {});
   });
 
-  it('fetches from /api/repo-analysis with hideTestFiles=true', async () => {
-    render(<RepoGraph repoPath="/some/repo" hideTestFiles={true} />);
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/repo-analysis', expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: true }),
-      }));
-    });
-
-    await act(async () => {});
-  });
-
-  it('fetches from /api/repo-analysis with hideTestFiles=false', async () => {
-    render(<RepoGraph repoPath="/some/repo" hideTestFiles={false} />);
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/repo-analysis', expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ repoPath: '/some/repo', hideTestFiles: false }),
-      }));
-    });
-
-    await act(async () => {});
-  });
-
-  it('does not fetch when repoPath is empty', () => {
-    render(<RepoGraph repoPath="" hideTestFiles={true} />);
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it('shows loading state while fetching', () => {
-    mockFetch.mockReturnValue(new Promise(() => {})); // never resolves
-    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
+  it('shows loading state when loading prop is true', () => {
+    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={true} error={null} />);
     expect(getByText('Analyzing repository...')).toBeInTheDocument();
   });
 
-  it('shows error state on failure', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: false, error: 'Analysis failed' }),
-    });
+  it('shows error state when error prop is set', () => {
+    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error="Analysis failed" />);
+    expect(getByText('Analysis failed')).toBeInTheDocument();
+  });
 
-    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
-    await waitFor(() => expect(getByText('Analysis failed')).toBeInTheDocument());
-    await act(async () => {});
+  it('renders nothing when not loading, no error, and no data', () => {
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error={null} />);
+    expect(container.firstChild).toBeNull();
   });
 });
 
 describe('RepoGraph — canvas rendering', () => {
   it('calls ctx.clearRect on simulation tick when data is loaded', async () => {
-    const mockData = {
+    const mockData: AnalysisResult = {
       nodes: [
         { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
         { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
@@ -189,15 +160,10 @@ describe('RepoGraph — canvas rendering', () => {
       ],
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: mockData }),
-    });
 
     const d3Mock = require('d3');
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     await act(async () => {});
 
     const sim = d3Mock.__getLastSim();
@@ -211,7 +177,7 @@ describe('RepoGraph — canvas rendering', () => {
 describe('RepoGraph — search', () => {
   it('registers search handler when onSearchNode is provided', () => {
     const registerFn = jest.fn();
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} />);
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 
@@ -219,7 +185,7 @@ describe('RepoGraph — search', () => {
     let searchFn: ((q: string) => boolean) | null = null;
     const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} />);
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
     await act(async () => {});
 
     expect(searchFn).not.toBeNull();
@@ -229,20 +195,15 @@ describe('RepoGraph — search', () => {
 
 describe('RepoGraph — tooltip', () => {
   it('does not crash on mousemove over canvas', async () => {
-    const mockData = {
+    const mockData: AnalysisResult = {
       nodes: [
         { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
       ],
       edges: [],
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: mockData }),
-    });
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');
@@ -254,20 +215,15 @@ describe('RepoGraph — tooltip', () => {
   });
 
   it('does not crash on mouseleave', async () => {
-    const mockData = {
+    const mockData: AnalysisResult = {
       nodes: [
         { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
       ],
       edges: [],
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: mockData }),
-    });
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');

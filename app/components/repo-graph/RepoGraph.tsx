@@ -13,6 +13,10 @@ interface RepoGraphProps {
   hideTestFiles: boolean;
   config?: ConfigOrFactory;
   onSearchNode?: (handler: (query: string) => boolean) => void;
+  analysisData: AnalysisResult | null;
+  loading: boolean;
+  error: string | null;
+  highlightedNodeId?: string | null;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -30,7 +34,7 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
 
 const HIGHLIGHT_COLOR = '#facc15';
 
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, highlightedNodeId }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -43,9 +47,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const drawFrameRef = useRef<(() => void) | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
 
-  const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
-  const [loading, setLoading] = useState(!!repoPath);
-  const [error, setError] = useState<string | null>(null);
   const [ctxError, setCtxError] = useState(false);
 
   const resolvedConfig = useMemo(() => {
@@ -84,40 +85,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   useEffect(() => {
     configRef.current = resolvedConfig;
   }, [resolvedConfig]);
-
-  // Fetch data from /api/repo-analysis
-  useEffect(() => {
-    if (!repoPath) return;
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-
-    fetch('/api/repo-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoPath, hideTestFiles }),
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        return res.json();
-      })
-      .then((result) => {
-        if (result.success) {
-          setAnalysisData(result.data);
-        } else {
-          setError(result.error || 'Analysis failed');
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        setError(err.message || 'Network error');
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [repoPath, hideTestFiles]);
 
   // Adapter: AnalysisResult → SimpleNode[] + SimpleEdge[]
   const simEdges: SimpleEdge[] = useMemo(() => {
@@ -397,6 +364,37 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       onSearchNode(handleSearchNode);
     }
   }, [onSearchNode, handleSearchNode]);
+
+  // External highlight (from Stats tab cross-navigation)
+  useEffect(() => {
+    if (!highlightedNodeId) return;
+    const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
+    if (!match || match.x == null || match.y == null) return;
+    if (!canvasRef.current || !zoomRef.current) return;
+
+    const canvas = canvasRef.current;
+    const w = canvas.offsetWidth || 800;
+    const h = canvas.offsetHeight || 600;
+    const scale = 2;
+    const transform = d3.zoomIdentity
+      .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
+      .scale(scale);
+
+    d3.select(canvas as any)
+      .transition()
+      .duration(500)
+      .call((zoomRef.current as any).transform, transform);
+
+    highlightedNodeIdRef.current = match.id;
+    drawFrameRef.current?.();
+
+    const timer = setTimeout(() => {
+      highlightedNodeIdRef.current = null;
+      drawFrameRef.current?.();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [highlightedNodeId]);
 
   if (loading) {
     return (
