@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
 import TabSidebar from './components/TabSidebar';
@@ -8,7 +8,7 @@ import type { TabId } from './components/TabSidebar';
 import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
-import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analysis/graph-config';
+import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisResult } from '@/lib/analysis/types';
 
@@ -68,6 +68,23 @@ export default function HomePage() {
 
     return () => controller.abort();
   }, [repoPath, hideTestFiles]);
+
+  // Compute which node IDs are visible in the current graph view.
+  // Mirrors the filtering logic in RepoGraph so treemap knows which nodes are clickable.
+  const graphVisibleNodeIds = useMemo(() => {
+    if (!analysisData) return new Set<string>();
+    const rawConfig = VIEW_OPTIONS[selectedView].config;
+    const cfg = typeof rawConfig === 'function' ? rawConfig(analysisData.edges) : (rawConfig ?? DEFAULT_REPO_GRAPH_CONFIG);
+    const candidateIds = new Set(analysisData.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol));
+    const connectedIds = new Set<string>();
+    for (const e of analysisData.edges) {
+      if (cfg.filters.edge(e) && candidateIds.has(e.fromSymbol) && candidateIds.has(e.toSymbol)) {
+        connectedIds.add(e.fromSymbol);
+        connectedIds.add(e.toSymbol);
+      }
+    }
+    return connectedIds;
+  }, [analysisData, selectedView]);
 
   const handleRepositorySelect = useCallback((path: string) => {
     setRepoPath(path);
@@ -164,6 +181,7 @@ export default function HomePage() {
                   topN={topN}
                   hideTestFiles={hideTestFiles}
                   onNodeSelect={handleNodeSelect}
+                  graphVisibleNodeIds={graphVisibleNodeIds}
                 />
               ) : loading ? (
                 <div className="w-full h-full flex items-center justify-center text-gray-500">

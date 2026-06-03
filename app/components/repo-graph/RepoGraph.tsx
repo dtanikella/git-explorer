@@ -367,18 +367,25 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
   // External highlight (from Stats tab cross-navigation)
   // RepoGraph may remount when switching tabs, so the simulation may not
-  // have positioned nodes yet. Poll until the target node has coordinates.
+  // have positioned nodes yet. Poll until the target node has coordinates,
+  // but give up after ~2s if the node isn't in the current graph view.
   useEffect(() => {
     if (!highlightedNodeId) return;
     let cancelled = false;
     let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 40; // 40 × 50ms = 2s
 
     function tryHighlight() {
       if (cancelled) return;
+      attempts++;
       const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
+
       if (!match || match.x == null || match.y == null || !canvasRef.current || !zoomRef.current) {
-        // Retry — simulation hasn't positioned nodes yet
-        setTimeout(tryHighlight, 50);
+        if (attempts < MAX_ATTEMPTS) {
+          setTimeout(tryHighlight, 50);
+        }
+        // If max attempts reached, node isn't in this graph view — silently give up
         return;
       }
 

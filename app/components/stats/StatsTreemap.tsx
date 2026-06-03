@@ -11,6 +11,7 @@ interface StatsTreemapProps {
   topN: number;
   hideTestFiles: boolean;
   onNodeSelect: (scipSymbol: string) => void;
+  graphVisibleNodeIds?: Set<string>;
 }
 
 interface TreemapDatum {
@@ -22,7 +23,7 @@ interface TreemapDatum {
   inboundCount: number;
 }
 
-export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect }: StatsTreemapProps) {
+export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect, graphVisibleNodeIds }: StatsTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
@@ -88,13 +89,14 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect 
           const w = leaf.x1 - leaf.x0;
           const h = leaf.y1 - leaf.y0;
           const color = getTreemapColor(normalizeOutboundRefs(d.outboundCount, maxOutbound));
+          const isInGraph = !graphVisibleNodeIds || graphVisibleNodeIds.has(d.scipSymbol);
 
           return (
             <g
               key={d.scipSymbol}
               data-symbol={d.scipSymbol}
-              onClick={() => onNodeSelect(d.scipSymbol)}
-              style={{ cursor: 'pointer' }}
+              onClick={isInGraph ? () => onNodeSelect(d.scipSymbol) : undefined}
+              style={{ cursor: isInGraph ? 'pointer' : 'default', opacity: isInGraph ? 1 : 0.5 }}
             >
               <rect
                 x={leaf.x0}
