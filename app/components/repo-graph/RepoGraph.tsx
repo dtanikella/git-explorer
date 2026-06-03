@@ -366,34 +366,54 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   }, [onSearchNode, handleSearchNode]);
 
   // External highlight (from Stats tab cross-navigation)
+  // RepoGraph may remount when switching tabs, so the simulation may not
+  // have positioned nodes yet. Poll until the target node has coordinates.
   useEffect(() => {
     if (!highlightedNodeId) return;
-    const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
-    if (!match || match.x == null || match.y == null) return;
-    if (!canvasRef.current || !zoomRef.current) return;
+    let cancelled = false;
+    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const canvas = canvasRef.current;
-    const w = canvas.offsetWidth || 800;
-    const h = canvas.offsetHeight || 600;
-    const scale = 2;
-    const transform = d3.zoomIdentity
-      .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
-      .scale(scale);
+    function tryHighlight() {
+      if (cancelled) return;
+      const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
+      if (!match || match.x == null || match.y == null || !canvasRef.current || !zoomRef.current) {
+        // Retry — simulation hasn't positioned nodes yet
+        setTimeout(tryHighlight, 50);
+        return;
+      }
 
-    d3.select(canvas as any)
-      .transition()
-      .duration(500)
-      .call((zoomRef.current as any).transform, transform);
+      const canvas = canvasRef.current;
+      const w = canvas.offsetWidth || 800;
+      const h = canvas.offsetHeight || 600;
+      const scale = 2;
+      const transform = d3.zoomIdentity
+        .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
+        .scale(scale);
 
-    highlightedNodeIdRef.current = match.id;
-    drawFrameRef.current?.();
+      d3.select(canvas as any)
+        .transition()
+        .duration(500)
+        .call((zoomRef.current as any).transform, transform);
 
-    const timer = setTimeout(() => {
-      highlightedNodeIdRef.current = null;
-      drawFrameRef.current?.();
-    }, 1500);
+      // Set highlight after zoom transition completes
+      setTimeout(() => {
+        if (cancelled) return;
+        highlightedNodeIdRef.current = match.id;
+        drawFrameRef.current?.();
 
-    return () => clearTimeout(timer);
+        highlightTimer = setTimeout(() => {
+          highlightedNodeIdRef.current = null;
+          drawFrameRef.current?.();
+        }, 1500);
+      }, 500);
+    }
+
+    tryHighlight();
+
+    return () => {
+      cancelled = true;
+      if (highlightTimer) clearTimeout(highlightTimer);
+    };
   }, [highlightedNodeId]);
 
   if (loading) {
