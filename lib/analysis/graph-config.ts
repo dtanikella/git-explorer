@@ -265,7 +265,7 @@ export function createModulesViewConfig(
         return {
           ...DEFAULT_NODE_STYLE,
           color,
-          radius: scaledValue(outbound, 4, 30),
+          radius: scaledValue(outbound, 5, 50),
         };
       },
       edge: (_edge: AnalysisEdge): EdgeStyle => ({
@@ -279,7 +279,7 @@ export function createModulesViewConfig(
     forces: {
       node: (node: AnalysisNode): NodeForces => ({
         ...DEFAULT_NODE_FORCES,
-        collideRadius: scaledValue(countInboundCalls(node), 8, 40),
+        collideRadius: scaledValue(countInboundCalls(node), 5, 50),
       }),
     },
   });
