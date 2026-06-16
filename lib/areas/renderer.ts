@@ -1,6 +1,8 @@
 import * as d3 from 'd3';
 import type { Area, AreaRuntimeState } from './types';
 
+const HULL_PADDING = 55; // px padding around member nodes
+
 export type HullResult =
   | { type: 'circle'; cx: number; cy: number; r: number }
   | { type: 'polygon'; points: [number, number][] }
@@ -20,7 +22,7 @@ export function computeAreaHull(
 
   if (memberPositions.length === 1) {
     const p = memberPositions[0];
-    return { type: 'circle', cx: p.x, cy: p.y, r: p.radius + 55 };
+    return { type: 'circle', cx: p.x, cy: p.y, r: p.radius + HULL_PADDING };
   }
 
   if (memberPositions.length === 2) {
@@ -28,7 +30,7 @@ export function computeAreaHull(
     const cx = (a.x + b.x) / 2;
     const cy = (a.y + b.y) / 2;
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
-    const r = dist / 2 + Math.max(a.radius, b.radius) + 55;
+    const r = dist / 2 + Math.max(a.radius, b.radius) + HULL_PADDING;
     return { type: 'circle', cx, cy, r };
   }
 
@@ -37,7 +39,7 @@ export function computeAreaHull(
   const hull = d3.polygonHull(points);
   if (!hull) return null;
 
-  const expanded = expandHull(hull, 55);
+  const expanded = expandHull(hull, HULL_PADDING);
   return { type: 'polygon', points: expanded };
 }
 
