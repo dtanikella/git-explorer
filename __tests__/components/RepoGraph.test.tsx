@@ -2,6 +2,28 @@ import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
+// jsdom lacks PointerEvent — polyfill with MouseEvent
+if (typeof PointerEvent === 'undefined') {
+  (globalThis as any).PointerEvent = class PointerEvent extends MouseEvent {
+    constructor(type: string, init?: PointerEventInit) { super(type, init); }
+  };
+}
+
+const mockToggleNode = jest.fn();
+const mockSelectionState = {
+  activeNodeIds: new Set<string>(),
+  selectedNodeIds: new Set<string>(),
+  hasSelection: false,
+  toggleNode: mockToggleNode,
+  clearSelection: jest.fn(),
+  toggleExpansionGroup: jest.fn(),
+  toggleExpandedNode: jest.fn(),
+  state: {
+    selectedNodeIds: new Set<string>(),
+    expansions: new Map(),
+  },
+};
+
 jest.mock('d3', () => {
   const chainable = (): any => {
     const obj: Record<string, any> = {};
@@ -61,6 +83,10 @@ jest.mock('d3', () => {
   };
 });
 
+jest.mock('@/app/contexts/SelectionContext', () => ({
+  useSelection: () => mockSelectionState,
+}));
+
 const mockCtx = {
   clearRect: jest.fn(),
   beginPath: jest.fn(),
@@ -72,6 +98,7 @@ const mockCtx = {
   save: jest.fn(),
   restore: jest.fn(),
   setTransform: jest.fn(),
+  setLineDash: jest.fn(),
   fillText: jest.fn(),
   globalAlpha: 1,
   fillStyle: '',
@@ -110,6 +137,11 @@ const emptyData: AnalysisResult = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSelectionState.activeNodeIds = new Set<string>();
+  mockSelectionState.selectedNodeIds = new Set<string>();
+  mockSelectionState.hasSelection = false;
+  mockSelectionState.state.selectedNodeIds = new Set<string>();
+  mockSelectionState.state.expansions = new Map();
 });
 
 describe('RepoGraph — props and rendering', () => {
@@ -181,6 +213,53 @@ describe('RepoGraph — search', () => {
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  it('search handler toggles the matched node into the selection set', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('foo')).toBe(true);
+    expect(mockToggleNode).toHaveBeenCalledWith('s1');
+  });
+
+  it('search handler does not re-toggle a node that is already selected', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+    const selectedIds = new Set(['s1']);
+    mockSelectionState.selectedNodeIds = selectedIds;
+    mockSelectionState.state.selectedNodeIds = selectedIds;
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('foo')).toBe(true);
+    expect(mockToggleNode).not.toHaveBeenCalled();
+  });
+
   it('search handler returns false when no matching node exists', async () => {
     let searchFn: ((q: string) => boolean) | null = null;
     const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
@@ -190,6 +269,60 @@ describe('RepoGraph — search', () => {
 
     expect(searchFn).not.toBeNull();
     expect(searchFn!('nonExistent')).toBe(false);
+  });
+});
+
+describe('RepoGraph — selection click handling', () => {
+  it('toggles a node when mouseup occurs within the click threshold', async () => {
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+
+    act(() => {
+      canvas!.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerup', { clientX: 102, clientY: 101, bubbles: true }));
+    });
+
+    expect(mockToggleNode).toHaveBeenCalledWith('s1');
+  });
+
+  it('does not toggle a node when pointer movement exceeds the click threshold', async () => {
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+
+    act(() => {
+      canvas!.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerup', { clientX: 110, clientY: 110, bubbles: true }));
+    });
+
+    expect(mockToggleNode).not.toHaveBeenCalled();
   });
 });
 

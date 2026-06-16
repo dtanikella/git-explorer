@@ -5,6 +5,7 @@ import * as d3 from 'd3';
 import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import { useSelection } from '@/app/contexts/SelectionContext';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -16,7 +17,6 @@ interface RepoGraphProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
-  highlightedNodeId?: string | null;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -32,9 +32,7 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
-const HIGHLIGHT_COLOR = '#facc15';
-
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, highlightedNodeId }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -43,11 +41,24 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const zoomTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const simNodesRef = useRef<SimpleNode[]>([]);
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
-  const highlightedNodeIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
+  const toggleNodeRef = useRef<(id: string) => void>(() => {});
 
   const [ctxError, setCtxError] = useState(false);
+  const { activeNodeIds, hasSelection, toggleNode } = useSelection();
+  const selectedNodeIds = useSelection().state.selectedNodeIds;
+  const activeNodeIdsRef = useRef(activeNodeIds);
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  const hasSelectionRef = useRef(hasSelection);
+
+  useEffect(() => {
+    activeNodeIdsRef.current = activeNodeIds;
+    selectedNodeIdsRef.current = selectedNodeIds;
+    hasSelectionRef.current = hasSelection;
+    toggleNodeRef.current = toggleNode;
+    drawFrameRef.current?.();
+  }, [activeNodeIds, selectedNodeIds, hasSelection, toggleNode]);
 
   const resolvedConfig = useMemo(() => {
     if (!analysisData) {
@@ -231,7 +242,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           c.strokeStyle = eStyle.color;
         }
         c.lineWidth = eStyle.width;
-        c.globalAlpha = eStyle.opacity;
+
+        if (hasSelectionRef.current) {
+          const srcActive = activeNodeIdsRef.current.has(src.id);
+          const tgtActive = activeNodeIdsRef.current.has(tgt.id);
+          c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity : 0.15;
+        } else {
+          c.globalAlpha = eStyle.opacity;
+        }
+
         c.stroke();
         c.globalAlpha = 1.0;
       }
@@ -240,27 +259,35 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       for (const n of simNodes) {
         if (n.x == null || n.y == null) continue;
         const nStyle = cfg.style.node(n.data, n.degree);
+        const isActive = hasSelectionRef.current ? activeNodeIdsRef.current.has(n.id) : true;
+        const nodeAlpha = hasSelectionRef.current ? (isActive ? nStyle.opacity : 0.3) : nStyle.opacity;
+
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
         c.fillStyle = nStyle.color;
-        c.globalAlpha = nStyle.opacity;
+        c.globalAlpha = nodeAlpha;
         c.fill();
         c.globalAlpha = 1.0;
         c.strokeStyle = '#fff';
         c.lineWidth = 1;
         c.stroke();
         if (nStyle.label) {
+          c.globalAlpha = nodeAlpha;
           c.fillStyle = '#374151';
           c.font = '10px sans-serif';
           c.textAlign = 'center';
           c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
+          c.globalAlpha = 1.0;
         }
-        if (highlightedNodeIdRef.current === n.id) {
+
+        if (selectedNodeIdsRef.current.has(n.id)) {
           c.beginPath();
           c.arc(n.x, n.y, nStyle.radius + 2, 0, 2 * Math.PI);
-          c.strokeStyle = HIGHLIGHT_COLOR;
-          c.lineWidth = 4;
+          c.strokeStyle = '#3b82f6';
+          c.lineWidth = 2;
+          c.setLineDash([4, 3]);
           c.stroke();
+          c.setLineDash([]);
         }
       }
 
@@ -307,6 +334,42 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     zoomRef.current = zoomBehavior;
     d3.select(canvas as any).call(zoomBehavior as any);
 
+    // Click-to-select using native events to avoid d3-zoom interference
+    let pointerDownPos: { x: number; y: number } | null = null;
+
+    const onPointerDown = (event: PointerEvent) => {
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pointerDownPos) return;
+      const pdx = event.clientX - pointerDownPos.x;
+      const pdy = event.clientY - pointerDownPos.y;
+      pointerDownPos = null;
+      if (Math.sqrt(pdx * pdx + pdy * pdy) > 3) return; // was a drag/pan
+
+      const rect = canvas.getBoundingClientRect();
+      const t = zoomTransformRef.current;
+      const mx = (event.clientX - rect.left - t.x) / t.k;
+      const my = (event.clientY - rect.top - t.y) / t.k;
+
+      const nodes = simNodesRef.current;
+      const cfg = configRef.current;
+      for (const n of nodes) {
+        if (n.x == null || n.y == null) continue;
+        const ndx = mx - n.x;
+        const ndy = my - n.y;
+        const nStyle = cfg.style.node(n.data, n.degree);
+        if (Math.sqrt(ndx * ndx + ndy * ndy) <= nStyle.radius) {
+          toggleNodeRef.current(n.id);
+          return;
+        }
+      }
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointerup', onPointerUp);
+
     const resizeObserver = new ResizeObserver(() => {
       if (!canvasRef.current) return;
       canvasRef.current.width = canvasRef.current.offsetWidth || 800;
@@ -322,10 +385,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       zoomRef.current = null;
       drawFrameRef.current = null;
       resizeObserver.disconnect();
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
     };
   }, [simNodes, simEdges]);
 
-  // Search handler
   const handleSearchNode = useCallback((query: string): boolean => {
     const lowerQ = query.toLowerCase();
     const match =
@@ -333,31 +397,13 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       simNodesRef.current.find((n) => n.name.toLowerCase().includes(lowerQ));
 
     if (!match || match.x == null || match.y == null) return false;
-    if (!canvasRef.current || !zoomRef.current) return false;
 
-    const canvas = canvasRef.current;
-    const w = canvas.offsetWidth || 800;
-    const h = canvas.offsetHeight || 600;
-    const scale = 2;
-    const transform = d3.zoomIdentity
-      .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
-      .scale(scale);
-
-    d3.select(canvas as any)
-      .transition()
-      .duration(500)
-      .call((zoomRef.current as any).transform, transform);
-
-    highlightedNodeIdRef.current = match.id;
-    drawFrameRef.current?.();
-
-    setTimeout(() => {
-      highlightedNodeIdRef.current = null;
-      drawFrameRef.current?.();
-    }, 5000);
+    if (!selectedNodeIdsRef.current.has(match.id)) {
+      toggleNode(match.id);
+    }
 
     return true;
-  }, []);
+  }, [toggleNode]);
 
   useEffect(() => {
     if (onSearchNode) {
@@ -365,72 +411,82 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     }
   }, [onSearchNode, handleSearchNode]);
 
-  // External highlight (from Stats tab cross-navigation)
-  // RepoGraph may remount when switching tabs, so the simulation may not
-  // have positioned nodes yet. Wait for the simulation to exist, then
-  // fast-forward it to completion before zooming to the target node.
+  // Zoom-to-fit when active set changes
   useEffect(() => {
-    if (!highlightedNodeId) return;
+    if (activeNodeIds.size === 0) return;
     let cancelled = false;
-    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
     const MAX_ATTEMPTS = 40; // 40 × 50ms = 2s
 
-    function tryHighlight() {
+    function tryZoomToFit() {
       if (cancelled) return;
       attempts++;
 
-      if (!simulationRef.current || !canvasRef.current || !zoomRef.current) {
-        if (attempts < MAX_ATTEMPTS) {
-          setTimeout(tryHighlight, 50);
-        }
+      if (!canvasRef.current || !zoomRef.current) {
+        if (attempts < MAX_ATTEMPTS) setTimeout(tryZoomToFit, 50);
         return;
       }
 
-      // Fast-forward the simulation to its settled state
-      const sim = simulationRef.current;
-      sim.stop();
-      while (sim.alpha() > sim.alphaMin()) {
-        sim.tick();
+      // If simulation exists but hasn't settled, fast-forward it
+      if (simulationRef.current) {
+        const sim = simulationRef.current;
+        if (sim.alpha() > sim.alphaMin()) {
+          sim.stop();
+          while (sim.alpha() > sim.alphaMin()) {
+            sim.tick();
+          }
+          drawFrameRef.current?.();
+        }
       }
-      drawFrameRef.current?.();
 
-      const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
-      if (!match || match.x == null || match.y == null) return;
+      // Check that nodes have been positioned
+      const activeNodes = simNodesRef.current.filter(
+        (n) => activeNodeIds.has(n.id) && n.x != null && n.y != null
+      );
+      if (activeNodes.length === 0) {
+        if (attempts < MAX_ATTEMPTS) setTimeout(tryZoomToFit, 50);
+        return;
+      }
 
       const canvas = canvasRef.current;
       const w = canvas.offsetWidth || 800;
       const h = canvas.offsetHeight || 600;
-      const scale = 2;
+
+      // Compute bounding box of active nodes in simulation coords
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const n of activeNodes) {
+        const cfg = configRef.current;
+        const r = cfg.style.node(n.data, n.degree).radius;
+        minX = Math.min(minX, n.x! - r);
+        minY = Math.min(minY, n.y! - r);
+        maxX = Math.max(maxX, n.x! + r);
+        maxY = Math.max(maxY, n.y! + r);
+      }
+
+      // Compute zoom transform to fit bounding box with padding
+      const padding = 60;
+      const bboxW = maxX - minX;
+      const bboxH = maxY - minY;
+      const scale = Math.min(
+        (w - 2 * padding) / Math.max(bboxW, 1),
+        (h - 2 * padding) / Math.max(bboxH, 1),
+        3, // max zoom — don't zoom too close on single nodes
+      );
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
       const transform = d3.zoomIdentity
-        .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
+        .translate(w / 2 - cx * scale, h / 2 - cy * scale)
         .scale(scale);
 
       d3.select(canvas as any)
         .transition()
-        .duration(500)
+        .duration(300)
         .call((zoomRef.current as any).transform, transform);
-
-      // Set highlight after zoom transition completes
-      setTimeout(() => {
-        if (cancelled) return;
-        highlightedNodeIdRef.current = match.id;
-        drawFrameRef.current?.();
-
-        highlightTimer = setTimeout(() => {
-          highlightedNodeIdRef.current = null;
-          drawFrameRef.current?.();
-        }, 5000);
-      }, 500);
     }
 
-    tryHighlight();
-
-    return () => {
-      cancelled = true;
-      if (highlightTimer) clearTimeout(highlightTimer);
-    };
-  }, [highlightedNodeId]);
+    tryZoomToFit();
+    return () => { cancelled = true; };
+  }, [activeNodeIds]);
 
   if (loading) {
     return (

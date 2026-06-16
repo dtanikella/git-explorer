@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type MutableRefObject } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
 import TabSidebar from './components/TabSidebar';
@@ -8,27 +8,63 @@ import type { TabId } from './components/TabSidebar';
 import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
+import { SelectionProvider, useSelection } from './contexts/SelectionContext';
+import SelectionSidebar from './components/selection/SelectionSidebar';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import type { AnalysisEdge, AnalysisResult } from '@/lib/analysis/types';
+import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
 
 const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
   modules: { label: 'Modules', config: createModulesViewConfig },
 };
 
+function SelectionSidebarWrapper({ nodes }: { nodes: AnalysisNode[] }) {
+  const { hasSelection } = useSelection();
+  if (!hasSelection) return null;
+  return <SelectionSidebar nodes={nodes} />;
+}
+
+function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
+  toggleRef: MutableRefObject<((id: string) => void) | null>;
+  pendingId: string | null;
+  onPendingConsumed: () => void;
+}) {
+  const { toggleNode, state: { selectedNodeIds } } = useSelection();
+
+  useEffect(() => {
+    toggleRef.current = (id: string) => {
+      if (!selectedNodeIds.has(id)) toggleNode(id);
+    };
+
+    return () => {
+      toggleRef.current = null;
+    };
+  }, [toggleNode, selectedNodeIds, toggleRef]);
+
+  useEffect(() => {
+    if (pendingId && !selectedNodeIds.has(pendingId)) {
+      toggleNode(pendingId);
+      onPendingConsumed();
+    }
+  }, [pendingId, toggleNode, selectedNodeIds, onPendingConsumed]);
+
+  return null;
+}
+
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [hideTestFiles, setHideTestFiles] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>('graph');
   const [topN, setTopN] = useState(20);
-  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
   // Graph toolbar state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
   const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
+  const selectionToggleRef = useRef<((id: string) => void) | null>(null);
 
   // Lifted data state
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
@@ -103,17 +139,9 @@ export default function HomePage() {
   }, [searchQuery]);
 
   const handleNodeSelect = useCallback((scipSymbol: string) => {
-    setHighlightedNodeId(scipSymbol);
     setActiveTab('graph');
+    setPendingSelectionId(scipSymbol);
   }, []);
-
-  // Clear highlight after tab switch completes
-  useEffect(() => {
-    if (highlightedNodeId && activeTab === 'graph') {
-      const timer = setTimeout(() => setHighlightedNodeId(null), 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [highlightedNodeId, activeTab]);
 
   return (
     <main className="h-screen flex flex-col p-2 gap-2 overflow-hidden">
@@ -164,16 +192,31 @@ export default function HomePage() {
                 Select a repository to visualize
               </div>
             ) : activeTab === 'graph' ? (
-              <RepoGraph
-                repoPath={repoPath}
-                hideTestFiles={hideTestFiles}
-                config={VIEW_OPTIONS[selectedView].config}
-                onSearchNode={handleRegisterSearch}
-                analysisData={analysisData}
-                loading={loading}
-                error={error}
-                highlightedNodeId={highlightedNodeId}
-              />
+              <SelectionProvider
+                nodes={analysisData?.nodes ?? []}
+                edges={analysisData?.edges ?? []}
+                visibleNodeIds={graphVisibleNodeIds}
+              >
+                <SelectionBridge
+                  toggleRef={selectionToggleRef}
+                  pendingId={pendingSelectionId}
+                  onPendingConsumed={() => setPendingSelectionId(null)}
+                />
+                <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <RepoGraph
+                      repoPath={repoPath}
+                      hideTestFiles={hideTestFiles}
+                      config={VIEW_OPTIONS[selectedView].config}
+                      onSearchNode={handleRegisterSearch}
+                      analysisData={analysisData}
+                      loading={loading}
+                      error={error}
+                    />
+                  </div>
+                  <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
+                </div>
+              </SelectionProvider>
             ) : (
               analysisData ? (
                 <StatsTreemap
