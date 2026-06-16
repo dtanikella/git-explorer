@@ -269,10 +269,20 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         }
         c.lineWidth = eStyle.width;
 
+        // Compute area filtering state for edges
+        const allAreasE = areasRef.current;
+        const visibleAreasE = getVisibleAreasRef.current();
+        const isAreaFilteringE = allAreasE.length > 0 && visibleAreasE.length < allAreasE.length;
+
         if (hasSelectionRef.current) {
           const srcActive = activeNodeIdsRef.current.has(src.id);
           const tgtActive = activeNodeIdsRef.current.has(tgt.id);
           c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity : 0.15;
+        } else if (isAreaFilteringE) {
+          const srcInArea = resolveAreaInfluence(src.id, visibleAreasE, nodeToAreasRef.current);
+          const tgtInArea = resolveAreaInfluence(tgt.id, visibleAreasE, nodeToAreasRef.current);
+          const bothDimmed = srcInArea?.dimmed && tgtInArea?.dimmed;
+          c.globalAlpha = bothDimmed ? 0.08 : eStyle.opacity;
         } else {
           c.globalAlpha = eStyle.opacity;
         }
@@ -288,12 +298,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const isActive = hasSelectionRef.current ? activeNodeIdsRef.current.has(n.id) : true;
         const nodeAlpha = hasSelectionRef.current ? (isActive ? nStyle.opacity : 0.3) : nStyle.opacity;
 
-        const areaInfluence = resolveAreaInfluence(
-          n.id,
-          getVisibleAreasRef.current(),
-          nodeToAreasRef.current,
-        );
-        const finalAlpha = areaInfluence?.dimmed ? Math.min(nodeAlpha, 0.15) : nodeAlpha;
+        // Only apply area dimming when user has toggled some areas off (active filter)
+        const allAreas = areasRef.current;
+        const visibleAreas = getVisibleAreasRef.current();
+        const isAreaFiltering = allAreas.length > 0 && visibleAreas.length < allAreas.length;
+        const areaInfluence = isAreaFiltering
+          ? resolveAreaInfluence(n.id, visibleAreas, nodeToAreasRef.current)
+          : null;
+        // Never dim active/selected nodes via area influence
+        const finalAlpha = (areaInfluence?.dimmed && !isActive) ? Math.min(nodeAlpha, 0.15) : nodeAlpha;
 
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);

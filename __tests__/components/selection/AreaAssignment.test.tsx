@@ -136,7 +136,7 @@ describe('AreaAssignment', () => {
       await user.selectOptions(screen.getByTestId('area-picker'), '__new__');
       await user.type(screen.getByTestId('new-area-name'), 'Config Pipeline');
       await user.selectOptions(screen.getByTestId('new-area-parent'), 'auth');
-      await user.selectOptions(screen.getByTestId('new-area-children'), ['payments']);
+      await user.selectOptions(screen.getByTestId('new-area-children'), 'payments');
       await user.click(screen.getByTestId('area-action-button'));
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -195,8 +195,9 @@ describe('AreaAssignment', () => {
       await user.selectOptions(screen.getByTestId('new-area-parent'), 'auth');
 
       const childOptions = within(screen.getByTestId('new-area-children')).getAllByRole('option');
-      expect(childOptions.map((option) => option.getAttribute('value'))).not.toContain('auth');
-      expect(childOptions.map((option) => option.getAttribute('value'))).toContain('payments');
+      const values = childOptions.map((option) => option.getAttribute('value')).filter(Boolean);
+      expect(values).not.toContain('auth');
+      expect(values).toContain('payments');
     });
   });
 
