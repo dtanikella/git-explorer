@@ -116,4 +116,95 @@ describe('SelectionContext', () => {
       expect(ctx!.activeNodeIds.size).toBe(0);
     });
   });
+
+  describe('expansion groups', () => {
+    it('computes same-file candidates when a node is selected', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); }); // filePath: src/a.ts
+      const sameFile = ctx!.state.expansions.get('same-file')!;
+      expect(sameFile.candidates.length).toBe(1);
+      expect(sameFile.candidates[0].nodeId).toBe('sym:b'); // also in src/a.ts
+      expect(sameFile.candidates[0].sourceNodeIds).toContain('sym:a');
+    });
+
+    it('computes caller candidates', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:c'); }); // sym:a calls sym:c
+      const callers = ctx!.state.expansions.get('callers')!;
+      expect(callers.candidates.length).toBe(1);
+      expect(callers.candidates[0].nodeId).toBe('sym:a');
+    });
+
+    it('computes callee candidates', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:c'); }); // sym:c calls sym:d
+      const callees = ctx!.state.expansions.get('callees')!;
+      expect(callees.candidates.length).toBe(1);
+      expect(callees.candidates[0].nodeId).toBe('sym:d');
+    });
+
+    it('toggleExpansionGroup enables a group and adds candidates to activeNodeIds', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      expect(ctx!.state.expansions.get('same-file')!.enabled).toBe(true);
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(true); // same file as sym:a
+    });
+
+    it('toggleExpansionGroup disables a group and removes candidates from activeNodeIds', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      expect(ctx!.state.expansions.get('same-file')!.enabled).toBe(false);
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(false);
+    });
+
+    it('toggleExpandedNode disables an individual candidate', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      act(() => { ctx!.toggleExpandedNode('same-file', 'sym:b'); });
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(false);
+      expect(ctx!.state.expansions.get('same-file')!.disabledIds.has('sym:b')).toBe(true);
+    });
+
+    it('toggleExpandedNode re-enables a disabled candidate', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      act(() => { ctx!.toggleExpandedNode('same-file', 'sym:b'); });
+      act(() => { ctx!.toggleExpandedNode('same-file', 'sym:b'); });
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(true);
+    });
+
+    it('clearSelection resets all expansion groups', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleExpansionGroup('same-file'); });
+      act(() => { ctx!.clearSelection(); });
+      expect(ctx!.state.expansions.size).toBe(0);
+      expect(ctx!.activeNodeIds.size).toBe(0);
+    });
+
+    it('does not include selected nodes as expansion candidates', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      // Select both sym:a and sym:b (same file)
+      act(() => { ctx!.toggleNode('sym:a'); });
+      act(() => { ctx!.toggleNode('sym:b'); });
+      const sameFile = ctx!.state.expansions.get('same-file')!;
+      // Neither sym:a nor sym:b should appear as candidates since both are selected
+      expect(sameFile.candidates.find((c) => c.nodeId === 'sym:a')).toBeUndefined();
+      expect(sameFile.candidates.find((c) => c.nodeId === 'sym:b')).toBeUndefined();
+    });
+  });
 });
