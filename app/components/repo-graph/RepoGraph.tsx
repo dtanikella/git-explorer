@@ -17,7 +17,6 @@ interface RepoGraphProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
-  highlightedNodeId?: string | null;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -33,7 +32,7 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, highlightedNodeId }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -42,7 +41,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const zoomTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const simNodesRef = useRef<SimpleNode[]>([]);
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
-  const highlightedNodeIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
@@ -483,73 +481,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     tryZoomToFit();
     return () => { cancelled = true; };
   }, [activeNodeIds]);
-
-  // External highlight (from Stats tab cross-navigation)
-  // RepoGraph may remount when switching tabs, so the simulation may not
-  // have positioned nodes yet. Wait for the simulation to exist, then
-  // fast-forward it to completion before zooming to the target node.
-  useEffect(() => {
-    if (!highlightedNodeId) return;
-    let cancelled = false;
-    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 40; // 40 × 50ms = 2s
-
-    function tryHighlight() {
-      if (cancelled) return;
-      attempts++;
-
-      if (!simulationRef.current || !canvasRef.current || !zoomRef.current) {
-        if (attempts < MAX_ATTEMPTS) {
-          setTimeout(tryHighlight, 50);
-        }
-        return;
-      }
-
-      // Fast-forward the simulation to its settled state
-      const sim = simulationRef.current;
-      sim.stop();
-      while (sim.alpha() > sim.alphaMin()) {
-        sim.tick();
-      }
-      drawFrameRef.current?.();
-
-      const match = simNodesRef.current.find((n) => n.id === highlightedNodeId);
-      if (!match || match.x == null || match.y == null) return;
-
-      const canvas = canvasRef.current;
-      const w = canvas.offsetWidth || 800;
-      const h = canvas.offsetHeight || 600;
-      const scale = 2;
-      const transform = d3.zoomIdentity
-        .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
-        .scale(scale);
-
-      d3.select(canvas as any)
-        .transition()
-        .duration(500)
-        .call((zoomRef.current as any).transform, transform);
-
-      // Set highlight after zoom transition completes
-      setTimeout(() => {
-        if (cancelled) return;
-        highlightedNodeIdRef.current = match.id;
-        drawFrameRef.current?.();
-
-        highlightTimer = setTimeout(() => {
-          highlightedNodeIdRef.current = null;
-          drawFrameRef.current?.();
-        }, 5000);
-      }, 500);
-    }
-
-    tryHighlight();
-
-    return () => {
-      cancelled = true;
-      if (highlightTimer) clearTimeout(highlightTimer);
-    };
-  }, [highlightedNodeId]);
 
   if (loading) {
     return (

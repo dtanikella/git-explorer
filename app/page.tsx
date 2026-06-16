@@ -57,7 +57,6 @@ export default function HomePage() {
   const [hideTestFiles, setHideTestFiles] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>('graph');
   const [topN, setTopN] = useState(20);
-  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
   // Graph toolbar state
@@ -144,14 +143,6 @@ export default function HomePage() {
     setPendingSelectionId(scipSymbol);
   }, []);
 
-  // Clear highlight after tab switch completes
-  useEffect(() => {
-    if (highlightedNodeId && activeTab === 'graph') {
-      const timer = setTimeout(() => setHighlightedNodeId(null), 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [highlightedNodeId, activeTab]);
-
   return (
     <main className="h-screen flex flex-col p-2 gap-2 overflow-hidden">
       {/* Row 1: Repository Selector */}
@@ -221,7 +212,6 @@ export default function HomePage() {
                       analysisData={analysisData}
                       loading={loading}
                       error={error}
-                      highlightedNodeId={highlightedNodeId}
                     />
                   </div>
                   <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
