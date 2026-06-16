@@ -21,10 +21,10 @@ const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((
   modules: { label: 'Modules', config: createModulesViewConfig },
 };
 
-function SelectionSidebarWrapper({ nodes }: { nodes: AnalysisNode[] }) {
+function SelectionSidebarWrapper({ nodes, repoPath }: { nodes: AnalysisNode[]; repoPath: string }) {
   const { hasSelection } = useSelection();
   if (!hasSelection) return null;
-  return <SelectionSidebar nodes={nodes} />;
+  return <SelectionSidebar nodes={nodes} repoPath={repoPath} />;
 }
 
 function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
@@ -244,7 +244,7 @@ export default function HomePage() {
                         error={error}
                       />
                     </div>
-                    <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
+                    <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} repoPath={repoPath} />
                   </div>
                 </AreaProvider>
               </SelectionProvider>

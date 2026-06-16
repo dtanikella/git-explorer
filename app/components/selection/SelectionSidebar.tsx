@@ -4,9 +4,11 @@ import { useMemo, useState } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import type { ExpansionGroup } from '@/app/contexts/SelectionContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
+import AreaAssignment from '@/app/components/selection/AreaAssignment';
 
 interface SelectionSidebarProps {
   nodes: AnalysisNode[];
+  repoPath: string;
 }
 
 const GROUP_LABELS: Record<string, string> = {
@@ -20,8 +22,8 @@ function truncatePath(filePath: string): string {
   return parts[parts.length - 1];
 }
 
-export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
-  const { state, clearSelection, toggleNode, toggleExpansionGroup, toggleExpandedNode } = useSelection();
+export default function SelectionSidebar({ nodes, repoPath }: SelectionSidebarProps) {
+  const { state, clearSelection, toggleNode, toggleExpansionGroup, toggleExpandedNode, activeNodeIds } = useSelection();
   const { selectedNodeIds, expansions } = state;
 
   const nodesBySymbol = useMemo(() => {
@@ -312,6 +314,12 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
             </div>
           );
         })}
+
+        {/* Area assignment section */}
+        <AreaAssignment
+          effectiveNodeIds={[...activeNodeIds]}
+          repoPath={repoPath}
+        />
       </div>
     </div>
   );
