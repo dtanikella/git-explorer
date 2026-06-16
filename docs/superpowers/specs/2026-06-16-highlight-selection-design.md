@@ -1,90 +1,15 @@
-# Highlight Selection
+# Highlight Selection Design
+
+**Date:** 2026-06-16
+**Issue:** #11
 
 ## Overview
 
-Persistent node selection system for the force-directed graph with expansion controls in a right sidebar. Replaces the existing transient highlight mechanism (yellow ring + auto-timeout) with a full selection model that supports multi-select, expansion by relationship, and opacity-based focus.
+Persistent node selection system for the force-directed graph with expansion controls in a right sidebar. Replaces the existing transient highlight mechanism (yellow ring + auto-timeout) with a full selection model supporting multi-select, expansion by relationship, and opacity-based focus.
 
-This mechanism is designed for reuse — it will serve as the foundation for future codebase navigation features.
+## Architecture
 
----
-
-## Requirements
-
-### Core Selection
-- Clicking a node toggles it in/out of the selection (no modifier keys needed for multi-select)
-- Selection is persistent until the user explicitly deselects (clicking the same node again, or "Clear all")
-- Dragging (mouse moves >3px between mousedown and mouseup) is treated as a pan, not a click — pan behavior is unchanged from current implementation
-- Nodes are not draggable; drag always pans the canvas
-
-### Opacity & Visual Treatment
-- **Selected nodes:** Full opacity + dashed blue selection ring
-- **Expanded nodes** (from sidebar): Full opacity, no ring
-- **All other nodes:** 30% opacity
-- **Edges with ≥1 endpoint in the active set:** Full opacity — even if the other endpoint is dimmed
-- **All other edges:** 15% opacity
-- **No selection active:** Everything renders at normal opacity (no dimming applied)
-
-### Right Sidebar
-- ~250px fixed width, appears on first selection, collapses when selection is empty
-- Graph canvas resizes to accommodate the sidebar (not an overlay)
-- **Header:** "Selection" title + "Clear all" action
-- **Selected nodes section:** Lists each root-selected node with name and truncated file path
-- **Expansion groups:** Three groups — Same File, Callers, Callees
-  - Each group has a toggle switch (on/off) and individual checkboxes when enabled
-  - Group toggle ON: all candidate nodes enabled by default; user can uncheck individuals
-  - Group toggle OFF: collapses the list, removes all group members from the active set
-  - Candidates are computed from all selected nodes combined (unified list)
-  - Subtle file-path attribution shows which selected node each candidate relates to
-- **Hover on any filename** in the sidebar shows the full file path in a tooltip
-
-### Expansion Logic
-- **Same File:** All nodes that share a file path with any selected node
-- **Callers:** All nodes that have an edge pointing TO any selected node
-- **Callees:** All nodes that any selected node has an edge pointing TO
-- Architecture supports filtering by any `EdgeKind`, but initially only `CALLS` edges are used for callers/callees
-- Architecture supports including all nodes (not just currently visible), but initially only nodes visible in the current graph view are shown as candidates
-
-### Zoom-to-Fit
-- When the active set changes (expansion toggled, individual node toggled), compute the bounding box of all active nodes
-- Animate a 250ms steady zoom transition to fit them with padding
-- Do not zoom if all active nodes are already visible in the current viewport
-
-### Replace Existing Highlight System
-- **Search (toolbar):** Finds the node → selects it → opens sidebar → zooms to it
-- **Cross-tab navigation (StatsTreemap click):** Switches to graph tab → selects the node → opens sidebar → zooms to it
-- Remove old highlight code: `highlightedNodeId` state in `page.tsx`, `highlightedNodeIdRef` in `RepoGraph.tsx`, yellow ring drawing, 5s/6s auto-timeouts
-- Strategy: build new selection system first, prove it works, then remove old highlight code
-
----
-
-## Acceptance Criteria
-
-- [ ] Clicking a node selects it (dashed blue ring, full opacity) and opens the sidebar
-- [ ] Clicking a selected node deselects it; sidebar collapses if no selection remains
-- [ ] Multiple nodes can be selected without modifier keys
-- [ ] Dragging/panning does not trigger selection (3px movement threshold)
-- [ ] Non-selected/non-expanded nodes dim to 30% opacity when selection is active
-- [ ] Edges with at least one active endpoint remain at full opacity; all others dim to 15%
-- [ ] Sidebar shows selected nodes with name and file path (hover for full path)
-- [ ] "Same File" expansion toggle works: shows candidates, individual checkboxes, group toggle
-- [ ] "Callers" expansion toggle works with CALLS edges
-- [ ] "Callees" expansion toggle works with CALLS edges
-- [ ] Group toggle ON enables all candidates by default
-- [ ] Individual checkboxes can be unchecked/re-checked within an enabled group
-- [ ] Group toggle OFF removes all group members from active set
-- [ ] Zoom-to-fit animates (250ms) when active set changes, only if needed
-- [ ] Search uses the new selection system (persistent, opens sidebar)
-- [ ] Cross-tab navigation from StatsTreemap uses the new selection system
-- [ ] Old highlight mechanism (yellow ring, timeouts) is fully removed
-- [ ] "Clear all" deselects everything and collapses the sidebar
-
----
-
-## Technical Design
-
-### Architecture: React Context Provider
-
-Selection state is managed via a `SelectionContext` with a provider and `useSelection()` hook. Both `RepoGraph` and `SelectionSidebar` consume the context independently.
+React Context Provider pattern. `SelectionContext` manages all selection state; both `RepoGraph` and `SelectionSidebar` consume it independently via `useSelection()`.
 
 ### New Files
 
@@ -107,70 +32,123 @@ app/
 ├── page.tsx                        # wrap with provider, remove old highlight state
 ```
 
-### Data Model
+## Data Model
 
 ```typescript
-interface SelectionState {
-  selectedNodeIds: Set<string>;       // root selections (user-clicked)
-  expandedNodeIds: Set<string>;       // derived from expansion groups
-  expansions: Map<string, ExpansionGroup>;
+interface ExpansionCandidate {
+  nodeId: string;
+  sourceNodeIds: string[];  // which selected node(s) this relates to
 }
 
 interface ExpansionGroup {
   type: 'same-file' | 'callers' | 'callees';
-  sourceNodeId: string;               // which selected node spawned this
-  candidateIds: string[];             // all possible nodes in this group
-  enabledIds: Set<string>;            // which are toggled on
+  enabled: boolean;                    // group toggle (on/off)
+  candidates: ExpansionCandidate[];    // unified across all selected nodes
+  disabledIds: Set<string>;           // opt-out tracking (enabled by default)
 }
-// Expansion group key format: `${sourceNodeId}:${type}` (e.g., "scip://login:callers")
+
+interface SelectionState {
+  selectedNodeIds: Set<string>;       // root selections (user-clicked)
+  expansions: Map<string, ExpansionGroup>;  // keyed by type
+}
 
 interface SelectionContextValue {
   state: SelectionState;
   toggleNode(id: string): void;
   clearSelection(): void;
-  toggleExpansionGroup(sourceNodeId: string, type: ExpansionGroup['type']): void;
-  toggleExpandedNode(groupKey: string, nodeId: string): void;
-  activeNodeIds: Set<string>;         // selected ∪ expanded (used for rendering)
+  toggleExpansionGroup(type: ExpansionGroup['type']): void;
+  toggleExpandedNode(type: ExpansionGroup['type'], nodeId: string): void;
+  activeNodeIds: Set<string>;         // selected ∪ expanded (derived)
   hasSelection: boolean;
 }
 ```
 
-### Data Flow
+### Expansion Logic
 
-1. `page.tsx` wraps the graph area with `<SelectionProvider analysisData={...} edges={...}>`
+- **Same File:** All visible nodes sharing `filePath` with any selected node
+- **Callers:** Visible nodes where a `CALLS` edge points TO any selected node (`toSymbol` = selected)
+- **Callees:** Visible nodes where a `CALLS` edge points FROM any selected node (`fromSymbol` = selected)
+
+Groups are unified — one "Callers" group combines candidates from all selected nodes. Each candidate tracks which selected node(s) it relates to for sidebar attribution.
+
+## Data Flow
+
+1. `page.tsx` wraps the graph area with `<SelectionProvider analysisData={...} visibleNodeIds={...}>`
 2. `RepoGraph` calls `useSelection()` → reads `activeNodeIds` and `selectedNodeIds` for opacity rendering, calls `toggleNode()` on click
 3. `SelectionSidebar` calls `useSelection()` → reads full state for sidebar UI, calls expansion actions
-4. Provider computes `activeNodeIds` as the union of `selectedNodeIds` and all `enabledIds` across expansion groups
-5. Provider computes expansion candidates from `analysisData` and `edges` when selected nodes change
+4. Provider computes `activeNodeIds` = `selectedNodeIds` ∪ all enabled expansion candidates (minus `disabledIds`)
+5. Provider recomputes expansion candidates when `selectedNodeIds` or `visibleNodeIds` change
 
-### Rendering Changes in RepoGraph
+## Rendering Changes (RepoGraph)
 
-- **Click handler:** On `mouseup`, if movement from `mousedown` < 3px, hit-test nodes and call `toggleNode(id)` if a node was under the cursor
-- **Draw loop:** Check each node/edge against `activeNodeIds` and `selectedNodeIds` to determine opacity and ring rendering
-- **Zoom-to-fit:** `useEffect` watching `activeNodeIds` — computes bounding box, checks viewport visibility, animates if needed (250ms)
+### Click Handling
 
-### Search & Cross-Tab Migration
+- Track `mousedown` position on canvas
+- On `mouseup`, if Euclidean distance from mousedown < 3px, hit-test nodes and call `toggleNode(id)`
+- Integrates with existing D3 zoom (which handles drag/pan)
 
-- Search handler calls `toggleNode()` instead of setting `highlightedNodeIdRef`
-- `handleNodeSelect` in `page.tsx` calls into context instead of setting `highlightedNodeId` state
-- After migration is verified, remove: `highlightedNodeId`, `highlightedNodeIdRef`, `HIGHLIGHT_COLOR`, yellow ring drawing code, all associated timeouts
+### Draw Loop Opacity
 
----
+When `hasSelection` is true:
+- **Selected nodes:** Full opacity + dashed blue selection ring (2px, `#3b82f6`)
+- **Expanded nodes:** Full opacity, no ring
+- **Other nodes:** 30% opacity (`globalAlpha = 0.3`)
+- **Edges with ≥1 endpoint in activeNodeIds:** Full opacity
+- **Other edges:** 15% opacity (`globalAlpha = 0.15`)
+- **No selection:** Everything at normal opacity (current behavior)
 
-## Design Details
+Context values are read into refs to avoid re-renders during the canvas draw loop.
 
-### Sidebar Visual Spec
-- Width: ~250px fixed
-- Appears/disappears based on selection (not always visible)
-- Canvas resizes to accommodate (flexbox layout)
-- Font size: 12px body, 10px labels
-- File paths truncated to filename with full-path hover tooltip
-- Group toggles styled as small switch toggles
-- Individual items have checkboxes
-- "Clear all" in header as subtle text link
+### Zoom-to-Fit
 
-### Future Extensibility
+`useEffect` watching `activeNodeIds`:
+- Compute bounding box of all active nodes
+- Check if all active nodes are already visible in current viewport
+- If not visible, animate 250ms transition to fit with padding
+- Skip zoom if already visible
+
+## Sidebar
+
+### Layout
+
+Graph content area becomes a flex row: `[canvas (flex-1)] [sidebar (250px, conditional)]`. Canvas resizes naturally via flexbox. Sidebar renders only when `hasSelection` is true.
+
+### Visual Spec
+
+- Width: 250px fixed
+- Header: "Selection" title + "Clear all" text link
+- Selected nodes section: each node's `name` + truncated `filePath` (hover for full path)
+- Three expansion groups: Same File, Callers, Callees
+  - Toggle switch (on/off) per group
+  - When enabled: checkbox list of candidates, all checked by default
+  - Individual checkboxes can be unchecked/re-checked
+  - Group toggle OFF collapses list, removes all group members from active set
+  - Subtle file-path attribution per candidate
+- Font: 12px body, 10px labels
+
+## Search & Cross-Tab Migration
+
+### Search
+
+`handleSearchNode` calls `toggleNode()` instead of setting `highlightedNodeIdRef`. Zoom is handled by the context's zoom-to-fit effect.
+
+### Cross-Tab Navigation
+
+`handleNodeSelect` in `page.tsx` calls into selection context instead of `setHighlightedNodeId`. Tab switch + selection + zoom all happen through the new system.
+
+### Old Code Removal
+
+After new system is verified, remove:
+- `highlightedNodeId` state in `page.tsx` (line 25)
+- `highlightedNodeIdRef` in `RepoGraph.tsx` (line 46)
+- `HIGHLIGHT_COLOR` constant (line 35)
+- Yellow ring drawing code (lines 258-264)
+- All `setTimeout` auto-clear logic (lines 354-357 in search, lines 420-423 in cross-tab, lines 111-116 in page.tsx)
+- `highlightedNodeId` prop on `RepoGraph` (line 19)
+
+## Future Extensibility
+
 - `ExpansionGroup.type` can be extended with new relationship types
 - `EdgeKind` filter can be parameterized per expansion type
-- Candidate computation can be switched to include non-visible nodes
-- Selection mechanism can be triggered programmatically for future navigation features
+- Candidate computation can include non-visible nodes
+- Selection can be triggered programmatically for future navigation features
