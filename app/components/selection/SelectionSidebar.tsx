@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import type { ExpansionGroup } from '@/app/contexts/SelectionContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
@@ -36,6 +36,18 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
   );
 
   const groupOrder: ExpansionGroup['type'][] = ['same-file', 'callers', 'callees'];
+
+  // Track which source-node subgroups are collapsed (key: "type:srcId")
+  const [collapsedSubgroups, setCollapsedSubgroups] = useState<Set<string>>(new Set());
+
+  const toggleCollapse = (key: string) => {
+    setCollapsedSubgroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
     <div
@@ -193,42 +205,63 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
                     return (
                       <div key={srcId} style={{ marginBottom: 4 }}>
                         {/* Source node subgroup header — only show when multiple selected nodes */}
-                        {selectedNodeIds.size > 1 && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              padding: '2px 0',
-                              cursor: 'pointer',
-                              fontSize: 11,
-                              color: '#374151',
-                              fontWeight: 500,
-                            }}
-                            onClick={() => {
-                              // Toggle all candidates in this subgroup
-                              for (const c of candidates) {
-                                const isCurrentlyDisabled = group.disabledIds.has(c.nodeId);
-                                if (noneDisabled && !isCurrentlyDisabled) {
-                                  toggleExpandedNode(type, c.nodeId);
-                                } else if (!noneDisabled && isCurrentlyDisabled) {
-                                  toggleExpandedNode(type, c.nodeId);
-                                }
-                              }
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={!allDisabled}
-                              ref={(el) => { if (el) el.indeterminate = !allDisabled && !noneDisabled; }}
-                              readOnly
-                              style={{ margin: 0, cursor: 'pointer' }}
-                            />
-                            <span>{srcLabel}</span>
-                            <span style={{ fontSize: 10, color: '#9ca3af' }}>({candidates.length})</span>
-                          </div>
-                        )}
-                        {/* Individual candidates */}
+                        {selectedNodeIds.size > 1 && (() => {
+                          const collapseKey = `${type}:${srcId}`;
+                          const isCollapsed = collapsedSubgroups.has(collapseKey);
+                          return (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '2px 0',
+                                fontSize: 11,
+                                color: '#374151',
+                                fontWeight: 500,
+                              }}
+                            >
+                              <span
+                                onClick={() => toggleCollapse(collapseKey)}
+                                style={{
+                                  cursor: 'pointer',
+                                  fontSize: 8,
+                                  userSelect: 'none',
+                                  width: 10,
+                                  textAlign: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {isCollapsed ? '▶' : '▼'}
+                              </span>
+                              <label
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', flex: 1 }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  for (const c of candidates) {
+                                    const isCurrentlyDisabled = group.disabledIds.has(c.nodeId);
+                                    if (noneDisabled && !isCurrentlyDisabled) {
+                                      toggleExpandedNode(type, c.nodeId);
+                                    } else if (!noneDisabled && isCurrentlyDisabled) {
+                                      toggleExpandedNode(type, c.nodeId);
+                                    }
+                                  }
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!allDisabled}
+                                  ref={(el) => { if (el) el.indeterminate = !allDisabled && !noneDisabled; }}
+                                  readOnly
+                                  style={{ margin: 0, cursor: 'pointer' }}
+                                />
+                                <span>{srcLabel}</span>
+                                <span style={{ fontSize: 10, color: '#9ca3af' }}>({candidates.length})</span>
+                              </label>
+                            </div>
+                          );
+                        })()}
+                        {/* Individual candidates — hidden when collapsed */}
+                        {!(selectedNodeIds.size > 1 && collapsedSubgroups.has(`${type}:${srcId}`)) && (
                         <div style={{ paddingLeft: selectedNodeIds.size > 1 ? 16 : 0 }}>
                           {candidates.map((candidate) => {
                             const node = nodesBySymbol.get(candidate.nodeId);
@@ -270,6 +303,7 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
                             );
                           })}
                         </div>
+                        )}
                       </div>
                     );
                   })}
