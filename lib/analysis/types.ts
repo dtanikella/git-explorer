@@ -104,7 +104,7 @@ export const MISSING_EDGE_KINDS = [
 // ============================================================================
 
 export class AnalysisError extends Error {
-  readonly name = 'AnalysisError';
+  readonly name: string = 'AnalysisError';
 
   constructor(
     message: string,
@@ -116,16 +116,17 @@ export class AnalysisError extends Error {
 }
 
 export class UnsupportedLanguageError extends AnalysisError {
-  readonly name = 'UnsupportedLanguageError';
+  declare readonly name: string;
 
   constructor(repoPath: string) {
     super(`No supported language detected in ${repoPath}`, repoPath);
+    this.name = 'UnsupportedLanguageError';
     Object.setPrototypeOf(this, UnsupportedLanguageError.prototype);
   }
 }
 
 export class NodeExtractionError extends AnalysisError {
-  readonly name = 'NodeExtractionError';
+  declare readonly name: string;
 
   constructor(
     message: string,
@@ -134,12 +135,13 @@ export class NodeExtractionError extends AnalysisError {
     readonly phase: string,
   ) {
     super(message, repoPath);
+    this.name = 'NodeExtractionError';
     Object.setPrototypeOf(this, NodeExtractionError.prototype);
   }
 }
 
 export class EdgeExtractionError extends AnalysisError {
-  readonly name = 'EdgeExtractionError';
+  declare readonly name: string;
 
   constructor(
     message: string,
@@ -148,6 +150,7 @@ export class EdgeExtractionError extends AnalysisError {
     readonly phase: string,
   ) {
     super(message, repoPath);
+    this.name = 'EdgeExtractionError';
     Object.setPrototypeOf(this, EdgeExtractionError.prototype);
   }
 }

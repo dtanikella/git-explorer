@@ -6,6 +6,9 @@ import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
+import { useAreaStore } from '@/app/contexts/AreaContext';
+import { drawAreaOverlays } from '@/lib/areas/renderer';
+import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -52,6 +55,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   const hasSelectionRef = useRef(hasSelection);
 
+  const { areas, runtimeState, nodeToAreas, getVisibleAreas } = useAreaStore();
+  const areasRef = useRef(areas);
+  const runtimeStateRef = useRef(runtimeState);
+  const nodeToAreasRef = useRef(nodeToAreas);
+  const getVisibleAreasRef = useRef(getVisibleAreas);
+
   useEffect(() => {
     activeNodeIdsRef.current = activeNodeIds;
     selectedNodeIdsRef.current = selectedNodeIds;
@@ -59,6 +68,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     toggleNodeRef.current = toggleNode;
     drawFrameRef.current?.();
   }, [activeNodeIds, selectedNodeIds, hasSelection, toggleNode]);
+
+  useEffect(() => {
+    areasRef.current = areas;
+    runtimeStateRef.current = runtimeState;
+    nodeToAreasRef.current = nodeToAreas;
+    getVisibleAreasRef.current = getVisibleAreas;
+    drawFrameRef.current?.();
+  }, [areas, runtimeState, nodeToAreas, getVisibleAreas]);
 
   const resolvedConfig = useMemo(() => {
     if (!analysisData) {
@@ -224,6 +241,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       c.save();
       c.setTransform(t.k, 0, 0, t.k, t.x, t.y);
 
+      // Draw area overlays (behind edges and nodes)
+      const nodePositionMap = new Map<string, { x: number; y: number; radius: number }>();
+      for (const n of simNodes) {
+        if (n.x == null || n.y == null) continue;
+        const nStyle = cfg.style.node(n.data, n.degree);
+        nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
+      }
+      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap);
+
       // Draw edges
       for (const e of simEdges) {
         const src = e.source as unknown as SimpleNode;
@@ -262,17 +288,24 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const isActive = hasSelectionRef.current ? activeNodeIdsRef.current.has(n.id) : true;
         const nodeAlpha = hasSelectionRef.current ? (isActive ? nStyle.opacity : 0.3) : nStyle.opacity;
 
+        const areaInfluence = resolveAreaInfluence(
+          n.id,
+          getVisibleAreasRef.current(),
+          nodeToAreasRef.current,
+        );
+        const finalAlpha = areaInfluence?.dimmed ? Math.min(nodeAlpha, 0.15) : nodeAlpha;
+
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
         c.fillStyle = nStyle.color;
-        c.globalAlpha = nodeAlpha;
+        c.globalAlpha = finalAlpha;
         c.fill();
         c.globalAlpha = 1.0;
         c.strokeStyle = '#fff';
         c.lineWidth = 1;
         c.stroke();
         if (nStyle.label) {
-          c.globalAlpha = nodeAlpha;
+          c.globalAlpha = finalAlpha;
           c.fillStyle = '#374151';
           c.font = '10px sans-serif';
           c.textAlign = 'center';
