@@ -5,6 +5,7 @@ import * as d3 from 'd3';
 import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import { useSelection } from '@/app/contexts/SelectionContext';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -32,8 +33,6 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
-const HIGHLIGHT_COLOR = '#facc15';
-
 export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, highlightedNodeId }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -45,9 +44,22 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
   const highlightedNodeIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
 
   const [ctxError, setCtxError] = useState(false);
+  const { activeNodeIds, hasSelection, toggleNode } = useSelection();
+  const selectedNodeIds = useSelection().state.selectedNodeIds;
+  const activeNodeIdsRef = useRef(activeNodeIds);
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  const hasSelectionRef = useRef(hasSelection);
+
+  useEffect(() => {
+    activeNodeIdsRef.current = activeNodeIds;
+    selectedNodeIdsRef.current = selectedNodeIds;
+    hasSelectionRef.current = hasSelection;
+    drawFrameRef.current?.();
+  }, [activeNodeIds, selectedNodeIds, hasSelection]);
 
   const resolvedConfig = useMemo(() => {
     if (!analysisData) {
@@ -185,6 +197,40 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     }
   }, []);
 
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    mouseDownPosRef.current = { x: event.clientX, y: event.clientY };
+  }, []);
+
+  const handleMouseUp = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    const downPos = mouseDownPosRef.current;
+    mouseDownPosRef.current = null;
+    if (!downPos) return;
+
+    const dx = event.clientX - downPos.x;
+    const dy = event.clientY - downPos.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 3) return;
+
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const t = zoomTransformRef.current;
+    const mx = (event.clientX - rect.left - t.x) / t.k;
+    const my = (event.clientY - rect.top - t.y) / t.k;
+
+    const nodes = simNodesRef.current;
+    const cfg = configRef.current;
+    for (const n of nodes) {
+      if (n.x == null || n.y == null) continue;
+      const ndx = mx - n.x;
+      const ndy = my - n.y;
+      const nStyle = cfg.style.node(n.data, n.degree);
+      if (Math.sqrt(ndx * ndx + ndy * ndy) <= nStyle.radius) {
+        toggleNode(n.id);
+        return;
+      }
+    }
+  }, [toggleNode]);
+
   // Force simulation + canvas rendering
   useEffect(() => {
     if (!canvasRef.current || simNodes.length === 0) return;
@@ -231,7 +277,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           c.strokeStyle = eStyle.color;
         }
         c.lineWidth = eStyle.width;
-        c.globalAlpha = eStyle.opacity;
+
+        if (hasSelectionRef.current) {
+          const srcActive = activeNodeIdsRef.current.has(src.id);
+          const tgtActive = activeNodeIdsRef.current.has(tgt.id);
+          c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity : 0.15;
+        } else {
+          c.globalAlpha = eStyle.opacity;
+        }
+
         c.stroke();
         c.globalAlpha = 1.0;
       }
@@ -240,27 +294,35 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       for (const n of simNodes) {
         if (n.x == null || n.y == null) continue;
         const nStyle = cfg.style.node(n.data, n.degree);
+        const isActive = hasSelectionRef.current ? activeNodeIdsRef.current.has(n.id) : true;
+        const nodeAlpha = hasSelectionRef.current ? (isActive ? nStyle.opacity : 0.3) : nStyle.opacity;
+
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
         c.fillStyle = nStyle.color;
-        c.globalAlpha = nStyle.opacity;
+        c.globalAlpha = nodeAlpha;
         c.fill();
         c.globalAlpha = 1.0;
         c.strokeStyle = '#fff';
         c.lineWidth = 1;
         c.stroke();
         if (nStyle.label) {
+          c.globalAlpha = nodeAlpha;
           c.fillStyle = '#374151';
           c.font = '10px sans-serif';
           c.textAlign = 'center';
           c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
+          c.globalAlpha = 1.0;
         }
-        if (highlightedNodeIdRef.current === n.id) {
+
+        if (selectedNodeIdsRef.current.has(n.id)) {
           c.beginPath();
           c.arc(n.x, n.y, nStyle.radius + 2, 0, 2 * Math.PI);
-          c.strokeStyle = HIGHLIGHT_COLOR;
-          c.lineWidth = 4;
+          c.strokeStyle = '#3b82f6';
+          c.lineWidth = 2;
+          c.setLineDash([4, 3]);
           c.stroke();
+          c.setLineDash([]);
         }
       }
 
@@ -466,6 +528,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         aria-label="Repository structure graph"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
       />
     </div>
   );
