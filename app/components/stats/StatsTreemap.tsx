@@ -60,10 +60,10 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
     const root = hierarchy<{ children: TreemapDatum[] }>({ children: treemapData } as any)
       .sum((d: any) => d.value ?? 0);
 
-    treemap<any>()
+    treemap<TreemapDatum>()
       .size([dimensions.width, dimensions.height])
       .padding(2)
-      .tile(treemapSquarify)(root);
+      .tile(treemapSquarify)(root as any);
 
     return root.leaves() as unknown as HierarchyRectangularNode<TreemapDatum>[];
   }, [treemapData, dimensions]);

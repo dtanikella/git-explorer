@@ -13,6 +13,8 @@ import SelectionSidebar from './components/selection/SelectionSidebar';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
+import { AreaProvider } from '@/app/contexts/AreaContext';
+import type { Area } from '@/lib/areas/types';
 
 const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
@@ -70,6 +72,7 @@ export default function HomePage() {
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [areasData, setAreasData] = useState<Area[]>([]);
 
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -104,6 +107,28 @@ export default function HomePage() {
 
     return () => controller.abort();
   }, [repoPath, hideTestFiles]);
+
+  // Load areas after analysis succeeds
+  useEffect(() => {
+    if (!repoPath || !analysisData) {
+      setAreasData([]);
+      return;
+    }
+    fetch('/api/areas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'load', repoPath }),
+    })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.success && result.data?.areas) {
+          setAreasData(result.data.areas);
+        }
+      })
+      .catch(() => {
+        // Silently fail — areas are optional
+      });
+  }, [repoPath, analysisData]);
 
   // Compute which node IDs are visible in the current graph view.
   // Mirrors the filtering logic in RepoGraph so treemap knows which nodes are clickable.
@@ -197,25 +222,27 @@ export default function HomePage() {
                 edges={analysisData?.edges ?? []}
                 visibleNodeIds={graphVisibleNodeIds}
               >
-                <SelectionBridge
-                  toggleRef={selectionToggleRef}
-                  pendingId={pendingSelectionId}
-                  onPendingConsumed={() => setPendingSelectionId(null)}
-                />
-                <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <RepoGraph
-                      repoPath={repoPath}
-                      hideTestFiles={hideTestFiles}
-                      config={VIEW_OPTIONS[selectedView].config}
-                      onSearchNode={handleRegisterSearch}
-                      analysisData={analysisData}
-                      loading={loading}
-                      error={error}
-                    />
+                <AreaProvider areas={areasData}>
+                  <SelectionBridge
+                    toggleRef={selectionToggleRef}
+                    pendingId={pendingSelectionId}
+                    onPendingConsumed={() => setPendingSelectionId(null)}
+                  />
+                  <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <RepoGraph
+                        repoPath={repoPath}
+                        hideTestFiles={hideTestFiles}
+                        config={VIEW_OPTIONS[selectedView].config}
+                        onSearchNode={handleRegisterSearch}
+                        analysisData={analysisData}
+                        loading={loading}
+                        error={error}
+                      />
+                    </div>
+                    <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
                   </div>
-                  <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
-                </div>
+                </AreaProvider>
               </SelectionProvider>
             ) : (
               analysisData ? (
