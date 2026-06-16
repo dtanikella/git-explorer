@@ -206,5 +206,13 @@ describe('AreaAssignment', () => {
       const button = screen.getByTestId('area-action-button');
       expect(button).toBeDisabled();
     });
+
+    it('disables Create Area when name is empty', async () => {
+      const user = userEvent.setup();
+      renderWithProvider(['sym-a']);
+      await user.selectOptions(screen.getByTestId('area-picker'), '__new__');
+      // Don't type a name
+      expect(screen.getByTestId('area-action-button')).toBeDisabled();
+    });
   });
 });
