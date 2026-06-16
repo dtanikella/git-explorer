@@ -101,4 +101,11 @@ describe('SelectionSidebar', () => {
     const callersToggle = screen.getByTestId('toggle-callers');
     expect(callersToggle).toBeInTheDocument();
   });
+
+  it('calls toggleNode when deselect button is clicked', () => {
+    render(<SelectionSidebar nodes={mockNodes as any} />);
+    const deselectBtn = screen.getByTestId('deselect-sym:a');
+    fireEvent.click(deselectBtn);
+    expect(mockToggleNode).toHaveBeenCalledWith('sym:a');
+  });
 });

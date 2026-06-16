@@ -42,8 +42,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const simNodesRef = useRef<SimpleNode[]>([]);
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
-  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
+  const toggleNodeRef = useRef<(id: string) => void>(() => {});
 
   const [ctxError, setCtxError] = useState(false);
   const { activeNodeIds, hasSelection, toggleNode } = useSelection();
@@ -56,8 +56,9 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     activeNodeIdsRef.current = activeNodeIds;
     selectedNodeIdsRef.current = selectedNodeIds;
     hasSelectionRef.current = hasSelection;
+    toggleNodeRef.current = toggleNode;
     drawFrameRef.current?.();
-  }, [activeNodeIds, selectedNodeIds, hasSelection]);
+  }, [activeNodeIds, selectedNodeIds, hasSelection, toggleNode]);
 
   const resolvedConfig = useMemo(() => {
     if (!analysisData) {
@@ -194,40 +195,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       tooltipRef.current.style('visibility', 'hidden');
     }
   }, []);
-
-  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    mouseDownPosRef.current = { x: event.clientX, y: event.clientY };
-  }, []);
-
-  const handleMouseUp = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    const downPos = mouseDownPosRef.current;
-    mouseDownPosRef.current = null;
-    if (!downPos) return;
-
-    const dx = event.clientX - downPos.x;
-    const dy = event.clientY - downPos.y;
-    if (Math.sqrt(dx * dx + dy * dy) > 3) return;
-
-    if (!canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const t = zoomTransformRef.current;
-    const mx = (event.clientX - rect.left - t.x) / t.k;
-    const my = (event.clientY - rect.top - t.y) / t.k;
-
-    const nodes = simNodesRef.current;
-    const cfg = configRef.current;
-    for (const n of nodes) {
-      if (n.x == null || n.y == null) continue;
-      const ndx = mx - n.x;
-      const ndy = my - n.y;
-      const nStyle = cfg.style.node(n.data, n.degree);
-      if (Math.sqrt(ndx * ndx + ndy * ndy) <= nStyle.radius) {
-        toggleNode(n.id);
-        return;
-      }
-    }
-  }, [toggleNode]);
 
   // Force simulation + canvas rendering
   useEffect(() => {
@@ -367,6 +334,42 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     zoomRef.current = zoomBehavior;
     d3.select(canvas as any).call(zoomBehavior as any);
 
+    // Click-to-select using native events to avoid d3-zoom interference
+    let pointerDownPos: { x: number; y: number } | null = null;
+
+    const onPointerDown = (event: PointerEvent) => {
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pointerDownPos) return;
+      const pdx = event.clientX - pointerDownPos.x;
+      const pdy = event.clientY - pointerDownPos.y;
+      pointerDownPos = null;
+      if (Math.sqrt(pdx * pdx + pdy * pdy) > 3) return; // was a drag/pan
+
+      const rect = canvas.getBoundingClientRect();
+      const t = zoomTransformRef.current;
+      const mx = (event.clientX - rect.left - t.x) / t.k;
+      const my = (event.clientY - rect.top - t.y) / t.k;
+
+      const nodes = simNodesRef.current;
+      const cfg = configRef.current;
+      for (const n of nodes) {
+        if (n.x == null || n.y == null) continue;
+        const ndx = mx - n.x;
+        const ndy = my - n.y;
+        const nStyle = cfg.style.node(n.data, n.degree);
+        if (Math.sqrt(ndx * ndx + ndy * ndy) <= nStyle.radius) {
+          toggleNodeRef.current(n.id);
+          return;
+        }
+      }
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointerup', onPointerUp);
+
     const resizeObserver = new ResizeObserver(() => {
       if (!canvasRef.current) return;
       canvasRef.current.width = canvasRef.current.offsetWidth || 800;
@@ -382,6 +385,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       zoomRef.current = null;
       drawFrameRef.current = null;
       resizeObserver.disconnect();
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
     };
   }, [simNodes, simEdges]);
 
@@ -516,8 +521,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         aria-label="Repository structure graph"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
       />
     </div>
   );

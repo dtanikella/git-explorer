@@ -2,6 +2,13 @@ import React from 'react';
 import { render, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
+// jsdom lacks PointerEvent — polyfill with MouseEvent
+if (typeof PointerEvent === 'undefined') {
+  (globalThis as any).PointerEvent = class PointerEvent extends MouseEvent {
+    constructor(type: string, init?: PointerEventInit) { super(type, init); }
+  };
+}
+
 const mockToggleNode = jest.fn();
 const mockSelectionState = {
   activeNodeIds: new Set<string>(),
@@ -285,8 +292,8 @@ describe('RepoGraph — selection click handling', () => {
     expect(canvas).not.toBeNull();
 
     act(() => {
-      canvas!.dispatchEvent(new MouseEvent('mousedown', { clientX: 100, clientY: 100, bubbles: true }));
-      canvas!.dispatchEvent(new MouseEvent('mouseup', { clientX: 102, clientY: 101, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerup', { clientX: 102, clientY: 101, bubbles: true }));
     });
 
     expect(mockToggleNode).toHaveBeenCalledWith('s1');
@@ -311,8 +318,8 @@ describe('RepoGraph — selection click handling', () => {
     expect(canvas).not.toBeNull();
 
     act(() => {
-      canvas!.dispatchEvent(new MouseEvent('mousedown', { clientX: 100, clientY: 100, bubbles: true }));
-      canvas!.dispatchEvent(new MouseEvent('mouseup', { clientX: 110, clientY: 110, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true }));
+      canvas!.dispatchEvent(new PointerEvent('pointerup', { clientX: 110, clientY: 110, bubbles: true }));
     });
 
     expect(mockToggleNode).not.toHaveBeenCalled();

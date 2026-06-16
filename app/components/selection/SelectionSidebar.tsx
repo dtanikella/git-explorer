@@ -21,7 +21,7 @@ function truncatePath(filePath: string): string {
 }
 
 export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
-  const { state, clearSelection, toggleExpansionGroup, toggleExpandedNode } = useSelection();
+  const { state, clearSelection, toggleNode, toggleExpansionGroup, toggleExpandedNode } = useSelection();
   const { selectedNodeIds, expansions } = state;
 
   const nodesBySymbol = useMemo(() => {
@@ -40,7 +40,7 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
   return (
     <div
       style={{
-        width: 250,
+        width: 400,
         borderLeft: '1px solid #e5e7eb',
         background: '#f9fafb',
         display: 'flex',
@@ -83,17 +83,39 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
             <div
               key={node.scipSymbol}
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 padding: '4px 0',
                 borderBottom: '1px solid #f3f4f6',
               }}
             >
-              <div style={{ fontWeight: 500 }}>{node.name}</div>
-              <div
-                style={{ fontSize: 10, color: '#9ca3af' }}
-                title={node.filePath}
-              >
-                {truncatePath(node.filePath)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{node.name}</span>
+                <span
+                  style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  title={node.filePath}
+                >
+                  {truncatePath(node.filePath)}
+                </span>
               </div>
+              <button
+                data-testid={`deselect-${node.scipSymbol}`}
+                onClick={() => toggleNode(node.scipSymbol)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: '0 2px',
+                  flexShrink: 0,
+                }}
+                title="Deselect"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
