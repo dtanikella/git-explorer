@@ -25,8 +25,10 @@ function SelectionSidebarWrapper({ nodes }: { nodes: AnalysisNode[] }) {
   return <SelectionSidebar nodes={nodes} />;
 }
 
-function SelectionBridge({ toggleRef }: {
+function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
   toggleRef: MutableRefObject<((id: string) => void) | null>;
+  pendingId: string | null;
+  onPendingConsumed: () => void;
 }) {
   const { toggleNode, state: { selectedNodeIds } } = useSelection();
 
@@ -40,6 +42,13 @@ function SelectionBridge({ toggleRef }: {
     };
   }, [toggleNode, selectedNodeIds, toggleRef]);
 
+  useEffect(() => {
+    if (pendingId && !selectedNodeIds.has(pendingId)) {
+      toggleNode(pendingId);
+      onPendingConsumed();
+    }
+  }, [pendingId, toggleNode, selectedNodeIds, onPendingConsumed]);
+
   return null;
 }
 
@@ -49,6 +58,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabId>('graph');
   const [topN, setTopN] = useState(20);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+  const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
   // Graph toolbar state
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,8 +140,8 @@ export default function HomePage() {
   }, [searchQuery]);
 
   const handleNodeSelect = useCallback((scipSymbol: string) => {
-    setHighlightedNodeId(scipSymbol);
     setActiveTab('graph');
+    setPendingSelectionId(scipSymbol);
   }, []);
 
   // Clear highlight after tab switch completes
@@ -196,7 +206,11 @@ export default function HomePage() {
                 edges={analysisData?.edges ?? []}
                 visibleNodeIds={graphVisibleNodeIds}
               >
-                <SelectionBridge toggleRef={selectionToggleRef} />
+                <SelectionBridge
+                  toggleRef={selectionToggleRef}
+                  pendingId={pendingSelectionId}
+                  onPendingConsumed={() => setPendingSelectionId(null)}
+                />
                 <div style={{ display: 'flex', width: '100%', height: '100%' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <RepoGraph

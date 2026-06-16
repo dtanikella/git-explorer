@@ -387,7 +387,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     };
   }, [simNodes, simEdges]);
 
-  // Search handler
   const handleSearchNode = useCallback((query: string): boolean => {
     const lowerQ = query.toLowerCase();
     const match =
@@ -395,31 +394,13 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       simNodesRef.current.find((n) => n.name.toLowerCase().includes(lowerQ));
 
     if (!match || match.x == null || match.y == null) return false;
-    if (!canvasRef.current || !zoomRef.current) return false;
 
-    const canvas = canvasRef.current;
-    const w = canvas.offsetWidth || 800;
-    const h = canvas.offsetHeight || 600;
-    const scale = 2;
-    const transform = d3.zoomIdentity
-      .translate(w / 2 - match.x * scale, h / 2 - match.y * scale)
-      .scale(scale);
-
-    d3.select(canvas as any)
-      .transition()
-      .duration(500)
-      .call((zoomRef.current as any).transform, transform);
-
-    highlightedNodeIdRef.current = match.id;
-    drawFrameRef.current?.();
-
-    setTimeout(() => {
-      highlightedNodeIdRef.current = null;
-      drawFrameRef.current?.();
-    }, 5000);
+    if (!selectedNodeIdsRef.current.has(match.id)) {
+      toggleNode(match.id);
+    }
 
     return true;
-  }, []);
+  }, [toggleNode]);
 
   useEffect(() => {
     if (onSearchNode) {

@@ -206,6 +206,53 @@ describe('RepoGraph — search', () => {
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  it('search handler toggles the matched node into the selection set', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('foo')).toBe(true);
+    expect(mockToggleNode).toHaveBeenCalledWith('s1');
+  });
+
+  it('search handler does not re-toggle a node that is already selected', async () => {
+    let searchFn: ((q: string) => boolean) | null = null;
+    const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
+    const selectedIds = new Set(['s1']);
+    mockSelectionState.selectedNodeIds = selectedIds;
+    mockSelectionState.state.selectedNodeIds = selectedIds;
+    const mockData: AnalysisResult = {
+      nodes: [
+        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+        { scipSymbol: 's2', name: 'bar', syntaxType: 'FUNCTION', filePath: 'b.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
+      ],
+      edges: [
+        { kind: 'CALLS', fromFile: 'a.ts', fromName: 'foo', fromSymbol: 's1', toText: 'bar', toFile: 'b.ts', toName: 'bar', toSymbol: 's2', isExternal: false, edgePosition: { line: 2, col: 3 }, isOptionalChain: false, isAsync: false },
+      ],
+      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
+    };
+
+    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    await act(async () => {});
+
+    expect(searchFn).not.toBeNull();
+    expect(searchFn!('foo')).toBe(true);
+    expect(mockToggleNode).not.toHaveBeenCalled();
+  });
+
   it('search handler returns false when no matching node exists', async () => {
     let searchFn: ((q: string) => boolean) | null = null;
     const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
