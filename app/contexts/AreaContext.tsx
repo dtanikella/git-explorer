@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Area, AreaRuntimeState } from '@/lib/areas/types';
 import { buildNodeToAreas } from '@/lib/areas/lookup';
@@ -65,7 +65,7 @@ export function AreaProvider({ areas, children }: AreaProviderProps) {
   );
 
   // Rebuild runtime state when areas prop changes (new areas get defaults)
-  useMemo(() => {
+  useEffect(() => {
     setRuntimeState((prev) => {
       const next = new Map<string, AreaRuntimeState>();
       for (const area of areas) {
@@ -74,7 +74,6 @@ export function AreaProvider({ areas, children }: AreaProviderProps) {
       }
       return next;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areas]);
 
   const nodeToAreas = useMemo(() => buildNodeToAreas(areas), [areas]);

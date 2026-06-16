@@ -114,10 +114,12 @@ export default function HomePage() {
       setAreasData([]);
       return;
     }
+    const controller = new AbortController();
     fetch('/api/areas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'load', repoPath }),
+      signal: controller.signal,
     })
       .then((res) => res.json())
       .then((result) => {
@@ -125,9 +127,11 @@ export default function HomePage() {
           setAreasData(result.data.areas);
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
         // Silently fail — areas are optional
       });
+    return () => controller.abort();
   }, [repoPath, analysisData]);
 
   // Compute which node IDs are visible in the current graph view.
