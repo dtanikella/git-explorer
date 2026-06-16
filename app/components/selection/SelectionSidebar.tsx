@@ -126,6 +126,15 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
           if (!group) return null;
           const candidateCount = group.candidates.length;
 
+          // Group candidates by source selected node
+          const bySource = new Map<string, typeof group.candidates>();
+          for (const candidate of group.candidates) {
+            for (const srcId of candidate.sourceNodeIds) {
+              if (!bySource.has(srcId)) bySource.set(srcId, []);
+              bySource.get(srcId)!.push(candidate);
+            }
+          }
+
           return (
             <div key={type} style={{ marginBottom: 8 }}>
               {/* Group header */}
@@ -172,46 +181,96 @@ export default function SelectionSidebar({ nodes }: SelectionSidebarProps) {
                 </button>
               </div>
 
-              {/* Candidate list */}
+              {/* Candidate list grouped by source node */}
               {group.enabled && candidateCount > 0 && (
                 <div style={{ paddingLeft: 8 }}>
-                  {group.candidates.map((candidate) => {
-                    const node = nodesBySymbol.get(candidate.nodeId);
-                    if (!node) return null;
-                    const isDisabled = group.disabledIds.has(candidate.nodeId);
+                  {[...bySource.entries()].map(([srcId, candidates]) => {
+                    const srcNode = nodesBySymbol.get(srcId);
+                    const srcLabel = srcNode ? srcNode.name : srcId;
+                    const allDisabled = candidates.every((c) => group.disabledIds.has(c.nodeId));
+                    const noneDisabled = candidates.every((c) => !group.disabledIds.has(c.nodeId));
+
                     return (
-                      <label
-                        key={candidate.nodeId}
-                        data-testid={`candidate-${type}-${candidate.nodeId}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '2px 0',
-                          cursor: 'pointer',
-                          opacity: isDisabled ? 0.5 : 1,
-                        }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toggleExpandedNode(type, candidate.nodeId);
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!isDisabled}
-                          readOnly
-                          style={{ margin: 0, cursor: 'pointer' }}
-                        />
-                        <span>
-                          <span>{node.name}</span>
-                          <span
-                            style={{ fontSize: 10, color: '#9ca3af', marginLeft: 4 }}
-                            title={node.filePath}
+                      <div key={srcId} style={{ marginBottom: 4 }}>
+                        {/* Source node subgroup header — only show when multiple selected nodes */}
+                        {selectedNodeIds.size > 1 && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '2px 0',
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              color: '#374151',
+                              fontWeight: 500,
+                            }}
+                            onClick={() => {
+                              // Toggle all candidates in this subgroup
+                              for (const c of candidates) {
+                                const isCurrentlyDisabled = group.disabledIds.has(c.nodeId);
+                                if (noneDisabled && !isCurrentlyDisabled) {
+                                  toggleExpandedNode(type, c.nodeId);
+                                } else if (!noneDisabled && isCurrentlyDisabled) {
+                                  toggleExpandedNode(type, c.nodeId);
+                                }
+                              }
+                            }}
                           >
-                            {truncatePath(node.filePath)}
-                          </span>
-                        </span>
-                      </label>
+                            <input
+                              type="checkbox"
+                              checked={!allDisabled}
+                              ref={(el) => { if (el) el.indeterminate = !allDisabled && !noneDisabled; }}
+                              readOnly
+                              style={{ margin: 0, cursor: 'pointer' }}
+                            />
+                            <span>{srcLabel}</span>
+                            <span style={{ fontSize: 10, color: '#9ca3af' }}>({candidates.length})</span>
+                          </div>
+                        )}
+                        {/* Individual candidates */}
+                        <div style={{ paddingLeft: selectedNodeIds.size > 1 ? 16 : 0 }}>
+                          {candidates.map((candidate) => {
+                            const node = nodesBySymbol.get(candidate.nodeId);
+                            if (!node) return null;
+                            const isDisabled = group.disabledIds.has(candidate.nodeId);
+                            return (
+                              <label
+                                key={candidate.nodeId}
+                                data-testid={`candidate-${type}-${candidate.nodeId}`}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  padding: '2px 0',
+                                  cursor: 'pointer',
+                                  opacity: isDisabled ? 0.5 : 1,
+                                }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  toggleExpandedNode(type, candidate.nodeId);
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!isDisabled}
+                                  readOnly
+                                  style={{ margin: 0, cursor: 'pointer' }}
+                                />
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <span>{node.name}</span>
+                                  <span
+                                    style={{ fontSize: 10, color: '#9ca3af' }}
+                                    title={node.filePath}
+                                  >
+                                    {truncatePath(node.filePath)}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

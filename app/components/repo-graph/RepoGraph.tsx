@@ -427,6 +427,18 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         return;
       }
 
+      // If simulation exists but hasn't settled, fast-forward it
+      if (simulationRef.current) {
+        const sim = simulationRef.current;
+        if (sim.alpha() > sim.alphaMin()) {
+          sim.stop();
+          while (sim.alpha() > sim.alphaMin()) {
+            sim.tick();
+          }
+          drawFrameRef.current?.();
+        }
+      }
+
       // Check that nodes have been positioned
       const activeNodes = simNodesRef.current.filter(
         (n) => activeNodeIds.has(n.id) && n.x != null && n.y != null
@@ -439,7 +451,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       const canvas = canvasRef.current;
       const w = canvas.offsetWidth || 800;
       const h = canvas.offsetHeight || 600;
-      const t = zoomTransformRef.current;
 
       // Compute bounding box of active nodes in simulation coords
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -452,24 +463,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         maxY = Math.max(maxY, n.y! + r);
       }
 
-      // Check if all active nodes are already visible in viewport
-      const viewMinX = (0 - t.x) / t.k;
-      const viewMinY = (0 - t.y) / t.k;
-      const viewMaxX = (w - t.x) / t.k;
-      const viewMaxY = (h - t.y) / t.k;
-
-      if (minX >= viewMinX && maxX <= viewMaxX && minY >= viewMinY && maxY <= viewMaxY) {
-        return; // already visible
-      }
-
       // Compute zoom transform to fit bounding box with padding
-      const padding = 40;
+      const padding = 60;
       const bboxW = maxX - minX;
       const bboxH = maxY - minY;
       const scale = Math.min(
         (w - 2 * padding) / Math.max(bboxW, 1),
         (h - 2 * padding) / Math.max(bboxH, 1),
-        4, // max zoom
+        3, // max zoom — don't zoom too close on single nodes
       );
       const cx = (minX + maxX) / 2;
       const cy = (minY + maxY) / 2;
@@ -479,7 +480,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
       d3.select(canvas as any)
         .transition()
-        .duration(250)
+        .duration(300)
         .call((zoomRef.current as any).transform, transform);
     }
 
