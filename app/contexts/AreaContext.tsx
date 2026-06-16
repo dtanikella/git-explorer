@@ -9,6 +9,7 @@ export interface AreaStoreValue {
   areas: Area[];
   runtimeState: Map<string, AreaRuntimeState>;
   nodeToAreas: Map<string, Area[]>;
+  setAreas(areas: Area[]): void;
   toggleVisibility(areaId: string): void;
   getVisibleAreas(): Area[];
   getAreasForNode(scipSymbol: string): Area[];
@@ -59,12 +60,17 @@ interface AreaProviderProps {
   children: ReactNode;
 }
 
-export function AreaProvider({ areas, children }: AreaProviderProps) {
+export function AreaProvider({ areas: initialAreas, children }: AreaProviderProps) {
+  const [areas, setAreasState] = useState<Area[]>(initialAreas);
   const [runtimeState, setRuntimeState] = useState<Map<string, AreaRuntimeState>>(() =>
     buildInitialRuntimeState(areas),
   );
 
-  // Rebuild runtime state when areas prop changes (new areas get defaults)
+  useEffect(() => {
+    setAreasState(initialAreas);
+  }, [initialAreas]);
+
+  // Rebuild runtime state when areas change (new areas get defaults)
   useEffect(() => {
     setRuntimeState((prev) => {
       const next = new Map<string, AreaRuntimeState>();
@@ -77,6 +83,10 @@ export function AreaProvider({ areas, children }: AreaProviderProps) {
   }, [areas]);
 
   const nodeToAreas = useMemo(() => buildNodeToAreas(areas), [areas]);
+
+  const setAreas = useCallback((newAreas: Area[]) => {
+    setAreasState(newAreas);
+  }, []);
 
   const toggleVisibility = useCallback((areaId: string) => {
     setRuntimeState((prev) => {
@@ -101,10 +111,11 @@ export function AreaProvider({ areas, children }: AreaProviderProps) {
     areas,
     runtimeState,
     nodeToAreas,
+    setAreas,
     toggleVisibility,
     getVisibleAreas,
     getAreasForNode,
-  }), [areas, runtimeState, nodeToAreas, toggleVisibility, getVisibleAreas, getAreasForNode]);
+  }), [areas, runtimeState, nodeToAreas, setAreas, toggleVisibility, getVisibleAreas, getAreasForNode]);
 
   return (
     <AreaContext.Provider value={value}>

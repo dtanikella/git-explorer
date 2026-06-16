@@ -70,4 +70,30 @@ describe('AreaContext', () => {
     const { result: result2 } = renderHook(() => useAreaStore(), { wrapper });
     expect(result2.current.runtimeState.get('auth')!.color).toBe(state1.color);
   });
+
+  it('setAreas updates areas and rebuilds runtime state', () => {
+    const { result } = renderHook(() => useAreaStore(), { wrapper });
+    expect(result.current.areas).toHaveLength(2);
+
+    const newArea: Area = {
+      id: 'payments',
+      created_at: '2026-06-16T00:00:00Z',
+      updated_at: '2026-06-16T00:00:00Z',
+      name: 'Payments',
+      type: 'business_domain',
+      contains: ['sym-pay'],
+      parent: null,
+      children: [],
+      clusterStrength: 0,
+    };
+
+    act(() => {
+      result.current.setAreas([...mockAreas, newArea]);
+    });
+
+    expect(result.current.areas).toHaveLength(3);
+    expect(result.current.runtimeState.get('payments')).toBeDefined();
+    expect(result.current.runtimeState.get('payments')!.visible).toBe(true);
+    expect(result.current.runtimeState.get('auth')).toBeDefined();
+  });
 });
