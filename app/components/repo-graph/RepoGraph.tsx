@@ -427,6 +427,82 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     }
   }, [onSearchNode, handleSearchNode]);
 
+  // Zoom-to-fit when active set changes
+  useEffect(() => {
+    if (activeNodeIds.size === 0) return;
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 40; // 40 × 50ms = 2s
+
+    function tryZoomToFit() {
+      if (cancelled) return;
+      attempts++;
+
+      if (!canvasRef.current || !zoomRef.current) {
+        if (attempts < MAX_ATTEMPTS) setTimeout(tryZoomToFit, 50);
+        return;
+      }
+
+      // Check that nodes have been positioned
+      const activeNodes = simNodesRef.current.filter(
+        (n) => activeNodeIds.has(n.id) && n.x != null && n.y != null
+      );
+      if (activeNodes.length === 0) {
+        if (attempts < MAX_ATTEMPTS) setTimeout(tryZoomToFit, 50);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      const w = canvas.offsetWidth || 800;
+      const h = canvas.offsetHeight || 600;
+      const t = zoomTransformRef.current;
+
+      // Compute bounding box of active nodes in simulation coords
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const n of activeNodes) {
+        const cfg = configRef.current;
+        const r = cfg.style.node(n.data, n.degree).radius;
+        minX = Math.min(minX, n.x! - r);
+        minY = Math.min(minY, n.y! - r);
+        maxX = Math.max(maxX, n.x! + r);
+        maxY = Math.max(maxY, n.y! + r);
+      }
+
+      // Check if all active nodes are already visible in viewport
+      const viewMinX = (0 - t.x) / t.k;
+      const viewMinY = (0 - t.y) / t.k;
+      const viewMaxX = (w - t.x) / t.k;
+      const viewMaxY = (h - t.y) / t.k;
+
+      if (minX >= viewMinX && maxX <= viewMaxX && minY >= viewMinY && maxY <= viewMaxY) {
+        return; // already visible
+      }
+
+      // Compute zoom transform to fit bounding box with padding
+      const padding = 40;
+      const bboxW = maxX - minX;
+      const bboxH = maxY - minY;
+      const scale = Math.min(
+        (w - 2 * padding) / Math.max(bboxW, 1),
+        (h - 2 * padding) / Math.max(bboxH, 1),
+        4, // max zoom
+      );
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const transform = d3.zoomIdentity
+        .translate(w / 2 - cx * scale, h / 2 - cy * scale)
+        .scale(scale);
+
+      d3.select(canvas as any)
+        .transition()
+        .duration(250)
+        .call((zoomRef.current as any).transform, transform);
+    }
+
+    tryZoomToFit();
+    return () => { cancelled = true; };
+  }, [activeNodeIds]);
+
   // External highlight (from Stats tab cross-navigation)
   // RepoGraph may remount when switching tabs, so the simulation may not
   // have positioned nodes yet. Wait for the simulation to exist, then
