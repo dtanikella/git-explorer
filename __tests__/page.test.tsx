@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Home from '../app/page';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analysis/graph-config';
 
 let lastRepoGraphProps: Record<string, unknown> | null = null;
+let lastSelectionProviderProps: Record<string, unknown> | null = null;
 
 // Mock fetch
 global.fetch = jest.fn(() =>
@@ -11,6 +12,32 @@ global.fetch = jest.fn(() =>
     json: () => Promise.resolve({ success: true, data: { nodes: [], edges: [] } }),
   })
 ) as jest.Mock;
+
+jest.mock('@/app/contexts/SelectionContext', () => ({
+  SelectionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+    lastSelectionProviderProps = props;
+    return <>{children}</>;
+  },
+  useSelection: () => ({
+    activeNodeIds: new Set<string>(),
+    selectedNodeIds: new Set<string>(),
+    hasSelection: false,
+    toggleNode: jest.fn(),
+    clearSelection: jest.fn(),
+    toggleExpansionGroup: jest.fn(),
+    toggleExpandedNode: jest.fn(),
+    state: {
+      selectedNodeIds: new Set<string>(),
+      expansions: new Map(),
+    },
+  }),
+}));
+
+jest.mock('@/app/components/selection/SelectionSidebar', () => {
+  return function MockSelectionSidebar() {
+    return <div data-testid="selection-sidebar" />;
+  };
+});
 
 jest.mock('@/app/components/RepositorySelector', () => {
   return function MockRepositorySelector({
@@ -126,6 +153,7 @@ jest.mock('@/app/components/stats/StatsTreemap', () => {
 describe('Homepage', () => {
   beforeEach(() => {
     lastRepoGraphProps = null;
+    lastSelectionProviderProps = null;
     (global.fetch as jest.Mock).mockClear();
   });
 
@@ -148,12 +176,13 @@ describe('Homepage', () => {
     expect(screen.getByPlaceholderText('Search node...')).toBeInTheDocument();
   });
 
-  it('switches repo graph config when the selected view changes', () => {
+  it('switches repo graph config when the selected view changes', async () => {
     render(<Home />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
 
     expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
+    await waitFor(() => expect(lastRepoGraphProps?.analysisData).toEqual({ nodes: [], edges: [] }));
     expect(lastRepoGraphProps?.config).toBe(createModulesViewConfig);
 
     fireEvent.change(screen.getByRole('combobox', { name: /view/i }), {
@@ -161,5 +190,75 @@ describe('Homepage', () => {
     });
 
     expect(lastRepoGraphProps?.config).toBe(INTERNAL_PROCESSING_CONFIG);
+  });
+
+  it('wraps the graph with SelectionProvider using the current analysis data', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          nodes: [
+            {
+              scipSymbol: 'symbol-a',
+              name: 'A',
+              filePath: 'src/a.ts',
+              syntaxType: 'FUNCTION',
+              startLine: 1,
+              startCol: 1,
+              isAsync: false,
+              isExported: true,
+              params: [],
+              returnTypeText: null,
+              isDefinition: true,
+              inTestFile: false,
+              referencedAt: [],
+              outboundRefs: [],
+            },
+            {
+              scipSymbol: 'symbol-b',
+              name: 'B',
+              filePath: 'src/b.ts',
+              syntaxType: 'FUNCTION',
+              startLine: 1,
+              startCol: 1,
+              isAsync: false,
+              isExported: true,
+              params: [],
+              returnTypeText: null,
+              isDefinition: true,
+              inTestFile: false,
+              referencedAt: [],
+              outboundRefs: [],
+            },
+          ],
+          edges: [
+            {
+              kind: 'CALLS',
+              fromFile: 'src/a.ts',
+              fromName: 'A',
+              fromSymbol: 'symbol-a',
+              toText: 'B',
+              toFile: 'src/b.ts',
+              toName: 'B',
+              toSymbol: 'symbol-b',
+              isExternal: false,
+              edgePosition: { line: 1, col: 1 },
+              isOptionalChain: false,
+              isAsync: false,
+            },
+          ],
+        },
+      }),
+    });
+
+    render(<Home />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+
+    await waitFor(() => expect(lastSelectionProviderProps?.nodes).toHaveLength(2));
+
+    expect(lastSelectionProviderProps?.edges).toHaveLength(1);
+    expect(lastSelectionProviderProps?.visibleNodeIds).toEqual(new Set(['symbol-a', 'symbol-b']));
+    expect(screen.queryByTestId('selection-sidebar')).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type MutableRefObject } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import RepoGraph from './components/repo-graph/RepoGraph';
 import TabSidebar from './components/TabSidebar';
@@ -8,14 +8,40 @@ import type { TabId } from './components/TabSidebar';
 import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
+import { SelectionProvider, useSelection } from './contexts/SelectionContext';
+import SelectionSidebar from './components/selection/SelectionSidebar';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import type { AnalysisEdge, AnalysisResult } from '@/lib/analysis/types';
+import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
 
 const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
   modules: { label: 'Modules', config: createModulesViewConfig },
 };
+
+function SelectionSidebarWrapper({ nodes }: { nodes: AnalysisNode[] }) {
+  const { hasSelection } = useSelection();
+  if (!hasSelection) return null;
+  return <SelectionSidebar nodes={nodes} />;
+}
+
+function SelectionBridge({ toggleRef }: {
+  toggleRef: MutableRefObject<((id: string) => void) | null>;
+}) {
+  const { toggleNode, state: { selectedNodeIds } } = useSelection();
+
+  useEffect(() => {
+    toggleRef.current = (id: string) => {
+      if (!selectedNodeIds.has(id)) toggleNode(id);
+    };
+
+    return () => {
+      toggleRef.current = null;
+    };
+  }, [toggleNode, selectedNodeIds, toggleRef]);
+
+  return null;
+}
 
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
@@ -29,6 +55,7 @@ export default function HomePage() {
   const [searchNotFound, setSearchNotFound] = useState(false);
   const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
+  const selectionToggleRef = useRef<((id: string) => void) | null>(null);
 
   // Lifted data state
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
@@ -164,16 +191,28 @@ export default function HomePage() {
                 Select a repository to visualize
               </div>
             ) : activeTab === 'graph' ? (
-              <RepoGraph
-                repoPath={repoPath}
-                hideTestFiles={hideTestFiles}
-                config={VIEW_OPTIONS[selectedView].config}
-                onSearchNode={handleRegisterSearch}
-                analysisData={analysisData}
-                loading={loading}
-                error={error}
-                highlightedNodeId={highlightedNodeId}
-              />
+              <SelectionProvider
+                nodes={analysisData?.nodes ?? []}
+                edges={analysisData?.edges ?? []}
+                visibleNodeIds={graphVisibleNodeIds}
+              >
+                <SelectionBridge toggleRef={selectionToggleRef} />
+                <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <RepoGraph
+                      repoPath={repoPath}
+                      hideTestFiles={hideTestFiles}
+                      config={VIEW_OPTIONS[selectedView].config}
+                      onSearchNode={handleRegisterSearch}
+                      analysisData={analysisData}
+                      loading={loading}
+                      error={error}
+                      highlightedNodeId={highlightedNodeId}
+                    />
+                  </div>
+                  <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
+                </div>
+              </SelectionProvider>
             ) : (
               analysisData ? (
                 <StatsTreemap
