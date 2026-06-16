@@ -62,6 +62,10 @@ export interface RepoGraphConfig {
     edge: EdgeForcer;
   };
   simulation: SimulationParams;
+  augment?: (nodes: AnalysisNode[], edges: AnalysisEdge[]) => {
+    extraNodes: AnalysisNode[];
+    extraEdges: AnalysisEdge[];
+  };
 }
 
 // ── Defaults ──
@@ -259,6 +263,9 @@ export function createModulesViewConfig(
     },
     style: {
       node: (node: AnalysisNode, _degree: number): NodeStyle => {
+        if (node.syntaxType === SyntaxType.MODULE) {
+          return { color: '#9ca3af', radius: 4, opacity: 0.8, label: false };
+        }
         const color =
           SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
         const outbound = outboundCallCounts.get(node.scipSymbol) ?? 0;
@@ -268,19 +275,92 @@ export function createModulesViewConfig(
           radius: scaledValue(outbound, 5, 50),
         };
       },
-      edge: (_edge: AnalysisEdge): EdgeStyle => ({
-        color: '#9ca3af',
-        width: 1.5,
-        opacity: 0.6,
-        gradientSourceColor: '#d1d5db',
-        gradientTargetColor: '#000000',
-      }),
+      edge: (edge: AnalysisEdge): EdgeStyle => {
+        if (edge.kind === EdgeKind.CONTAINS) {
+          return { color: '#d1d5db', width: 0.5, opacity: 0.3 };
+        }
+        return {
+          color: '#9ca3af',
+          width: 1.5,
+          opacity: 0.6,
+          gradientSourceColor: '#d1d5db',
+          gradientTargetColor: '#000000',
+        };
+      },
     },
     forces: {
       node: (node: AnalysisNode): NodeForces => ({
         ...DEFAULT_NODE_FORCES,
-        collideRadius: scaledValue(countInboundCalls(node), 5, 50),
+        charge: -600,
+        collideRadius: node.syntaxType === SyntaxType.MODULE
+          ? 6
+          : scaledValue(countInboundCalls(node), 5, 50),
       }),
+      edge: (edge: AnalysisEdge): EdgeForces => {
+        if (edge.kind === EdgeKind.CONTAINS) {
+          return { distance: 30, strength: 1 };
+        }
+        const sameFile = edge.fromFile === edge.toFile;
+        return {
+          distance: sameFile ? 50 : 100,
+          strength: sameFile ? 0.7 : 0.5,
+        };
+      },
+    },
+    augment: (filteredNodes: AnalysisNode[]) => {
+      const fileGroups = new Map<string, AnalysisNode[]>();
+      for (const node of filteredNodes) {
+        let group = fileGroups.get(node.filePath);
+        if (!group) {
+          group = [];
+          fileGroups.set(node.filePath, group);
+        }
+        group.push(node);
+      }
+
+      const extraNodes: AnalysisNode[] = [];
+      const extraEdges: AnalysisEdge[] = [];
+
+      for (const [filePath, children] of fileGroups) {
+        const fileName = filePath.split('/').pop() ?? filePath;
+        const fileSymbol = `file:${filePath}`;
+
+        extraNodes.push({
+          syntaxType: SyntaxType.MODULE,
+          name: fileName,
+          filePath,
+          startLine: 0,
+          startCol: 0,
+          isAsync: false,
+          isExported: false,
+          params: [],
+          returnTypeText: null,
+          scipSymbol: fileSymbol,
+          isDefinition: true,
+          inTestFile: false,
+          referencedAt: [],
+          outboundRefs: [],
+        });
+
+        for (const child of children) {
+          extraEdges.push({
+            kind: EdgeKind.CONTAINS,
+            fromFile: filePath,
+            fromName: fileName,
+            fromSymbol: fileSymbol,
+            toText: child.name,
+            toFile: filePath,
+            toName: child.name,
+            toSymbol: child.scipSymbol,
+            isExternal: false,
+            edgePosition: { line: 0, col: 0 },
+            isOptionalChain: false,
+            isAsync: false,
+          });
+        }
+      }
+
+      return { extraNodes, extraEdges };
     },
   });
 }
@@ -294,6 +374,7 @@ export function mergeConfigs(
     style: { ...base.style },
     forces: { ...base.forces },
     simulation: { ...base.simulation },
+    augment: base.augment,
   };
 
   for (const override of overrides) {
@@ -317,6 +398,9 @@ export function mergeConfigs(
     }
     if (override.simulation) {
       result.simulation = { ...result.simulation, ...override.simulation };
+    }
+    if (override.augment !== undefined) {
+      result.augment = override.augment;
     }
   }
 

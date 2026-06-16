@@ -123,18 +123,39 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       }));
   }, [analysisData, simEdges, resolvedConfig]);
 
-  useEffect(() => { simNodesRef.current = simNodes; }, [simNodes]);
+  // Augment with synthetic nodes/edges (e.g. file nodes)
+  const { allSimNodes, allSimEdges } = useMemo(() => {
+    if (!resolvedConfig.augment || simNodes.length === 0) {
+      return { allSimNodes: simNodes, allSimEdges: simEdges };
+    }
+    const filteredAnalysisNodes = simNodes.map((n) => n.data);
+    const filteredAnalysisEdges = simEdges.map((e) => e.data);
+    const { extraNodes, extraEdges } = resolvedConfig.augment(filteredAnalysisNodes, filteredAnalysisEdges);
+
+    return {
+      allSimNodes: [
+        ...simNodes,
+        ...extraNodes.map((n) => ({ id: n.scipSymbol, name: n.name, data: n, degree: 0 })),
+      ],
+      allSimEdges: [
+        ...simEdges,
+        ...extraEdges.map((e) => ({ source: e.fromSymbol, target: e.toSymbol, data: e })),
+      ],
+    };
+  }, [simNodes, simEdges, resolvedConfig]);
+
+  useEffect(() => { simNodesRef.current = allSimNodes; }, [allSimNodes]);
 
   useEffect(() => {
     const degreeCounts = new Map<string, number>();
-    for (const e of simEdges) {
+    for (const e of allSimEdges) {
       degreeCounts.set(e.source as string, (degreeCounts.get(e.source as string) ?? 0) + 1);
       degreeCounts.set(e.target as string, (degreeCounts.get(e.target as string) ?? 0) + 1);
     }
-    simNodes.forEach((n) => {
+    allSimNodes.forEach((n) => {
       (n as { degree: number }).degree = degreeCounts.get(n.id) ?? 0;
     });
-  }, [simNodes, simEdges]);
+  }, [allSimNodes, allSimEdges]);
 
   // Mouse handlers
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -187,7 +208,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
   // Force simulation + canvas rendering
   useEffect(() => {
-    if (!canvasRef.current || simNodes.length === 0) return;
+    if (!canvasRef.current || allSimNodes.length === 0) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -214,7 +235,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       c.setTransform(t.k, 0, 0, t.k, t.x, t.y);
 
       // Draw edges
-      for (const e of simEdges) {
+      for (const e of allSimEdges) {
         const src = e.source as unknown as SimpleNode;
         const tgt = e.target as unknown as SimpleNode;
         if (src.x == null || src.y == null || tgt.x == null || tgt.y == null) continue;
@@ -237,7 +258,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       }
 
       // Draw nodes
-      for (const n of simNodes) {
+      for (const n of allSimNodes) {
         if (n.x == null || n.y == null) continue;
         const nStyle = cfg.style.node(n.data, n.degree);
         c.beginPath();
@@ -272,11 +293,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     const cfg = configRef.current;
 
     const simulation = d3
-      .forceSimulation<SimpleNode>(simNodes)
+      .forceSimulation<SimpleNode>(allSimNodes)
       .force(
         'link',
         d3
-          .forceLink<SimpleNode, SimpleEdge>(simEdges)
+          .forceLink<SimpleNode, SimpleEdge>(allSimEdges)
           .id((d) => d.id)
           .distance((d: any) => cfg.forces.edge(d.data).distance)
           .strength((d: any) => cfg.forces.edge(d.data).strength)
@@ -323,7 +344,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       drawFrameRef.current = null;
       resizeObserver.disconnect();
     };
-  }, [simNodes, simEdges]);
+  }, [allSimNodes, allSimEdges]);
 
   // Search handler
   const handleSearchNode = useCallback((query: string): boolean => {

@@ -7,7 +7,7 @@ import TabSidebar from './components/TabSidebar';
 import type { TabId } from './components/TabSidebar';
 import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
-import StatsTreemap from './components/stats/StatsTreemap';
+import DistributionChart from './components/stats/DistributionChart';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisResult } from '@/lib/analysis/types';
@@ -176,13 +176,28 @@ export default function HomePage() {
               />
             ) : (
               analysisData ? (
-                <StatsTreemap
-                  nodes={analysisData.nodes}
-                  topN={topN}
-                  hideTestFiles={hideTestFiles}
-                  onNodeSelect={handleNodeSelect}
-                  graphVisibleNodeIds={graphVisibleNodeIds}
-                />
+               <div className="w-full" style={{ height: '600px', maxHeight: '600px' }}>
+                 <div className="grid grid-cols-2 gap-2 px-2 pt-2 pb-4 h-full">
+                   <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
+                     <DistributionChart
+                       nodes={analysisData.nodes}
+                       accessor={(n) => n.referencedAt.length}
+                       label="Inbound References Distribution"
+                       xAxisLabel="Number of inbound references"
+                       colorClass="fill-blue-500"
+                     />
+                   </div>
+                   <div className="border border-gray-200 rounded-md bg-white overflow-hidden">
+                     <DistributionChart
+                       nodes={analysisData.nodes}
+                       accessor={(n) => n.outboundRefs.length}
+                       label="Outbound References Distribution"
+                       xAxisLabel="Number of outbound references"
+                       colorClass="fill-orange-500"
+                     />
+                   </div>
+                 </div>
+               </div>
               ) : loading ? (
                 <div className="w-full h-full flex items-center justify-center text-gray-500">
                   Analyzing repository...

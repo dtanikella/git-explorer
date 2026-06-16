@@ -4,7 +4,7 @@ import { useMemo, useRef, useEffect, useState } from 'react';
 import { hierarchy, treemap, treemapSquarify } from 'd3-hierarchy';
 import type { HierarchyRectangularNode } from 'd3-hierarchy';
 import type { AnalysisNode } from '@/lib/analysis/types';
-import { filterAndSortNodes, normalizeOutboundRefs, getTreemapColor } from './treemap-utils';
+import { filterAndSortNodes, normalizeInboundRefs, getTreemapColor } from './treemap-utils';
 
 interface StatsTreemapProps {
   nodes: AnalysisNode[];
@@ -48,7 +48,7 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
       name: n.name,
       filePath: n.filePath,
       scipSymbol: n.scipSymbol,
-      value: n.referencedAt.length,
+      value: n.outboundRefs.length,
       outboundCount: n.outboundRefs.length,
       inboundCount: n.referencedAt.length,
     }));
@@ -68,15 +68,15 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
     return root.leaves() as HierarchyRectangularNode<TreemapDatum>[];
   }, [treemapData, dimensions]);
 
-  const maxOutbound = useMemo(
-    () => Math.max(...treemapData.map((d) => d.outboundCount), 1),
+  const maxInbound = useMemo(
+    () => Math.max(...treemapData.map((d) => d.inboundCount), 1),
     [treemapData],
   );
 
   if (treemapData.length === 0) {
     return (
       <div ref={containerRef} className="w-full h-full flex items-center justify-center text-gray-400">
-        No nodes with inbound references found
+        No nodes with outbound references found
       </div>
     );
   }
@@ -88,7 +88,7 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
           const d = leaf.data as TreemapDatum;
           const w = leaf.x1 - leaf.x0;
           const h = leaf.y1 - leaf.y0;
-          const color = getTreemapColor(normalizeOutboundRefs(d.outboundCount, maxOutbound));
+          const color = getTreemapColor(normalizeInboundRefs(d.inboundCount, maxInbound));
           const isInGraph = !graphVisibleNodeIds || graphVisibleNodeIds.has(d.scipSymbol);
 
           return (
@@ -114,7 +114,7 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
                       fontSize: '10px',
                       lineHeight: '1.2',
                       overflow: 'hidden',
-                      color: normalizeOutboundRefs(d.outboundCount, maxOutbound) > 0.5 ? '#fff' : '#1f2937',
+                      color: normalizeInboundRefs(d.inboundCount, maxInbound) > 0.5 ? '#fff' : '#1f2937',
                     }}
                   >
                     <div style={{ fontWeight: 'bold' }}>{d.name}</div>

@@ -6,15 +6,15 @@ export function filterAndSortNodes(
   topN: number,
   hideTestFiles: boolean,
 ): AnalysisNode[] {
-  let filtered = nodes.filter((n) => n.referencedAt.length > 0);
+  let filtered = nodes.filter((n) => n.outboundRefs.length > 0);
   if (hideTestFiles) {
     filtered = filtered.filter((n) => !n.inTestFile);
   }
-  filtered.sort((a, b) => b.referencedAt.length - a.referencedAt.length);
+  filtered.sort((a, b) => b.outboundRefs.length - a.outboundRefs.length);
   return filtered.slice(0, topN);
 }
 
-export function normalizeOutboundRefs(count: number, max: number): number {
+export function normalizeInboundRefs(count: number, max: number): number {
   if (max === 0) return 0;
   return count / max;
 }
