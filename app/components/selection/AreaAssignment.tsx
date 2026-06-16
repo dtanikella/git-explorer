@@ -314,13 +314,56 @@ export default function AreaAssignment({ effectiveNodeIds, repoPath }: AreaAssig
             <label style={{ fontSize: 10, color: '#6b7280', display: 'block', marginBottom: 2 }}>
               Children
             </label>
+            {/* Selected children as removable chips */}
+            {newChildren.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                {newChildren.map((childId) => {
+                  const childArea = areas.find((a) => a.id === childId);
+                  return (
+                    <span
+                      key={childId}
+                      data-testid={`child-chip-${childId}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        background: '#e0f2fe',
+                        color: '#0369a1',
+                        fontSize: 10,
+                        padding: '2px 6px',
+                        borderRadius: 9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {childArea?.name ?? childId}
+                      <button
+                        type="button"
+                        onClick={() => setNewChildren((prev) => prev.filter((id) => id !== childId))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#0369a1',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          lineHeight: 1,
+                          padding: 0,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {/* Dropdown to add children */}
             <select
               data-testid="new-area-children"
-              multiple
-              value={newChildren}
+              value=""
               onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, (o) => o.value);
-                setNewChildren(selected);
+                if (e.target.value && !newChildren.includes(e.target.value)) {
+                  setNewChildren((prev) => [...prev, e.target.value]);
+                }
               }}
               style={{
                 width: '100%',
@@ -329,14 +372,16 @@ export default function AreaAssignment({ effectiveNodeIds, repoPath }: AreaAssig
                 padding: '5px 8px',
                 fontSize: 12,
                 background: 'white',
-                minHeight: 48,
               }}
             >
-              {availableChildAreas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              <option value="">Add child area…</option>
+              {availableChildAreas
+                .filter((a) => !newChildren.includes(a.id))
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
