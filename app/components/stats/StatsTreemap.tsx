@@ -65,7 +65,7 @@ export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect,
       .padding(2)
       .tile(treemapSquarify)(root);
 
-    return root.leaves() as HierarchyRectangularNode<TreemapDatum>[];
+    return root.leaves() as unknown as HierarchyRectangularNode<TreemapDatum>[];
   }, [treemapData, dimensions]);
 
   const maxOutbound = useMemo(

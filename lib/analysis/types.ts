@@ -104,7 +104,7 @@ export const MISSING_EDGE_KINDS = [
 // ============================================================================
 
 export class AnalysisError extends Error {
-  readonly name = 'AnalysisError';
+  readonly name: string = 'AnalysisError';
 
   constructor(
     message: string,

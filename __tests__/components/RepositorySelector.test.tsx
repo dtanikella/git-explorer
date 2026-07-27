@@ -20,10 +20,11 @@ describe('RepositorySelector', () => {
   });
 
   it('calls onRepositorySelected when directory is selected', async () => {
-    // Mock the File System Access API
-    const mockHandle = { name: 'test-repo', kind: 'directory' };
-    // @ts-ignore
-    window.showDirectoryPicker = jest.fn().mockResolvedValue(mockHandle);
+    // Mock the server-side directory browser endpoint
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ success: true, path: '/path/to/test-repo' }),
+    } as unknown as Response);
 
     render(
       <RepositorySelector
@@ -38,7 +39,7 @@ describe('RepositorySelector', () => {
     // Wait for the async operation
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    expect(mockOnRepositorySelected).toHaveBeenCalledWith('test-repo');
+    expect(mockOnRepositorySelected).toHaveBeenCalledWith('/path/to/test-repo');
   });
 
   it('disables button when isLoading is true', () => {
@@ -66,9 +67,10 @@ describe('RepositorySelector', () => {
   });
 
   it('shows selected path when directory is selected', async () => {
-    const mockHandle = { name: 'test-repo' };
-    // @ts-ignore
-    window.showDirectoryPicker = jest.fn().mockResolvedValue(mockHandle);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ success: true, path: '/path/to/test-repo' }),
+    } as unknown as Response);
 
     const { rerender } = render(
       <RepositorySelector
@@ -90,11 +92,11 @@ describe('RepositorySelector', () => {
       <RepositorySelector
         onRepositorySelected={mockOnRepositorySelected}
         isLoading={false}
-        currentPath="test-repo"
+        currentPath="/path/to/test-repo"
       />
     );
 
-    expect(screen.getByText('Current: test-repo')).toBeInTheDocument();
+    expect(screen.getByText('Current: /path/to/test-repo')).toBeInTheDocument();
   });
 
   it('shows current path when currentPath prop is provided', () => {

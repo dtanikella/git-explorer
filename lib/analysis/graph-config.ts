@@ -132,21 +132,43 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   simulation: { ...DEFAULT_SIMULATION },
 };
 
+function hasCrossFileReference(node: AnalysisNode): boolean {
+  return (
+    node.referencedAt.some((ref) => ref.filePath !== node.filePath) ||
+    node.outboundRefs.some((ref) => ref.filePath !== node.filePath)
+  );
+}
+
 export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
   filters: {
-    node: (node: AnalysisNode) => PROCESSING_NODE_TYPES.has(node.syntaxType),
+    node: (node: AnalysisNode) =>
+      PROCESSING_NODE_TYPES.has(node.syntaxType) && hasCrossFileReference(node),
     edge: (edge: AnalysisEdge) => !edge.isExternal,
   },
   style: {
     node: (node: AnalysisNode, _degree: number): NodeStyle => {
       const color = SYNTAX_TYPE_COLORS[node.syntaxType] ?? DEFAULT_NODE_STYLE.color;
-      return { ...DEFAULT_NODE_STYLE, color };
+      return {
+        ...DEFAULT_NODE_STYLE,
+        color,
+        radius: scaledValue(node.outboundRefs.length, 3, 30),
+      };
     },
     edge: (): EdgeStyle => ({ ...DEFAULT_EDGE_STYLE }),
   },
   forces: {
-    node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
-    edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
+    node: (node: AnalysisNode): NodeForces => ({
+      ...DEFAULT_NODE_FORCES,
+      charge: -300 - scaledValue(node.referencedAt.length, 0, 1500),
+    }),
+    edge: createEdgeForcer({
+      [EdgeKind.CALLS]: { distance: 60, strength: 0.5 },
+      [EdgeKind.EXTENDS]: { distance: 100, strength: 0.3 },
+      [EdgeKind.IMPLEMENTS]: { distance: 100, strength: 0.3 },
+      [EdgeKind.INSTANTIATES]: { distance: 100, strength: 0.3 },
+      [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
+      [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
+    }),
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -265,7 +287,7 @@ export function createModulesViewConfig(
         return {
           ...DEFAULT_NODE_STYLE,
           color,
-          radius: scaledValue(outbound, 5, 50),
+          radius: scaledValue(outbound, 4, 30),
         };
       },
       edge: (_edge: AnalysisEdge): EdgeStyle => ({
@@ -279,7 +301,7 @@ export function createModulesViewConfig(
     forces: {
       node: (node: AnalysisNode): NodeForces => ({
         ...DEFAULT_NODE_FORCES,
-        collideRadius: scaledValue(countInboundCalls(node), 5, 50),
+        collideRadius: scaledValue(countInboundCalls(node), 8, 40),
       }),
     },
   });

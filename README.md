@@ -1,192 +1,164 @@
-
 # Git Explorer
 
-A Next.js web application that visualizes git repository commit activity through interactive treemap charts. Analyze which files and directories have been most active in your codebase over different time periods.
+A Next.js app that visualizes TypeScript codebases as an interactive symbol graph. Point it at a local repo, and it builds a force-directed graph of functions, classes, methods, and interfaces plus their call/import/extends relationships.
+
+The analysis uses a real [SCIP](https://github.com/sourcegraph/scip) index and a tree-sitter parse — not a toy AST walk.
 
 ## Features
 
-- **Interactive Treemap Visualization**: View commit frequency across your repository files using hierarchical treemaps
-- **Color-Coded Activity**: Files are colored from dark green (high activity) to light gray (low activity) based on recent commit frequency
-- **Multiple Time Ranges**: Analyze commits from the last 2 weeks, 1 month, 3 months, 6 months, or 1 year
-- **Repository Analysis**: Input any local git repository path for instant analysis
-- **Performance Optimized**: Handles repositories with thousands of files efficiently
-- **Responsive Design**: Works on desktop and mobile devices
-- **Error Handling**: Clear feedback for invalid repositories, missing git, or empty time ranges
+- **Symbol graph**: force-directed canvas visualization of functions, classes, methods, interfaces, and type aliases
+- **Call/import/extends edges**: edges show CALLS, IMPORTS, EXTENDS, IMPLEMENTS, INSTANTIATES, and USES_TYPE relationships
+- **Modules view**: alternate layout filtered to CALLS edges only
+- **Stats tab**: treemap of symbols sized by inbound references
+- **Selection sidebar**: click a node to see its callers, callees, and file context
+- **Search & zoom-to-fit**: find a symbol and center the graph on it
+- **Local-only analysis**: repo data is analyzed on your machine; nothing is uploaded
 
-## Quick Start
+## Requirements
 
-### Prerequisites
+- **Node.js** (recommended: **20.x**; other versions may work but are not regularly tested)
+- **npm** (comes with Node)
+- **Git** installed and available in `PATH`
+- A modern web browser
 
-- Node.js 18+ and npm
-- Git installed and available in PATH
-- Modern web browser (Chrome 86+, Edge 86+, Safari 15.2+, Firefox 111+)
-
-### Installation
+## Quick start
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone git@github.com:dtanikella/git-explorer.git
 cd git-explorer
 
 # Install dependencies
+# Note: plain `npm install` may fail because some @visx packages declare React 18
+# peer deps while this app uses React 19. Use --legacy-peer-deps if needed.
 npm install
+# or: npm install --legacy-peer-deps
 
-# Start development server
+# Start the development server
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Usage
+> The `npm run dev` script uses nvm to switch to Node 20 if nvm is installed. You can also run `next dev` directly with your own Node setup.
 
-1. **Enter Repository Path**: Provide an absolute path to a local git repository (e.g., `/Users/username/projects/my-repo`)
+## Using the app
 
-2. **Select Time Range**: Choose from predefined ranges:
-   - Last 2 weeks
-   - Last month
-   - Last 3 months
-   - Last 6 months
-   - Last year
+1. **Enter a repository path**: type an absolute path to a local TypeScript repo (e.g. `/Users/you/projects/my-app`) and click **Analyze**.
+2. **Browse the graph**: drag to pan, scroll to zoom, click a node to select it.
+3. **Switch views**: use the view dropdown to choose **Internal Processing** (default) or **Modules**.
+4. **Open the stats tab**: see a treemap of symbols sized by inbound references.
+5. **Search**: type a symbol name and hit **Search** to zoom to it.
 
-3. **Analyze**: Click "Analyze Repository" to generate the treemap
+## Available scripts
 
-4. **Explore**: Hover over rectangles to see file/folder details, click to navigate the hierarchy
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Start the Next.js dev server with Turbopack |
+| `npm run build` | Create an optimized production build |
+| `npm run start` | Start the production server (run `build` first) |
+| `npm test` | Run all Jest tests |
+| `npm run test:watch` | Run Jest in watch mode |
+| `npm run lint` | Run ESLint |
 
-## How It Works
+## Tech stack
 
-### Treemap Visualization
+- **Framework**: Next.js 16.1.6, React 19.2.3, TypeScript 5, App Router
+- **Styling**: Tailwind CSS 4
+- **Graph rendering**: D3 force simulation on an HTML5 canvas
+- **Symbol indexing**: `@sourcegraph/scip-typescript` → `@c4312/scip` reader
+- **Parsing**: `tree-sitter` + `tree-sitter-typescript` (native bindings)
+- **Testing**: Jest + React Testing Library
 
-The treemap displays your repository as nested rectangles where:
-- **Size**: Represents total commit count (larger = more commits)
-- **Color**: Represents recent activity (darker green = more recent commits)
-- **Hierarchy**: Folders contain files and subfolders
-- **Top 500 Files**: Shows the most active files, sorted by commit frequency
-
-### Analysis Process
-
-1. **Git Log Extraction**: Uses `git log --name-only --since=<date>` to get commit data
-2. **File Counting**: Counts unique commits per file within the selected time range
-3. **Frequency Scoring**: Calculates recent activity scores (0-1 scale)
-4. **Tree Building**: Constructs hierarchical tree structure from file paths
-5. **Color Mapping**: Applies gradient colors based on activity scores
-6. **Visualization**: Renders interactive treemap using D3.js (via Visx)
-
-## Architecture
-
-### Tech Stack
-
-- **Frontend**: Next.js 16.1.6 with App Router, React 19.2.3, TypeScript 5
-- **Styling**: Tailwind CSS 4 for responsive design
-- **Visualization**: Visx (@visx/hierarchy) for D3-powered treemaps
-- **Git Integration**: simple-git library for repository analysis
-- **Testing**: Jest with React Testing Library
-- **Build**: Next.js with Turbopack for fast development
-
-### Project Structure
+## Project structure
 
 ```
 git-explorer/
 ├── app/
-│   ├── page.tsx                 # Main UI with treemap display
-│   ├── layout.tsx              # Root layout
-│   ├── globals.css             # Global styles and Tailwind
-│   ├── api/git-analysis/       # API endpoint for git analysis
-│   └── components/             # React components
-│       ├── RepositorySelector.tsx
-│       ├── TreemapChart.tsx
-│       ├── LoadingState.tsx
-│       └── DateRangeSelector.tsx
+│   ├── page.tsx                         # Main orchestrator UI
+│   ├── layout.tsx                       # Root layout
+│   ├── globals.css                      # Global styles / Tailwind
+│   ├── api/
+│   │   ├── repo-analysis/route.ts       # POST /api/repo-analysis
+│   │   └── browse-directory/route.ts    # GET /api/browse-directory
+│   ├── components/
+│   │   ├── RepositorySelector.tsx       # Path input + directory picker
+│   │   ├── repo-graph/RepoGraph.tsx     # Canvas force-directed graph
+│   │   ├── selection/SelectionSidebar.tsx
+│   │   ├── stats/StatsTreemap.tsx
+│   │   ├── stats/StatsToolbar.tsx
+│   │   ├── graph/GraphToolbar.tsx
+│   │   └── TabSidebar.tsx
+│   └── contexts/SelectionContext.tsx    # Selection state provider
+├── app/services/analysis/
+│   ├── controller.ts                    # analyzeRepo() entry point
+│   ├── language-detector.ts             # Picks a language pipeline
+│   └── ts/
+│       ├── controller.ts                # TS pipeline orchestrator
+│       ├── node-extractor.ts            # SCIP + tree-sitter → nodes
+│       ├── edge-extractor.ts            # Edges between symbols
+│       ├── graph-assembler.ts           # Packages result
+│       └── symbol-utils.ts
 ├── lib/
-│   ├── git/                    # Git analysis logic
-│   │   ├── analyzer.ts         # Git log parsing and commit counting
-│   │   ├── tree-builder.ts     # Hierarchical tree construction
-│   │   └── types.ts            # TypeScript interfaces
-│   ├── treemap/                # Visualization utilities
-│   │   ├── color-scale.ts      # Activity-based color mapping
-│   │   └── data-transformer.ts # Data transformation for Visx
-│   └── utils/                  # Helper utilities
-│       └── date-helpers.ts     # Time range calculations
-├── __tests__/                  # Test suites
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # API integration tests
-│   └── components/             # Component tests
-└── specs/002-commit-treemap/   # Feature documentation
-    ├── spec.md                 # Feature specification
-    ├── plan.md                 # Implementation plan
-    ├── quickstart.md           # Developer setup guide
-    └── tasks.md                # Task breakdown
+│   ├── analysis/
+│   │   ├── types.ts                     # AnalysisNode, AnalysisEdge, etc.
+│   │   └── graph-config.ts              # RepoGraph config objects
+│   ├── scip/                            # SCIP index reading/indexing
+│   └── tree-sitter/                     # Thin tree-sitter wrappers
+├── __tests__/                           # Jest test suites
+└── docs/superpowers/                    # Design specs and implementation plans
 ```
 
-## Development
+## Analysis pipeline
 
-### Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run with coverage
-npm test -- --coverage
 ```
-
-### Code Quality
-
-```bash
-# Lint code
-npm run lint
-
-# Build for production
-npm run build
+User selects repo
+    → POST /api/repo-analysis
+    → analyzeRepo()
+    → TypeScript pipeline (analyzeTsRepo)
+        1. SCIP index  (lib/scip/ts/indexer.ts)
+        2. tree-sitter parse  (lib/tree-sitter/*)
+        3. node extraction  (node-extractor.ts)
+        4. edge extraction  (edge-extractor.ts)
+        5. graph assembly  (graph-assembler.ts)
+    → RepoGraph.tsx renders canvas graph
 ```
-
-### Development Workflow
-
-This project follows Test-Driven Development (TDD):
-
-1. **Write failing test** for new functionality
-2. **Implement code** to make test pass
-3. **Refactor** while maintaining test coverage
-4. **Repeat** for each feature increment
-
-### Contributing
-
-See [specs/002-commit-treemap/quickstart.md](specs/002-commit-treemap/quickstart.md) for detailed development setup and contribution guidelines.
-
-## Performance
-
-- **Analysis Time**: <10 seconds for repositories with 10,000+ files
-- **Memory Usage**: Efficient streaming of git log output
-- **Visualization**: Smooth interaction with up to 500 displayed files
-- **Responsiveness**: Adapts to window size changes automatically
 
 ## Troubleshooting
 
-### Common Issues
+### `npm install` fails with peer dependency errors
 
-**"Git is required" error**
-- Ensure git is installed and available in your PATH
-- On macOS: `brew install git`
-- On Ubuntu: `sudo apt install git`
+Some `@visx` packages still declare React 18 peer deps. Run:
 
-**"Repository path does not exist"**
-- Use absolute paths (e.g., `/Users/username/projects/repo`)
-- Ensure you have read access to the directory
+```bash
+npm install --legacy-peer-deps
+```
 
-**Empty treemap**
-- Check if the repository has commits in the selected time range
-- Try a longer time range or verify recent activity with `git log --oneline -10`
+### `tree-sitter` build errors
 
-**Slow analysis**
-- Large repositories may take longer to analyze
-- The app processes git history efficiently but very large repos (>100k files) may be slow
+`tree-sitter` and `@c4312/scip` include native bindings. If installation fails:
+
+- Make sure you are on a supported Node version (20.x recommended).
+- Make sure you have a C++ toolchain installed (Xcode Command Line Tools on macOS, `build-essential` on Ubuntu).
+- Delete `node_modules` and `package-lock.json` and run `npm install --legacy-peer-deps` again.
+
+### "No supported language detected"
+
+The app currently looks for `tsconfig.json` to detect a TypeScript repo. Make sure the path you enter contains a `tsconfig.json`.
+
+### Graph is empty
+
+- Try disabling **Hide test files**.
+- Check that the repo has non-trivial TypeScript code (the pipeline focuses on functions, classes, methods, and interfaces with cross-file references).
+
+## Development notes
+
+- Tests run with Jest. The default environment is `jsdom`; tree-sitter tests override this to `node` because tree-sitter uses native bindings.
+- If tree-sitter tests fail when running the full suite but pass in isolation, it is a known test-isolation issue with the native parser in shared Jest workers. Run them separately with:
+  ```bash
+  npx jest __tests__/unit/tree-sitter __tests__/integration/tree-sitter.integration.test.ts __tests__/integration/analysis-controller.integration.test.ts __tests__/unit/node-extractor.test.ts __tests__/unit/edge-extractor.test.ts
+  ```
 
 ## License
 
 [Add your license here]
-
-## Contributing
-
-Contributions welcome! Please read our [development guide](specs/002-commit-treemap/quickstart.md) and follow the TDD workflow.
