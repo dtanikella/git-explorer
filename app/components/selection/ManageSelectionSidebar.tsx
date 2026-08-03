@@ -186,7 +186,6 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
     setNewType('business_domain');
     setNewParent(null);
     setNewChildren([]);
-    setSaveStatus('idle');
     setErrorMessage(null);
   }, []);
 
@@ -208,8 +207,8 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
         throw new Error(result.error || 'Save failed');
       }
       setAreas(updatedAreas);
-      setSaveStatus('success');
       clearPending();
+      setSaveStatus('success');
     } catch (err) {
       setSaveStatus('error');
       setErrorMessage(err instanceof Error ? err.message : 'Save failed');
