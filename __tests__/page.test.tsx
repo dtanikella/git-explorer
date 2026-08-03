@@ -21,23 +21,35 @@ jest.mock('@/app/contexts/SelectionContext', () => ({
     return <>{children}</>;
   },
   useSelection: () => ({
-    activeNodeIds: new Set<string>(),
+    activeNodeIds: new Set<string>(mockPageSelectedNodeIds),
     selectedNodeIds: mockPageSelectedNodeIds,
+    selectedAreaIds: new Set<string>(),
     hasSelection: mockPageSelectedNodeIds.size > 0,
     toggleNode: mockPageToggleNode,
+    toggleArea: jest.fn(),
     clearSelection: jest.fn(),
     toggleExpansionGroup: jest.fn(),
     toggleExpandedNode: jest.fn(),
+    toggleAreaMember: jest.fn(),
     state: {
       selectedNodeIds: mockPageSelectedNodeIds,
+      selectedAreaIds: new Set<string>(),
       expansions: new Map(),
     },
   }),
 }));
 
-jest.mock('@/app/components/selection/SelectionSidebar', () => {
-  return function MockSelectionSidebar() {
-    return <div data-testid="selection-sidebar" />;
+jest.mock('@/app/components/selection/SearchSelectSidebar', () => {
+  return function MockSearchSelectSidebar() {
+    return <div data-testid="search-select-sidebar" />;
+  };
+});
+
+jest.mock('@/app/components/selection/ManageSelectionSidebar', () => {
+  return function MockManageSelectionSidebar() {
+    const { hasSelection } = require('@/app/contexts/SelectionContext').useSelection();
+    if (!hasSelection) return null;
+    return <div data-testid="manage-selection-sidebar" />;
   };
 });
 
@@ -86,10 +98,6 @@ jest.mock('@/app/components/graph/GraphToolbar', () => {
     selectedView,
     onViewChange,
     viewOptions,
-    searchQuery,
-    onSearchQueryChange,
-    onSearch,
-    searchNotFound,
     disabled,
   }: {
     hideTestFiles: boolean;
@@ -97,10 +105,6 @@ jest.mock('@/app/components/graph/GraphToolbar', () => {
     selectedView: string;
     onViewChange: (value: string) => void;
     viewOptions: Record<string, { label: string }>;
-    searchQuery: string;
-    onSearchQueryChange: (value: string) => void;
-    onSearch: () => void;
-    searchNotFound: boolean;
     disabled: boolean;
   }) {
     return (
@@ -123,16 +127,6 @@ jest.mock('@/app/components/graph/GraphToolbar', () => {
             ))}
           </select>
         </label>
-        <input
-          type="text"
-          placeholder="Search node..."
-          value={searchQuery}
-          onChange={(e) => onSearchQueryChange(e.target.value)}
-          disabled={disabled}
-        />
-        <button onClick={onSearch} disabled={disabled || !searchQuery.trim()}>
-          Search
-        </button>
       </div>
     );
   };
@@ -175,13 +169,15 @@ describe('Homepage', () => {
     expect(screen.getByText('Select a repository to visualize')).toBeInTheDocument();
   });
 
-  it('renders tools and filters toolbar', () => {
+  it('renders tools and filters toolbar after selecting a repo', async () => {
     render(<Home />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+    await waitFor(() => expect(screen.getByTestId('repo-graph')).toBeInTheDocument());
     expect(screen.getByRole('checkbox', { name: /hide test files/i })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /view/i })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /view/i })).toBeEnabled();
     expect(screen.getByRole('option', { name: 'Internal Processing' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Modules' })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search node...')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search node...')).not.toBeInTheDocument();
   });
 
   it('switches repo graph config when the selected view changes', async () => {
@@ -267,7 +263,9 @@ describe('Homepage', () => {
 
     expect(lastSelectionProviderProps?.edges).toHaveLength(1);
     expect(lastSelectionProviderProps?.visibleNodeIds).toEqual(new Set(['symbol-a', 'symbol-b']));
-    expect(screen.queryByTestId('selection-sidebar')).not.toBeInTheDocument();
+    expect(lastSelectionProviderProps?.areas).toEqual([]);
+    expect(screen.getByTestId('search-select-sidebar')).toBeInTheDocument();
+    expect(screen.queryByTestId('manage-selection-sidebar')).not.toBeInTheDocument();
   });
 
   it('consumes pending selection after switching from stats to graph', async () => {
