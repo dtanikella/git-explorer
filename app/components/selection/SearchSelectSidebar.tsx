@@ -5,6 +5,7 @@ import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import type { ExpansionGroup } from '@/app/contexts/SelectionContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
+import AreaTree from './AreaTree';
 
 interface SearchSelectSidebarProps {
   nodes: AnalysisNode[];
@@ -473,10 +474,10 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
           );
         })}
 
-        {/* Select By Area (placeholder for Phase 3) */}
+        {/* Select By Area */}
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, fontWeight: 500 }}>Select By</div>
-          <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Area hierarchy tree (Phase 3)</div>
+          <AreaTree nodes={nodes} />
         </div>
       </div>
     </div>
