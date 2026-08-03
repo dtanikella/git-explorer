@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useMemo, useCallback } from 'react
 import type { ReactNode } from 'react';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { EdgeKind } from '@/lib/analysis/types';
+import type { Area } from '@/lib/areas/types';
 
 // --- Types ---
 
@@ -13,7 +14,7 @@ export interface ExpansionCandidate {
 }
 
 export interface ExpansionGroup {
-  type: 'same-file' | 'callers' | 'callees';
+  type: 'same-file' | 'callers' | 'callees' | 'area-members';
   enabled: boolean;
   candidates: ExpansionCandidate[];
   disabledIds: Set<string>;
@@ -21,15 +22,18 @@ export interface ExpansionGroup {
 
 export interface SelectionState {
   selectedNodeIds: Set<string>;
+  selectedAreaIds: Set<string>;
   expansions: Map<string, ExpansionGroup>;
 }
 
 export interface SelectionContextValue {
   state: SelectionState;
   toggleNode(id: string): void;
+  toggleArea(id: string): void;
   clearSelection(): void;
   toggleExpansionGroup(type: ExpansionGroup['type']): void;
   toggleExpandedNode(type: ExpansionGroup['type'], nodeId: string): void;
+  toggleAreaMember(nodeId: string): void;
   activeNodeIds: Set<string>;
   hasSelection: boolean;
 }
@@ -47,19 +51,21 @@ export function useSelection(): SelectionContextValue {
 // --- Expansion computation ---
 
 function computeExpansions(
-  selectedIds: Set<string>,
+  selectedNodeIds: Set<string>,
+  selectedAreaIds: Set<string>,
   nodes: AnalysisNode[],
   edges: AnalysisEdge[],
   visibleNodeIds: Set<string>,
+  areas: Area[],
   prevExpansions: Map<string, ExpansionGroup>,
 ): Map<string, ExpansionGroup> {
-  if (selectedIds.size === 0) return new Map();
+  if (selectedNodeIds.size === 0 && selectedAreaIds.size === 0) return new Map();
 
   const nodesBySymbol = new Map<string, AnalysisNode>();
   for (const n of nodes) nodesBySymbol.set(n.scipSymbol, n);
 
   const selectedFilePaths = new Set<string>();
-  for (const id of selectedIds) {
+  for (const id of selectedNodeIds) {
     const node = nodesBySymbol.get(id);
     if (node) selectedFilePaths.add(node.filePath);
   }
@@ -67,10 +73,10 @@ function computeExpansions(
   // Same File: visible nodes sharing filePath with any selected node (excluding selected nodes themselves)
   const sameFileCandidates: ExpansionCandidate[] = [];
   for (const n of nodes) {
-    if (selectedIds.has(n.scipSymbol)) continue;
+    if (selectedNodeIds.has(n.scipSymbol)) continue;
     if (!visibleNodeIds.has(n.scipSymbol)) continue;
     if (selectedFilePaths.has(n.filePath)) {
-      const sourceNodeIds = [...selectedIds].filter((id) => {
+      const sourceNodeIds = [...selectedNodeIds].filter((id) => {
         const sn = nodesBySymbol.get(id);
         return sn && sn.filePath === n.filePath;
       });
@@ -83,8 +89,8 @@ function computeExpansions(
   const callerMap = new Map<string, Set<string>>();
   for (const e of edges) {
     if (e.kind !== EdgeKind.CALLS) continue;
-    if (!selectedIds.has(e.toSymbol)) continue;
-    if (selectedIds.has(e.fromSymbol)) continue;
+    if (!selectedNodeIds.has(e.toSymbol)) continue;
+    if (selectedNodeIds.has(e.fromSymbol)) continue;
     if (!visibleNodeIds.has(e.fromSymbol)) continue;
     if (!callerMap.has(e.fromSymbol)) callerMap.set(e.fromSymbol, new Set());
     callerMap.get(e.fromSymbol)!.add(e.toSymbol);
@@ -98,8 +104,8 @@ function computeExpansions(
   const calleeMap = new Map<string, Set<string>>();
   for (const e of edges) {
     if (e.kind !== EdgeKind.CALLS) continue;
-    if (!selectedIds.has(e.fromSymbol)) continue;
-    if (selectedIds.has(e.toSymbol)) continue;
+    if (!selectedNodeIds.has(e.fromSymbol)) continue;
+    if (selectedNodeIds.has(e.toSymbol)) continue;
     if (!visibleNodeIds.has(e.toSymbol)) continue;
     if (!calleeMap.has(e.toSymbol)) calleeMap.set(e.toSymbol, new Set());
     calleeMap.get(e.toSymbol)!.add(e.fromSymbol);
@@ -108,25 +114,46 @@ function computeExpansions(
     calleeCandidates.push({ nodeId, sourceNodeIds: [...sources] });
   }
 
-  function makeGroup(type: ExpansionGroup['type'], candidates: ExpansionCandidate[]): ExpansionGroup {
+  // Area members: union of contains[] across selected areas.
+  // Each candidate carries the source area id so the UI can group by area.
+  const areaMemberMap = new Map<string, Set<string>>();
+  for (const area of areas) {
+    if (!selectedAreaIds.has(area.id)) continue;
+    for (const nodeId of area.contains) {
+      if (!visibleNodeIds.has(nodeId)) continue;
+      if (!areaMemberMap.has(nodeId)) areaMemberMap.set(nodeId, new Set());
+      areaMemberMap.get(nodeId)!.add(area.id);
+    }
+  }
+  const areaMemberCandidates: ExpansionCandidate[] = [];
+  for (const [nodeId, sourceAreaIds] of areaMemberMap) {
+    areaMemberCandidates.push({ nodeId, sourceNodeIds: [...sourceAreaIds] });
+  }
+
+  function makeGroup(
+    type: ExpansionGroup['type'],
+    candidates: ExpansionCandidate[],
+    defaultEnabled: boolean,
+  ): ExpansionGroup {
     const prev = prevExpansions.get(type);
     return {
       type,
-      enabled: prev ? prev.enabled : false,
+      enabled: prev ? prev.enabled : defaultEnabled,
       candidates,
       disabledIds: prev ? new Set([...prev.disabledIds].filter((id) => candidates.some((c) => c.nodeId === id))) : new Set(),
     };
   }
 
   const result = new Map<string, ExpansionGroup>();
-  result.set('same-file', makeGroup('same-file', sameFileCandidates));
-  result.set('callers', makeGroup('callers', callerCandidates));
-  result.set('callees', makeGroup('callees', calleeCandidates));
+  result.set('same-file', makeGroup('same-file', sameFileCandidates, false));
+  result.set('callers', makeGroup('callers', callerCandidates, false));
+  result.set('callees', makeGroup('callees', calleeCandidates, false));
+  result.set('area-members', makeGroup('area-members', areaMemberCandidates, true));
   return result;
 }
 
-function computeActiveNodeIds(selectedIds: Set<string>, expansions: Map<string, ExpansionGroup>): Set<string> {
-  const active = new Set(selectedIds);
+function computeActiveNodeIds(selectedNodeIds: Set<string>, expansions: Map<string, ExpansionGroup>): Set<string> {
+  const active = new Set(selectedNodeIds);
   for (const group of expansions.values()) {
     if (!group.enabled) continue;
     for (const c of group.candidates) {
@@ -144,18 +171,20 @@ interface SelectionProviderProps {
   nodes: AnalysisNode[];
   edges: AnalysisEdge[];
   visibleNodeIds: Set<string>;
+  areas: Area[];
   children: ReactNode;
 }
 
-export function SelectionProvider({ nodes, edges, visibleNodeIds, children }: SelectionProviderProps) {
+export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, children }: SelectionProviderProps) {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [selectedAreaIds, setSelectedAreaIds] = useState<Set<string>>(new Set());
   const [expansions, setExpansions] = useState<Map<string, ExpansionGroup>>(new Map());
 
   // Recompute expansion candidates when selection or visible nodes change
   const computedExpansions = useMemo(
-    () => computeExpansions(selectedNodeIds, nodes, edges, visibleNodeIds, expansions),
+    () => computeExpansions(selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas, expansions),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- expansions intentionally excluded to avoid infinite loop
-    [selectedNodeIds, nodes, edges, visibleNodeIds],
+    [selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas],
   );
 
   // Sync computed expansions into state (preserving enabled/disabledIds from user)
@@ -179,7 +208,7 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, children }: Se
     [selectedNodeIds, currentExpansions],
   );
 
-  const hasSelection = selectedNodeIds.size > 0;
+  const hasSelection = selectedNodeIds.size > 0 || selectedAreaIds.size > 0;
 
   const toggleNode = useCallback((id: string) => {
     setSelectedNodeIds((prev) => {
@@ -193,8 +222,21 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, children }: Se
     });
   }, []);
 
+  const toggleArea = useCallback((id: string) => {
+    setSelectedAreaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
   const clearSelection = useCallback(() => {
     setSelectedNodeIds(new Set());
+    setSelectedAreaIds(new Set());
     setExpansions(new Map());
   }, []);
 
@@ -227,15 +269,33 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, children }: Se
     });
   }, []);
 
+  const toggleAreaMember = useCallback((nodeId: string) => {
+    setExpansions((prev) => {
+      const next = new Map(prev);
+      const group = next.get('area-members') ?? currentExpansions.get('area-members');
+      if (!group) return prev;
+      const nextDisabled = new Set(group.disabledIds);
+      if (nextDisabled.has(nodeId)) {
+        nextDisabled.delete(nodeId);
+      } else {
+        nextDisabled.add(nodeId);
+      }
+      next.set('area-members', { ...group, disabledIds: nextDisabled });
+      return next;
+    });
+  }, [currentExpansions]);
+
   const value = useMemo<SelectionContextValue>(() => ({
-    state: { selectedNodeIds, expansions: currentExpansions },
+    state: { selectedNodeIds, selectedAreaIds, expansions: currentExpansions },
     toggleNode,
+    toggleArea,
     clearSelection,
     toggleExpansionGroup,
     toggleExpandedNode,
+    toggleAreaMember,
     activeNodeIds,
     hasSelection,
-  }), [selectedNodeIds, currentExpansions, toggleNode, clearSelection, toggleExpansionGroup, toggleExpandedNode, activeNodeIds, hasSelection]);
+  }), [selectedNodeIds, selectedAreaIds, currentExpansions, toggleNode, toggleArea, clearSelection, toggleExpansionGroup, toggleExpandedNode, toggleAreaMember, activeNodeIds, hasSelection]);
 
   return (
     <SelectionContext.Provider value={value}>

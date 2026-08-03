@@ -211,6 +211,7 @@ export default function HomePage() {
                 nodes={analysisData?.nodes ?? []}
                 edges={analysisData?.edges ?? []}
                 visibleNodeIds={graphVisibleNodeIds}
+                areas={areasData}
               >
                 <AreaProvider areas={areasData}>
                   <SelectionBridge
