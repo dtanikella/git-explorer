@@ -9,7 +9,8 @@ import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
 import { SelectionProvider, useSelection } from './contexts/SelectionContext';
-import SelectionSidebar from './components/selection/SelectionSidebar';
+import SearchSelectSidebar from './components/selection/SearchSelectSidebar';
+import ManageSelectionSidebar from './components/selection/ManageSelectionSidebar';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
@@ -21,10 +22,9 @@ const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((
   modules: { label: 'Modules', config: createModulesViewConfig },
 };
 
-function SelectionSidebarWrapper({ nodes, repoPath }: { nodes: AnalysisNode[]; repoPath: string }) {
-  const { hasSelection } = useSelection();
-  if (!hasSelection) return null;
-  return <SelectionSidebar nodes={nodes} repoPath={repoPath} />;
+function ManageSelectionSidebarWrapper({ repoPath }: { repoPath: string }) {
+  const { activeNodeIds } = useSelection();
+  return <ManageSelectionSidebar effectiveNodeIds={[...activeNodeIds]} repoPath={repoPath} />;
 }
 
 function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
@@ -180,16 +180,6 @@ export default function HomePage() {
         {/* Main content */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           {/* Toolbar (per-tab) */}
-          {activeTab === 'graph' && (
-            <GraphToolbar
-              hideTestFiles={hideTestFiles}
-              onHideTestFilesChange={setHideTestFiles}
-              selectedView={selectedView}
-              onViewChange={setSelectedView}
-              viewOptions={VIEW_OPTIONS}
-              disabled={!repoPath}
-            />
-          )}
           {activeTab === 'stats' && (
             <StatsToolbar
               topN={topN}
@@ -219,19 +209,34 @@ export default function HomePage() {
                     pendingId={pendingSelectionId}
                     onPendingConsumed={() => setPendingSelectionId(null)}
                   />
-                  <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <RepoGraph
-                        repoPath={repoPath}
+                  <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
+                    <SearchSelectSidebar
+                      nodes={analysisData?.nodes ?? []}
+                      onSearchNode={(query) => searchHandlerRef.current?.(query) ?? false}
+                      repoPath={repoPath}
+                    />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <GraphToolbar
                         hideTestFiles={hideTestFiles}
-                        config={VIEW_OPTIONS[selectedView].config}
-                        onSearchNode={handleRegisterSearch}
-                        analysisData={analysisData}
-                        loading={loading}
-                        error={error}
+                        onHideTestFilesChange={setHideTestFiles}
+                        selectedView={selectedView}
+                        onViewChange={setSelectedView}
+                        viewOptions={VIEW_OPTIONS}
+                        disabled={!repoPath}
                       />
+                      <div style={{ flex: 1, minHeight: 0 }}>
+                        <RepoGraph
+                          repoPath={repoPath}
+                          hideTestFiles={hideTestFiles}
+                          config={VIEW_OPTIONS[selectedView].config}
+                          onSearchNode={handleRegisterSearch}
+                          analysisData={analysisData}
+                          loading={loading}
+                          error={error}
+                        />
+                      </div>
                     </div>
-                    <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} repoPath={repoPath} />
+                    <ManageSelectionSidebarWrapper repoPath={repoPath} />
                   </div>
                 </AreaProvider>
               </SelectionProvider>
