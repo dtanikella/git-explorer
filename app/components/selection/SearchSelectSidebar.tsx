@@ -78,9 +78,26 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
   };
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) return;
-    const found = onSearchNode(searchQuery.trim());
-    setSearchNotFound(!found);
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // First try node search (pan/highlight on canvas)
+    const nodeFound = onSearchNode(query);
+    if (nodeFound) {
+      setSearchNotFound(false);
+      return;
+    }
+
+    // Fall back to area name search
+    const lowerQuery = query.toLowerCase();
+    const areaMatch = areas.find((a) => a.name.toLowerCase().includes(lowerQuery));
+    if (areaMatch) {
+      toggleArea(areaMatch.id);
+      setSearchNotFound(false);
+      return;
+    }
+
+    setSearchNotFound(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
