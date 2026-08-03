@@ -62,8 +62,6 @@ export default function HomePage() {
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
   // Graph toolbar state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchNotFound, setSearchNotFound] = useState(false);
   const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
   const selectionToggleRef = useRef<((id: string) => void) | null>(null);
@@ -159,14 +157,6 @@ export default function HomePage() {
     searchHandlerRef.current = handler;
   }, []);
 
-  const handleSearch = useCallback(() => {
-    if (!searchQuery.trim()) return;
-    if (searchHandlerRef.current) {
-      const found = searchHandlerRef.current(searchQuery.trim());
-      setSearchNotFound(!found);
-    }
-  }, [searchQuery]);
-
   const handleNodeSelect = useCallback((scipSymbol: string) => {
     setActiveTab('graph');
     setPendingSelectionId(scipSymbol);
@@ -197,10 +187,6 @@ export default function HomePage() {
               selectedView={selectedView}
               onViewChange={setSelectedView}
               viewOptions={VIEW_OPTIONS}
-              searchQuery={searchQuery}
-              onSearchQueryChange={(q) => { setSearchQuery(q); setSearchNotFound(false); }}
-              onSearch={handleSearch}
-              searchNotFound={searchNotFound}
               disabled={!repoPath}
             />
           )}
