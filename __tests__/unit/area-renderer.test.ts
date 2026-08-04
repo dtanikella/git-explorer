@@ -1,4 +1,4 @@
-import { computeAreaHull, expandHull } from '@/lib/areas/renderer';
+import { computeAreaHull, expandHull, getTransitiveContains } from '@/lib/areas/renderer';
 import type { Area } from '@/lib/areas/types';
 
 const area: Area = {
@@ -55,5 +55,59 @@ describe('expandHull', () => {
       const expDist = Math.hypot(expanded[i][0] - cx, expanded[i][1] - cy);
       expect(expDist).toBeGreaterThan(origDist);
     }
+  });
+});
+
+describe('getTransitiveContains', () => {
+  const parent: Area = { ...area, id: 'core', contains: ['p1'], children: ['child'] };
+  const child: Area = { ...area, id: 'child', contains: ['c1'], parent: 'core', children: [] };
+
+  it('includes the area\'s own members plus descendants\' members', () => {
+    const areasById = new Map([['core', parent], ['child', child]]);
+    const result = getTransitiveContains(parent, areasById);
+    expect(result.sort()).toEqual(['c1', 'p1']);
+  });
+
+  it('returns just its own members when it has no children', () => {
+    const areasById = new Map([['child', child]]);
+    expect(getTransitiveContains(child, areasById)).toEqual(['c1']);
+  });
+
+  it('does not infinite-loop on a self-referencing children cycle', () => {
+    const cyclic: Area = { ...area, id: 'x', contains: ['x1'], children: ['x'] };
+    const areasById = new Map([['x', cyclic]]);
+    expect(getTransitiveContains(cyclic, areasById)).toEqual(['x1']);
+  });
+
+  it('recurses through grandchildren', () => {
+    const grandchild: Area = { ...area, id: 'grandchild', contains: ['g1'], parent: 'child', children: [] };
+    const childWithKid: Area = { ...child, children: ['grandchild'] };
+    const areasById = new Map([
+      ['core', parent],
+      ['child', childWithKid],
+      ['grandchild', grandchild],
+    ]);
+    const result = getTransitiveContains(parent, areasById);
+    expect(result.sort()).toEqual(['c1', 'g1', 'p1']);
+  });
+});
+
+describe('computeAreaHull with areasById (containment)', () => {
+  it('includes descendant member positions in the parent hull', () => {
+    const parentArea: Area = { ...area, id: 'core', contains: ['p1'], children: ['child'] };
+    const childArea: Area = { ...area, id: 'child', contains: ['c1'], parent: 'core', children: [] };
+    const areasById = new Map([['core', parentArea], ['child', childArea]]);
+    const positions = new Map([
+      ['p1', { x: 0, y: 0, radius: 5 }],
+      ['c1', { x: 200, y: 200, radius: 5 }],
+    ]);
+
+    const withoutChildren = computeAreaHull(parentArea, positions);
+    const withChildren = computeAreaHull(parentArea, positions, areasById);
+
+    // Without transitive lookup, only p1 is a member -> circle around p1 alone.
+    expect(withoutChildren).toEqual({ type: 'circle', cx: 0, cy: 0, r: expect.any(Number) });
+    // With transitive lookup, both members are included -> circle spans p1 and c1.
+    expect(withChildren).not.toEqual(withoutChildren);
   });
 });

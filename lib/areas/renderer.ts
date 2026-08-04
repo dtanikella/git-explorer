@@ -8,12 +8,37 @@ export type HullResult =
   | { type: 'polygon'; points: [number, number][] }
   | null;
 
+export function getTransitiveContains(
+  area: Area,
+  areasById: Map<string, Area>,
+): string[] {
+  const symbols = new Set(area.contains);
+  const visited = new Set<string>([area.id]);
+  const queue = [...area.children];
+
+  while (queue.length > 0) {
+    const childId = queue.shift()!;
+    if (visited.has(childId)) continue;
+    visited.add(childId);
+
+    const child = areasById.get(childId);
+    if (!child) continue;
+
+    for (const symbol of child.contains) symbols.add(symbol);
+    queue.push(...child.children);
+  }
+
+  return [...symbols];
+}
+
 export function computeAreaHull(
   area: Area,
   nodePositions: Map<string, { x: number; y: number; radius: number }>,
+  areasById: Map<string, Area> = new Map(),
 ): HullResult {
+  const memberSymbols = getTransitiveContains(area, areasById);
   const memberPositions: { x: number; y: number; radius: number }[] = [];
-  for (const symbol of area.contains) {
+  for (const symbol of memberSymbols) {
     const pos = nodePositions.get(symbol);
     if (pos) memberPositions.push(pos);
   }
@@ -76,11 +101,13 @@ export function drawAreaOverlays(
   runtimeState: Map<string, AreaRuntimeState>,
   nodePositions: Map<string, { x: number; y: number; radius: number }>,
 ): void {
+  const areasById = new Map(areas.map((a) => [a.id, a]));
+
   for (const area of areas) {
     const state = runtimeState.get(area.id);
     if (!state || !state.visible) continue;
 
-    const hull = computeAreaHull(area, nodePositions);
+    const hull = computeAreaHull(area, nodePositions, areasById);
     if (!hull) continue;
 
     ctx.save();
