@@ -9,6 +9,14 @@ import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays } from '@/lib/areas/renderer';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
+import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
+import { buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
+import {
+  createClusterPullForce,
+  createAreaAttractForce,
+  createParentPullForce,
+  createAnchorRepelForce,
+} from '@/lib/areas/forces';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -60,6 +68,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const runtimeStateRef = useRef(runtimeState);
   const nodeToAreasRef = useRef(nodeToAreas);
   const getVisibleAreasRef = useRef(getVisibleAreas);
+  const anchorsRef = useRef<Map<string, AreaAnchorNode>>(new Map());
 
   useEffect(() => {
     activeNodeIdsRef.current = activeNodeIds;
@@ -344,8 +353,17 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
     const cfg = configRef.current;
 
+    const anchors = buildAreaAnchors(areas, anchorsRef.current);
+    anchorsRef.current = new Map(anchors.map((a) => [a.areaId, a]));
+    const areasById = new Map(areas.map((a) => [a.id, a]));
+    const crossAreaWeights = buildCrossAreaEdgeWeights(
+      simEdges.map((e) => [e.source as unknown as string, e.target as unknown as string]),
+      nodeToAreas,
+    );
+    const allSimNodes: Array<SimpleNode | AreaAnchorNode> = [...simNodes, ...anchors];
+
     const simulation = d3
-      .forceSimulation<SimpleNode>(simNodes)
+      .forceSimulation<any>(allSimNodes)
       .force(
         'link',
         d3
@@ -354,15 +372,20 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           .distance((d: any) => cfg.forces.edge(d.data).distance)
           .strength((d: any) => cfg.forces.edge(d.data).strength)
       )
-      .force('charge', d3.forceManyBody<SimpleNode>()
-        .strength((d: any) => cfg.forces.node(d.data).charge))
+      .force('charge', d3.forceManyBody<any>()
+        .strength((d: any) => (d.kind === 'anchor' ? 0 : cfg.forces.node(d.data).charge)))
       .force('center', d3.forceCenter(width / 2, height / 2)
         .strength(cfg.simulation.centerStrength))
-      .force('collide', d3.forceCollide<SimpleNode>()
+      .force('collide', d3.forceCollide<any>()
         .radius((d: any) => {
+          if (d.kind === 'anchor') return 0;
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
-        }));
+        }))
+      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
+      .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
+      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
 
     simulation.alphaDecay(cfg.simulation.alphaDecay);
     simulation.velocityDecay(cfg.simulation.velocityDecay);
@@ -434,7 +457,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
     };
-  }, [simNodes, simEdges]);
+  }, [simNodes, simEdges, areas, nodeToAreas]);
 
   const handleSearchNode = useCallback((query: string): boolean => {
     const lowerQ = query.toLowerCase();
