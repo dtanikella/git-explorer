@@ -24,6 +24,20 @@ const mockSelectionState = {
   },
 };
 
+const mockAreaStore = {
+  areas: [] as any[],
+  runtimeState: new Map(),
+  nodeToAreas: new Map(),
+  setAreas: jest.fn(),
+  toggleVisibility: jest.fn(),
+  getVisibleAreas: jest.fn(() => [] as any[]),
+  getAreasForNode: jest.fn(() => [] as any[]),
+};
+
+jest.mock('@/app/contexts/AreaContext', () => ({
+  useAreaStore: () => mockAreaStore,
+}));
+
 jest.mock('d3', () => {
   const chainable = (): any => {
     const obj: Record<string, any> = {};
@@ -142,6 +156,9 @@ beforeEach(() => {
   mockSelectionState.hasSelection = false;
   mockSelectionState.state.selectedNodeIds = new Set<string>();
   mockSelectionState.state.expansions = new Map();
+  mockAreaStore.areas = [];
+  mockAreaStore.runtimeState = new Map();
+  mockAreaStore.nodeToAreas = new Map();
 });
 
 describe('RepoGraph — props and rendering', () => {
