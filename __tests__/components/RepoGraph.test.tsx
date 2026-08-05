@@ -118,8 +118,13 @@ beforeAll(() => {
 });
 
 import RepoGraph from '@/app/components/repo-graph/RepoGraph';
+import { AreaProvider } from '@/app/contexts/AreaContext';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { AnalysisResult } from '@/lib/analysis/types';
+
+function renderWithAreas(ui: React.ReactElement) {
+  return render(<AreaProvider areas={[]}>{ui}</AreaProvider>);
+}
 
 const emptyData: AnalysisResult = {
   nodes: [],
@@ -158,24 +163,24 @@ describe('RepoGraph — props and rendering', () => {
     };
     const configFactory = jest.fn(() => DEFAULT_REPO_GRAPH_CONFIG);
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} analysisData={mockData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} analysisData={mockData} loading={false} error={null} />);
 
     await waitFor(() => expect(configFactory).toHaveBeenCalledWith(mockData.edges));
     await act(async () => {});
   });
 
   it('shows loading state when loading prop is true', () => {
-    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={true} error={null} />);
+    const { getByText } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={true} error={null} />);
     expect(getByText('Analyzing repository...')).toBeInTheDocument();
   });
 
   it('shows error state when error prop is set', () => {
-    const { getByText } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error="Analysis failed" />);
+    const { getByText } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error="Analysis failed" />);
     expect(getByText('Analysis failed')).toBeInTheDocument();
   });
 
   it('renders nothing when not loading, no error, and no data', () => {
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error={null} />);
+    const { container } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={null} loading={false} error={null} />);
     expect(container.firstChild).toBeNull();
   });
 });
@@ -194,7 +199,7 @@ describe('RepoGraph — canvas rendering', () => {
     };
 
     const d3Mock = require('d3');
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
 
     await act(async () => {});
 
@@ -209,7 +214,7 @@ describe('RepoGraph — canvas rendering', () => {
 describe('RepoGraph — search', () => {
   it('registers search handler when onSearchNode is provided', () => {
     const registerFn = jest.fn();
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
     expect(registerFn).toHaveBeenCalledWith(expect.any(Function));
   });
 
@@ -227,7 +232,7 @@ describe('RepoGraph — search', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     expect(searchFn).not.toBeNull();
@@ -252,7 +257,7 @@ describe('RepoGraph — search', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     expect(searchFn).not.toBeNull();
@@ -264,7 +269,7 @@ describe('RepoGraph — search', () => {
     let searchFn: ((q: string) => boolean) | null = null;
     const registerFn = jest.fn((fn: (q: string) => boolean) => { searchFn = fn; });
 
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
+    renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} onSearchNode={registerFn} analysisData={emptyData} loading={false} error={null} />);
     await act(async () => {});
 
     expect(searchFn).not.toBeNull();
@@ -285,7 +290,7 @@ describe('RepoGraph — selection click handling', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    const { container } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');
@@ -311,7 +316,7 @@ describe('RepoGraph — selection click handling', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 2, edgeCount: 1, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    const { container } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');
@@ -336,7 +341,7 @@ describe('RepoGraph — tooltip', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    const { container } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');
@@ -356,7 +361,7 @@ describe('RepoGraph — tooltip', () => {
       metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
     };
 
-    const { container } = render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
+    const { container } = renderWithAreas(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData} loading={false} error={null} />);
     await act(async () => {});
 
     const canvas = container.querySelector('canvas');
