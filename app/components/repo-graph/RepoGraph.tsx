@@ -6,6 +6,17 @@ import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
+import { useAreaStore } from '@/app/contexts/AreaContext';
+import { drawAreaOverlays } from '@/lib/areas/renderer';
+import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
+import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
+import { buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
+import {
+  createClusterPullForce,
+  createAreaAttractForce,
+  createParentPullForce,
+  createAnchorRepelForce,
+} from '@/lib/areas/forces';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -52,6 +63,13 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   const hasSelectionRef = useRef(hasSelection);
 
+  const { areas, runtimeState, nodeToAreas, getVisibleAreas } = useAreaStore();
+  const areasRef = useRef(areas);
+  const runtimeStateRef = useRef(runtimeState);
+  const nodeToAreasRef = useRef(nodeToAreas);
+  const getVisibleAreasRef = useRef(getVisibleAreas);
+  const anchorsRef = useRef<Map<string, AreaAnchorNode>>(new Map());
+
   useEffect(() => {
     activeNodeIdsRef.current = activeNodeIds;
     selectedNodeIdsRef.current = selectedNodeIds;
@@ -59,6 +77,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     toggleNodeRef.current = toggleNode;
     drawFrameRef.current?.();
   }, [activeNodeIds, selectedNodeIds, hasSelection, toggleNode]);
+
+  useEffect(() => {
+    areasRef.current = areas;
+    runtimeStateRef.current = runtimeState;
+    nodeToAreasRef.current = nodeToAreas;
+    getVisibleAreasRef.current = getVisibleAreas;
+    drawFrameRef.current?.();
+  }, [areas, runtimeState, nodeToAreas, getVisibleAreas]);
 
   const resolvedConfig = useMemo(() => {
     if (!analysisData) {
@@ -224,6 +250,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       c.save();
       c.setTransform(t.k, 0, 0, t.k, t.x, t.y);
 
+      // Draw area overlays (behind edges and nodes)
+      const nodePositionMap = new Map<string, { x: number; y: number; radius: number }>();
+      for (const n of simNodes) {
+        if (n.x == null || n.y == null) continue;
+        const nStyle = cfg.style.node(n.data, n.degree);
+        nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
+      }
+      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap);
+
       // Draw edges
       for (const e of simEdges) {
         const src = e.source as unknown as SimpleNode;
@@ -243,10 +278,20 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         }
         c.lineWidth = eStyle.width;
 
+        // Compute area filtering state for edges
+        const allAreasE = areasRef.current;
+        const visibleAreasE = getVisibleAreasRef.current();
+        const isAreaFilteringE = allAreasE.length > 0 && visibleAreasE.length < allAreasE.length;
+
         if (hasSelectionRef.current) {
           const srcActive = activeNodeIdsRef.current.has(src.id);
           const tgtActive = activeNodeIdsRef.current.has(tgt.id);
           c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity : 0.15;
+        } else if (isAreaFilteringE) {
+          const srcInArea = resolveAreaInfluence(src.id, visibleAreasE, nodeToAreasRef.current);
+          const tgtInArea = resolveAreaInfluence(tgt.id, visibleAreasE, nodeToAreasRef.current);
+          const bothDimmed = srcInArea?.dimmed && tgtInArea?.dimmed;
+          c.globalAlpha = bothDimmed ? 0.08 : eStyle.opacity;
         } else {
           c.globalAlpha = eStyle.opacity;
         }
@@ -262,17 +307,27 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const isActive = hasSelectionRef.current ? activeNodeIdsRef.current.has(n.id) : true;
         const nodeAlpha = hasSelectionRef.current ? (isActive ? nStyle.opacity : 0.3) : nStyle.opacity;
 
+        // Only apply area dimming when user has toggled some areas off (active filter)
+        const allAreas = areasRef.current;
+        const visibleAreas = getVisibleAreasRef.current();
+        const isAreaFiltering = allAreas.length > 0 && visibleAreas.length < allAreas.length;
+        const areaInfluence = isAreaFiltering
+          ? resolveAreaInfluence(n.id, visibleAreas, nodeToAreasRef.current)
+          : null;
+        // Never dim active/selected nodes via area influence
+        const finalAlpha = (areaInfluence?.dimmed && !isActive) ? Math.min(nodeAlpha, 0.15) : nodeAlpha;
+
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
         c.fillStyle = nStyle.color;
-        c.globalAlpha = nodeAlpha;
+        c.globalAlpha = finalAlpha;
         c.fill();
         c.globalAlpha = 1.0;
         c.strokeStyle = '#fff';
         c.lineWidth = 1;
         c.stroke();
         if (nStyle.label) {
-          c.globalAlpha = nodeAlpha;
+          c.globalAlpha = finalAlpha;
           c.fillStyle = '#374151';
           c.font = '10px sans-serif';
           c.textAlign = 'center';
@@ -298,8 +353,17 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
     const cfg = configRef.current;
 
+    const anchors = buildAreaAnchors(areas, anchorsRef.current);
+    anchorsRef.current = new Map(anchors.map((a) => [a.areaId, a]));
+    const areasById = new Map(areas.map((a) => [a.id, a]));
+    const crossAreaWeights = buildCrossAreaEdgeWeights(
+      simEdges.map((e) => [e.source as unknown as string, e.target as unknown as string]),
+      nodeToAreas,
+    );
+    const allSimNodes: Array<SimpleNode | AreaAnchorNode> = [...simNodes, ...anchors];
+
     const simulation = d3
-      .forceSimulation<SimpleNode>(simNodes)
+      .forceSimulation<any>(allSimNodes)
       .force(
         'link',
         d3
@@ -308,15 +372,20 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           .distance((d: any) => cfg.forces.edge(d.data).distance)
           .strength((d: any) => cfg.forces.edge(d.data).strength)
       )
-      .force('charge', d3.forceManyBody<SimpleNode>()
-        .strength((d: any) => cfg.forces.node(d.data).charge))
+      .force('charge', d3.forceManyBody<any>()
+        .strength((d: any) => (d.kind === 'anchor' ? 0 : cfg.forces.node(d.data).charge)))
       .force('center', d3.forceCenter(width / 2, height / 2)
         .strength(cfg.simulation.centerStrength))
-      .force('collide', d3.forceCollide<SimpleNode>()
+      .force('collide', d3.forceCollide<any>()
         .radius((d: any) => {
+          if (d.kind === 'anchor') return 0;
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
-        }));
+        }))
+      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
+      .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
+      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
 
     simulation.alphaDecay(cfg.simulation.alphaDecay);
     simulation.velocityDecay(cfg.simulation.velocityDecay);
@@ -388,7 +457,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
     };
-  }, [simNodes, simEdges]);
+  }, [simNodes, simEdges, areas, nodeToAreas]);
 
   const handleSearchNode = useCallback((query: string): boolean => {
     const lowerQ = query.toLowerCase();

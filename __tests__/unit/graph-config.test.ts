@@ -3,6 +3,7 @@ import {
   DEFAULT_EDGE_STYLE,
   DEFAULT_NODE_FORCES,
   DEFAULT_EDGE_FORCES,
+  DEFAULT_AREA_FORCES,
   DEFAULT_SIMULATION,
   DEFAULT_REPO_GRAPH_CONFIG,
   INTERNAL_PROCESSING_CONFIG,
@@ -98,6 +99,24 @@ describe('graph-config defaults', () => {
       expect(DEFAULT_SIMULATION.velocityDecay).toBeGreaterThan(0);
     });
   });
+
+  describe('DEFAULT_AREA_FORCES', () => {
+    it('has a positive cluster pull strength', () => {
+      expect(DEFAULT_AREA_FORCES.areaCluster).toBeGreaterThan(0);
+    });
+
+    it('has a positive area-attract strength', () => {
+      expect(DEFAULT_AREA_FORCES.areaAttract).toBeGreaterThan(0);
+    });
+
+    it('has a positive parent-pull strength', () => {
+      expect(DEFAULT_AREA_FORCES.areaParent).toBeGreaterThan(0);
+    });
+
+    it('has a positive anchor-repel strength', () => {
+      expect(DEFAULT_AREA_FORCES.anchorRepel).toBeGreaterThan(0);
+    });
+  });
 });
 
 const makeNode = (overrides?: Partial<AnalysisNode>): AnalysisNode => ({
@@ -189,6 +208,13 @@ describe('DEFAULT_REPO_GRAPH_CONFIG', () => {
 
   it('has default simulation params', () => {
     expect(DEFAULT_REPO_GRAPH_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
+  });
+
+  it('exposes the area force constants', () => {
+    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaCluster).toBe(DEFAULT_AREA_FORCES.areaCluster);
+    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaAttract).toBe(DEFAULT_AREA_FORCES.areaAttract);
+    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaParent).toBe(DEFAULT_AREA_FORCES.areaParent);
+    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.anchorRepel).toBe(DEFAULT_AREA_FORCES.anchorRepel);
   });
 });
 
@@ -353,6 +379,19 @@ describe('mergeConfigs', () => {
     expect(result.style.node).toBe(customNodeStyler);
     const edgeStyle = result.style.edge(makeEdge());
     expect(edgeStyle).toEqual(DEFAULT_EDGE_STYLE);
+  });
+
+  it('keeps base area force values when override does not specify forces', () => {
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {});
+    expect(result.forces.areaCluster).toBe(DEFAULT_AREA_FORCES.areaCluster);
+  });
+
+  it('applies an override area force value', () => {
+    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+      forces: { areaCluster: 0.99 },
+    });
+    expect(result.forces.areaCluster).toBe(0.99);
+    expect(result.forces.areaAttract).toBe(DEFAULT_AREA_FORCES.areaAttract);
   });
 });
 

@@ -60,6 +60,10 @@ export interface RepoGraphConfig {
   forces: {
     node: NodeForcer;
     edge: EdgeForcer;
+    areaCluster: number;
+    areaAttract: number;
+    areaParent: number;
+    anchorRepel: number;
   };
   simulation: SimulationParams;
 }
@@ -89,6 +93,13 @@ export const DEFAULT_NODE_FORCES: NodeForces = {
 export const DEFAULT_EDGE_FORCES: EdgeForces = {
   distance: 80,
   strength: 0.5,
+};
+
+export const DEFAULT_AREA_FORCES = {
+  areaCluster: 0.3,
+  areaAttract: 0.15,
+  areaParent: 0.5,
+  anchorRepel: 4000,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
@@ -128,6 +139,7 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   forces: {
     node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
     edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
+    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -169,6 +181,7 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
       [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
       [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
     }),
+    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -335,6 +348,10 @@ export function mergeConfigs(
       result.forces = {
         node: override.forces.node ?? result.forces.node,
         edge: override.forces.edge ?? result.forces.edge,
+        areaCluster: override.forces.areaCluster ?? result.forces.areaCluster,
+        areaAttract: override.forces.areaAttract ?? result.forces.areaAttract,
+        areaParent: override.forces.areaParent ?? result.forces.areaParent,
+        anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
       };
     }
     if (override.simulation) {

@@ -9,20 +9,22 @@ import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
 import { SelectionProvider, useSelection } from './contexts/SelectionContext';
-import SelectionSidebar from './components/selection/SelectionSidebar';
+import SearchSelectSidebar from './components/selection/SearchSelectSidebar';
+import ManageSelectionSidebar from './components/selection/ManageSelectionSidebar';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
+import { AreaProvider } from '@/app/contexts/AreaContext';
+import type { Area } from '@/lib/areas/types';
 
 const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
   modules: { label: 'Modules', config: createModulesViewConfig },
 };
 
-function SelectionSidebarWrapper({ nodes }: { nodes: AnalysisNode[] }) {
-  const { hasSelection } = useSelection();
-  if (!hasSelection) return null;
-  return <SelectionSidebar nodes={nodes} />;
+function ManageSelectionSidebarWrapper({ repoPath }: { repoPath: string }) {
+  const { activeNodeIds } = useSelection();
+  return <ManageSelectionSidebar effectiveNodeIds={[...activeNodeIds]} repoPath={repoPath} />;
 }
 
 function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
@@ -60,8 +62,6 @@ export default function HomePage() {
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
   // Graph toolbar state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchNotFound, setSearchNotFound] = useState(false);
   const [selectedView, setSelectedView] = useState<string>('modules');
   const searchHandlerRef = useRef<((query: string) => boolean) | null>(null);
   const selectionToggleRef = useRef<((id: string) => void) | null>(null);
@@ -70,6 +70,7 @@ export default function HomePage() {
   const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [areasData, setAreasData] = useState<Area[]>([]);
 
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -105,6 +106,32 @@ export default function HomePage() {
     return () => controller.abort();
   }, [repoPath, hideTestFiles]);
 
+  // Load areas after analysis succeeds
+  useEffect(() => {
+    if (!repoPath || !analysisData) {
+      setAreasData([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch('/api/areas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'load', repoPath }),
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.success && result.data?.areas) {
+          setAreasData(result.data.areas);
+        }
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        // Silently fail — areas are optional
+      });
+    return () => controller.abort();
+  }, [repoPath, analysisData]);
+
   // Compute which node IDs are visible in the current graph view.
   // Mirrors the filtering logic in RepoGraph so treemap knows which nodes are clickable.
   const graphVisibleNodeIds = useMemo(() => {
@@ -130,14 +157,6 @@ export default function HomePage() {
     searchHandlerRef.current = handler;
   }, []);
 
-  const handleSearch = useCallback(() => {
-    if (!searchQuery.trim()) return;
-    if (searchHandlerRef.current) {
-      const found = searchHandlerRef.current(searchQuery.trim());
-      setSearchNotFound(!found);
-    }
-  }, [searchQuery]);
-
   const handleNodeSelect = useCallback((scipSymbol: string) => {
     setActiveTab('graph');
     setPendingSelectionId(scipSymbol);
@@ -161,20 +180,6 @@ export default function HomePage() {
         {/* Main content */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           {/* Toolbar (per-tab) */}
-          {activeTab === 'graph' && (
-            <GraphToolbar
-              hideTestFiles={hideTestFiles}
-              onHideTestFilesChange={setHideTestFiles}
-              selectedView={selectedView}
-              onViewChange={setSelectedView}
-              viewOptions={VIEW_OPTIONS}
-              searchQuery={searchQuery}
-              onSearchQueryChange={(q) => { setSearchQuery(q); setSearchNotFound(false); }}
-              onSearch={handleSearch}
-              searchNotFound={searchNotFound}
-              disabled={!repoPath}
-            />
-          )}
           {activeTab === 'stats' && (
             <StatsToolbar
               topN={topN}
@@ -196,26 +201,44 @@ export default function HomePage() {
                 nodes={analysisData?.nodes ?? []}
                 edges={analysisData?.edges ?? []}
                 visibleNodeIds={graphVisibleNodeIds}
+                areas={areasData}
               >
-                <SelectionBridge
-                  toggleRef={selectionToggleRef}
-                  pendingId={pendingSelectionId}
-                  onPendingConsumed={() => setPendingSelectionId(null)}
-                />
-                <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <RepoGraph
+                <AreaProvider areas={areasData}>
+                  <SelectionBridge
+                    toggleRef={selectionToggleRef}
+                    pendingId={pendingSelectionId}
+                    onPendingConsumed={() => setPendingSelectionId(null)}
+                  />
+                  <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
+                    <SearchSelectSidebar
+                      nodes={analysisData?.nodes ?? []}
+                      onSearchNode={(query) => searchHandlerRef.current?.(query) ?? false}
                       repoPath={repoPath}
-                      hideTestFiles={hideTestFiles}
-                      config={VIEW_OPTIONS[selectedView].config}
-                      onSearchNode={handleRegisterSearch}
-                      analysisData={analysisData}
-                      loading={loading}
-                      error={error}
                     />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <GraphToolbar
+                        hideTestFiles={hideTestFiles}
+                        onHideTestFilesChange={setHideTestFiles}
+                        selectedView={selectedView}
+                        onViewChange={setSelectedView}
+                        viewOptions={VIEW_OPTIONS}
+                        disabled={!repoPath}
+                      />
+                      <div style={{ flex: 1, minHeight: 0 }}>
+                        <RepoGraph
+                          repoPath={repoPath}
+                          hideTestFiles={hideTestFiles}
+                          config={VIEW_OPTIONS[selectedView].config}
+                          onSearchNode={handleRegisterSearch}
+                          analysisData={analysisData}
+                          loading={loading}
+                          error={error}
+                        />
+                      </div>
+                    </div>
+                    <ManageSelectionSidebarWrapper repoPath={repoPath} />
                   </div>
-                  <SelectionSidebarWrapper nodes={analysisData?.nodes ?? []} />
-                </div>
+                </AreaProvider>
               </SelectionProvider>
             ) : (
               analysisData ? (
