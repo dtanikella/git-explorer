@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { SelectionProvider, useSelection } from '@/app/contexts/SelectionContext';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
+import type { Area } from '@/lib/areas/types';
 
 function makeNode(overrides: Partial<AnalysisNode> & { scipSymbol: string; name: string; filePath: string }): AnalysisNode {
   return {
@@ -53,15 +54,43 @@ const testEdges: AnalysisEdge[] = [
 
 const visibleNodeIds = new Set(['sym:a', 'sym:b', 'sym:c', 'sym:d']);
 
+const testAreas: Area[] = [
+  {
+    id: 'area-a',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    name: 'Area A',
+    type: 'business_domain',
+    contains: ['sym:a', 'sym:b'],
+    parent: null,
+    children: [],
+    clusterStrength: 0,
+  },
+  {
+    id: 'area-b',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    name: 'Area B',
+    type: 'business_domain',
+    contains: ['sym:c'],
+    parent: null,
+    children: [],
+    clusterStrength: 0,
+  },
+];
+
 function TestConsumer({ onReady }: { onReady: (ctx: ReturnType<typeof useSelection>) => void }) {
   const ctx = useSelection();
   React.useEffect(() => { onReady(ctx); });
   return null;
 }
 
-function renderWithProvider(onReady: (ctx: ReturnType<typeof useSelection>) => void) {
+function renderWithProvider(
+  onReady: (ctx: ReturnType<typeof useSelection>) => void,
+  areas: Area[] = [],
+) {
   return render(
-    <SelectionProvider nodes={testNodes} edges={testEdges} visibleNodeIds={visibleNodeIds}>
+    <SelectionProvider nodes={testNodes} edges={testEdges} visibleNodeIds={visibleNodeIds} areas={areas}>
       <TestConsumer onReady={onReady} />
     </SelectionProvider>
   );
@@ -205,6 +234,96 @@ describe('SelectionContext', () => {
       // Neither sym:a nor sym:b should appear as candidates since both are selected
       expect(sameFile.candidates.find((c) => c.nodeId === 'sym:a')).toBeUndefined();
       expect(sameFile.candidates.find((c) => c.nodeId === 'sym:b')).toBeUndefined();
+    });
+  });
+
+  describe('area selection', () => {
+    it('starts with no area selection', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      expect(ctx!.state.selectedAreaIds.size).toBe(0);
+      expect(ctx!.hasSelection).toBe(false);
+    });
+
+    it('toggleArea adds an area to selection', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      expect(ctx!.state.selectedAreaIds.has('area-a')).toBe(true);
+      expect(ctx!.hasSelection).toBe(true);
+    });
+
+    it('toggleArea removes an area that is already selected', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      act(() => { ctx!.toggleArea('area-a'); });
+      expect(ctx!.state.selectedAreaIds.size).toBe(0);
+      expect(ctx!.hasSelection).toBe(false);
+    });
+
+    it('computes area-members candidates when an area is selected', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      const areaMembers = ctx!.state.expansions.get('area-members')!;
+      expect(areaMembers.candidates.length).toBe(2);
+      expect(areaMembers.candidates.map((c) => c.nodeId).sort()).toEqual(['sym:a', 'sym:b']);
+      expect(areaMembers.candidates.every((c) => c.sourceNodeIds.includes('area-a'))).toBe(true);
+    });
+
+    it('area-members group is enabled by default', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      expect(ctx!.state.expansions.get('area-members')!.enabled).toBe(true);
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(true);
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(true);
+    });
+
+    it('toggleAreaMember disables an individual area member', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      act(() => { ctx!.toggleAreaMember('sym:a'); });
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(false);
+      expect(ctx!.activeNodeIds.has('sym:b')).toBe(true);
+    });
+
+    it('toggleAreaMember re-enables a disabled area member', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      act(() => { ctx!.toggleAreaMember('sym:a'); });
+      act(() => { ctx!.toggleAreaMember('sym:a'); });
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(true);
+    });
+
+    it('clearSelection removes area selections and resets expansions', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      act(() => { ctx!.clearSelection(); });
+      expect(ctx!.state.selectedAreaIds.size).toBe(0);
+      expect(ctx!.state.selectedNodeIds.size).toBe(0);
+      expect(ctx!.state.expansions.size).toBe(0);
+      expect(ctx!.hasSelection).toBe(false);
+    });
+
+    it('hasSelection is true with only area selection', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleArea('area-a'); });
+      expect(ctx!.hasSelection).toBe(true);
+    });
+
+    it('combines node and area selections in activeNodeIds', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      renderWithProvider((c) => { ctx = c; }, testAreas);
+      act(() => { ctx!.toggleNode('sym:d'); });
+      act(() => { ctx!.toggleArea('area-b'); });
+      expect(ctx!.activeNodeIds.has('sym:c')).toBe(true); // from area-b
+      expect(ctx!.activeNodeIds.has('sym:d')).toBe(true); // selected node
     });
   });
 });
