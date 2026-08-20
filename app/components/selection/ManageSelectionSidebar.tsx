@@ -12,6 +12,7 @@ interface ManageSelectionSidebarProps {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
+type RegenerateStatus = 'idle' | 'running' | 'success' | 'error';
 
 const NEW_AREA_SENTINEL = '__new__';
 
@@ -44,6 +45,8 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
   const [pendingCreate, setPendingCreate] = useState<DraftArea | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [regenerateStatus, setRegenerateStatus] = useState<RegenerateStatus>('idle');
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
   const [selectedAreaId, setSelectedAreaId] = useState<string>('');
   const [newName, setNewName] = useState('');
@@ -63,6 +66,8 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
     setNewChildren([]);
     setSaveStatus('idle');
     setErrorMessage(null);
+    setRegenerateStatus('idle');
+    setRegenerateError(null);
   }, [effectiveNodeIds]);
 
   // Reset success/error status after a delay
@@ -72,6 +77,13 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
       return () => clearTimeout(timer);
     }
   }, [saveStatus]);
+
+  useEffect(() => {
+    if (regenerateStatus === 'success' || regenerateStatus === 'error') {
+      const timer = setTimeout(() => setRegenerateStatus('idle'), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [regenerateStatus]);
 
   const areasById = useMemo(() => {
     const map = new Map<string, Area>();
@@ -215,6 +227,27 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
     }
   }, [repoPath, setAreas, clearPending]);
 
+  const handleRegenerate = useCallback(async () => {
+    setRegenerateStatus('running');
+    setRegenerateError(null);
+    try {
+      const res = await fetch('/api/areas/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoPath }),
+      });
+      const result = await res.json();
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Regeneration failed');
+      }
+      setAreas(result.data.areas);
+      setRegenerateStatus('success');
+    } catch (err) {
+      setRegenerateStatus('error');
+      setRegenerateError(err instanceof Error ? err.message : 'Regeneration failed');
+    }
+  }, [repoPath, setAreas]);
+
   const handleSave = useCallback(() => {
     if (!canSave) return;
 
@@ -305,6 +338,24 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
       >
         <span style={{ fontWeight: 600 }}>Manage Selection</span>
         <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            data-testid="regenerate-areas"
+            onClick={handleRegenerate}
+            disabled={regenerateStatus === 'running'}
+            style={{
+              padding: '4px 10px',
+              fontSize: 11,
+              background: regenerateStatus === 'running' ? '#d1d5db' : '#7c3aed',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: regenerateStatus === 'running' ? 'default' : 'pointer',
+              opacity: regenerateStatus === 'running' ? 0.7 : 1,
+            }}
+            title="Run community detection over the call graph and regenerate all areas"
+          >
+            {regenerateStatus === 'running' ? 'Regenerating…' : 'Regenerate Areas'}
+          </button>
           <button
             data-testid="save-selection"
             onClick={handleSave}
@@ -704,6 +755,21 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
             </div>
 
             {/* Status */}
+            {regenerateStatus === 'running' && (
+              <div data-testid="regenerate-running" style={{ color: '#7c3aed', fontSize: 11, padding: '4px 0' }}>
+                Running community detection…
+              </div>
+            )}
+            {regenerateStatus === 'success' && (
+              <div data-testid="regenerate-success" style={{ color: '#059669', fontSize: 11, padding: '4px 0' }}>
+                Areas regenerated
+              </div>
+            )}
+            {regenerateStatus === 'error' && (
+              <div data-testid="regenerate-error" style={{ color: '#dc2626', fontSize: 11, padding: '4px 0' }}>
+                {regenerateError ?? 'Regeneration failed'}
+              </div>
+            )}
             {saveStatus === 'success' && (
               <div data-testid="save-success" style={{ color: '#059669', fontSize: 11, padding: '4px 0' }}>
                 Saved successfully

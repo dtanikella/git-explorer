@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ManageSelectionSidebar from '@/app/components/selection/ManageSelectionSidebar';
 import type { SelectionContextValue } from '@/app/contexts/SelectionContext';
@@ -238,6 +238,48 @@ describe('ManageSelectionSidebar', () => {
     fireEvent.click(screen.getByTestId('save-selection'));
 
     expect(await screen.findByTestId('save-error')).toHaveTextContent('No write access');
+  });
+
+  describe('Regenerate Areas action', () => {
+    it('POSTs to /api/areas/generate, shows a loading state, then applies the returned areas', async () => {
+      const regeneratedAreas: Area[] = [
+        { ...mockAreas[0], name: 'Generated Auth', contains: ['sym-login'] },
+        { ...mockAreas[1], name: 'Generated Payments' },
+      ];
+      let releaseResolve: (value: unknown) => void = () => {};
+      const pending = new Promise((resolve) => { releaseResolve = resolve; });
+      fetchMock.mockReturnValueOnce(
+        pending.then(() => ({
+          json: async () => ({ success: true, data: { version: 1, areas: regeneratedAreas } }),
+        })),
+      );
+
+      render(<ManageSelectionSidebar effectiveNodeIds={['sym-login', 'sym-logout']} repoPath="/tmp/test" />);
+      fireEvent.click(screen.getByTestId('regenerate-areas'));
+
+      // Loading state is surfaced while the request is in flight.
+      expect(screen.getByText('Regenerating…')).toBeInTheDocument();
+      const [url, request] = fetchMock.mock.calls[0];
+      expect(url).toBe('/api/areas/generate');
+      expect(JSON.parse((request as Request).body as string)).toMatchObject({ repoPath: '/tmp/test' });
+
+      await act(async () => { releaseResolve(null); });
+      expect(await screen.findByTestId('regenerate-success')).toBeInTheDocument();
+      expect(mockSetAreas).toHaveBeenCalledWith(regeneratedAreas);
+    });
+
+    it('shows an error and never applies the areas when regeneration fails', async () => {
+      fetchMock.mockResolvedValue({
+        json: async () => ({ success: false, error: 'Analysis failed' }),
+      });
+
+      render(<ManageSelectionSidebar effectiveNodeIds={['sym-login', 'sym-logout']} repoPath="/tmp/test" />);
+      fireEvent.click(screen.getByTestId('regenerate-areas'));
+
+      expect(await screen.findByTestId('regenerate-error')).toHaveTextContent('Analysis failed');
+      expect(mockSetAreas).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('regenerate-success')).not.toBeInTheDocument();
+    });
   });
 
   it('returns null when there is no selection', () => {

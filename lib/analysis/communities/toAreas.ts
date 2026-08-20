@@ -86,6 +86,7 @@ export function communitiesToAreas(
 
   const created: Area[] = [];
   let seq = 0;
+  const usedIds = new Set<string>();
 
   for (const level of levels) {
     const members = membersByCommunity(level.partition);
@@ -93,30 +94,45 @@ export function communitiesToAreas(
     for (const [communityId, memberList] of members) {
       const membersSet = new Set(memberList);
 
-      // Best IoU match against unclaimed previous areas.
-      let bestMatch: { area: Area; iou: number } | null = null;
+
+
+      // Best IoU match against unclaimed previous areas. A previous area can be
+      // claimed by at most one new community (the `candidate.claimed` flag is
+      // set on the candidate itself, not on a wrapper).
+      let bestCandidate: { candidate: { area: Area; claimed: boolean }; iou: number } | null = null;
       for (const candidate of claimable) {
         if (candidate.claimed) continue;
         const score = iou(membersSet, new Set(candidate.area.contains));
-        if (score > (bestMatch?.iou ?? 0)) {
-          bestMatch = { area: candidate.area, iou: score };
+        if (score > (bestCandidate?.iou ?? 0)) {
+          bestCandidate = { candidate, iou: score };
         }
       }
 
-      const reuse = bestMatch !== null && bestMatch.iou >= ID_PRESERVATION_IOU_THRESHOLD;
-      if (bestMatch !== null && reuse) {
-        bestMatch.claimed = true;
+      const reuse =
+        bestCandidate !== null && bestCandidate.iou >= ID_PRESERVATION_IOU_THRESHOLD;
+      if (bestCandidate !== null && reuse) {
+        bestCandidate.candidate.claimed = true;
       }
 
-      const id = reuse && bestMatch ? bestMatch.area.id : `community-${seq}`;
-      seq++;
+      // Mint ids deterministically AND without colliding with any id already
+      // assigned this run (reused or freshly minted) — a changed analysis can
+      // otherwise mint `community-0` on top of a reused `community-0`.
+      let id: string;
+      if (reuse && bestCandidate) {
+        id = bestCandidate.candidate.area.id;
+      } else {
+        while (usedIds.has(`community-${seq}`)) seq++;
+        id = `community-${seq}`;
+        seq++;
+      }
+      usedIds.add(id);
 
       const parentRaw = level.parentOf.get(communityId) ?? null;
       const parent = parentRaw != null ? (areaIdByCommunity.get(parentRaw) ?? null) : null;
 
       const area: Area = {
         id,
-        created_at: reuse && bestMatch ? bestMatch.area.created_at : now,
+        created_at: reuse && bestCandidate ? bestCandidate.candidate.area.created_at : now,
         updated_at: now,
         name: areaLabel(communityId, seq - 1),
         type: 'business_domain',
