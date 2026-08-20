@@ -1,6 +1,6 @@
 import louvain from 'graphology-communities-louvain';
 import { connectedComponents } from 'graphology-components';
-import Graph from 'graphology';
+import { UndirectedGraph } from 'graphology';
 import type { CommunityGraph } from './graph';
 import { EDGE_WEIGHT_ATTRIBUTE } from './graph';
 
@@ -20,7 +20,7 @@ export function buildInducedSubgraph(
   graph: CommunityGraph,
   nodeSet: Set<string>,
 ): CommunityGraph {
-  const sub = new Graph();
+  const sub = new UndirectedGraph();
   for (const node of nodeSet) sub.addNode(node);
 
   const seen = new Set<string>();

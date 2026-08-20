@@ -1,4 +1,4 @@
-import { DEFAULT_REPO_GRAPH_CONFIG, DEFAULT_EDGE_FORCES } from '@/lib/analysis/graph-config';
+import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import type { EdgeForces } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge } from '@/lib/analysis/types';
 import { EdgeKind } from '@/lib/analysis/types';
@@ -17,10 +17,15 @@ export const RHO_DEFAULT = 0.4;
 export const BETA_DEFAULT = 2.0;
 
 /**
- * `d0` — base edge distance for same-community edges, matching the legacy
+ * `d0` — base edge distance for same-community edges. Matches the legacy
  * `DEFAULT_EDGE_FORCES.distance` (80) so intra-cluster spacing stays familiar.
+ * Kept as a literal (with a note) rather than `import { DEFAULT_EDGE_FORCES }`
+ * to avoid a module-initialization cycle: `graph-config` imports this module
+ * (via `scheme`), so reading `DEFAULT_EDGE_FORCES` here at init would dereference
+ * an uninitialized binding. The wiring keeps the legacy path returning the
+ * config's own accessor, so this literal is only the v2 knob default.
  */
-export const BASE_DISTANCE_DEFAULT = DEFAULT_EDGE_FORCES.distance;
+export const BASE_DISTANCE_DEFAULT = 80;
 
 /**
  * Optional secondary per-edge-kind multiplier kept from the old lookup table

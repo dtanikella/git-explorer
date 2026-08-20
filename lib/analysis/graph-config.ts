@@ -1,5 +1,11 @@
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
+import {
+  type SchemeName,
+  getActiveScheme,
+  getChargeStrategy,
+  getEdgeStrategy,
+} from '@/lib/analysis/forces/scheme';
 
 // ── Resolved value types ──
 
@@ -318,6 +324,48 @@ export function createModulesViewConfig(
       }),
     },
   });
+}
+
+// ── Force-scheme delegation (report §2.6) ──
+//
+// `cfg.forces.node` / `cfg.forces.edge` are sourced from `forces/scheme.ts`'s
+// active strategy instead of being hard-wired inline closures. With the default
+// `'legacy'` scheme this function is an identity — the config's existing
+// accessors are returned untouched, which is what pins byte-for-byte parity
+// with pre-Phase-3 behavior. With `'v2'` the per-node/per-edge accessors are
+// replaced by the community-derived factories from `lib/analysis/forces/`.
+
+/**
+ * Context required to rebuild force accessors from a scheme: the full node/edge
+ * set that will appear in the simulation, plus the community partition.
+ */
+export interface ForceSchemeContext {
+  nodes: AnalysisNode[];
+  edges: AnalysisEdge[];
+  communityOf: Map<string, string>;
+}
+
+/**
+ * Return a copy of `cfg` whose `forces.node` / `forces.edge` come from the
+ * active force scheme. `scheme` is taken as an explicit argument (defaulting to
+ * the runtime-resolved scheme) so tests can pin both modes without touching
+ * globals; `RepoGraph` passes the result of `getActiveScheme()`.
+ */
+export function withForceScheme(
+  cfg: RepoGraphConfig,
+  data: ForceSchemeContext,
+  scheme?: SchemeName,
+): RepoGraphConfig {
+  const active = scheme ?? getActiveScheme();
+  if (active === 'legacy') return cfg;
+
+  const charge = getChargeStrategy(active)({ nodes: data.nodes, edges: data.edges });
+  const edge = getEdgeStrategy(active)({
+    nodes: data.nodes,
+    edges: data.edges,
+    communityOf: data.communityOf,
+  });
+  return mergeConfigs(cfg, { forces: { node: charge, edge } });
 }
 
 export function mergeConfigs(

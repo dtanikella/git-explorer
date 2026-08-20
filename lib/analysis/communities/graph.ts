@@ -1,4 +1,4 @@
-import Graph from 'graphology';
+import { UndirectedGraph } from 'graphology';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 
 /**
@@ -10,8 +10,7 @@ export const EDGE_WEIGHT_ATTRIBUTE = 'weight';
  * Community graph type — an undirected graphology graph, one node per
  * `scipSymbol`, edge weight = symmetrized call weight.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CommunityGraph = Graph<any, any>;
+export type CommunityGraph = UndirectedGraph;
 
 // Separator used only inside the local accumulator map (never a graph key).
 // Null characters cannot appear in SCIP symbol strings.
@@ -36,7 +35,7 @@ export function buildCommunityGraph(
   nodes: AnalysisNode[],
   edges: AnalysisEdge[],
 ): CommunityGraph {
-  const graph = new Graph();
+  const graph = new UndirectedGraph();
 
   // Every analysis node becomes a graph node, even if it has no edges
   // (degree 0). Dropping isolated nodes here would silently lose them from
@@ -76,5 +75,5 @@ export function edgeWeight(
   b: string,
 ): number {
   if (!graph.hasEdge(a, b)) return 0;
-  return graph.getEdgeAttribute(a, b, EDGE_WEIGHT_ATTRIBUTE, 1);
+  return graph.getEdgeAttribute(a, b, EDGE_WEIGHT_ATTRIBUTE) ?? 1;
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import { DEFAULT_REPO_GRAPH_CONFIG, withForceScheme } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays } from '@/lib/areas/renderer';
@@ -17,6 +17,19 @@ import {
   createParentPullForce,
   createAnchorRepelForce,
 } from '@/lib/areas/forces';
+import { buildCommunityGraph } from '@/lib/analysis/communities/graph';
+import {
+  computeEmbeddedness,
+  computeCrossCommunityWeight,
+} from '@/lib/analysis/communities/metrics';
+import { areasToCommunityOf } from '@/lib/analysis/communities/toAreas';
+import { getActiveScheme } from '@/lib/analysis/forces/scheme';
+import {
+  createComputedAnchorRepelForce,
+  createEmbeddednessClusterPullForce,
+  createNullModelAreaAttractForce,
+  createHierarchyParentPullForce,
+} from '@/lib/analysis/forces/areaForces';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
 
@@ -362,6 +375,29 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     );
     const allSimNodes: Array<SimpleNode | AreaAnchorNode> = [...simNodes, ...anchors];
 
+    // ── v2 community pipeline (report §2.4) ──
+    // Derived force inputs recomputed live from the current `areas.json`
+    // contents (always in sync with hand edits), O(V+E) cheap, and built
+    // unconditionally so the scheme toggle only decides which factories consume
+    // them. The community graph mirrors the drawn (filtered) node/edge set.
+    const scheme = getActiveScheme();
+    const simAnalysisNodes = simNodes.map((n) => n.data);
+    const simAnalysisEdges = simEdges.map((e) => e.data);
+    const communityGraph = buildCommunityGraph(simAnalysisNodes, simAnalysisEdges);
+    const communityOf = areasToCommunityOf(areas);
+    const embeddedness = computeEmbeddedness(communityGraph, communityOf);
+    const crossWeights = computeCrossCommunityWeight(communityGraph, communityOf);
+    // v2 parent links come straight from the generated `Area.parent` fields
+    // (themselves produced from the resolution-sweep hierarchy at generate time).
+    const parentOf = new Map(areas.map((a) => [a.id, a.parent]));
+    const activeCfg = withForceScheme(cfg, {
+      nodes: simAnalysisNodes,
+      edges: simAnalysisEdges,
+      communityOf,
+    });
+    const numCommunities = communityOf.size > 0 ? new Set(communityOf.values()).size : 0;
+    const isV2 = scheme === 'v2';
+
     const simulation = d3
       .forceSimulation<any>(allSimNodes)
       .force(
@@ -369,11 +405,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         d3
           .forceLink<SimpleNode, SimpleEdge>(simEdges)
           .id((d) => d.id)
-          .distance((d: any) => cfg.forces.edge(d.data).distance)
-          .strength((d: any) => cfg.forces.edge(d.data).strength)
+          .distance((d: any) => activeCfg.forces.edge(d.data).distance)
+          .strength((d: any) => activeCfg.forces.edge(d.data).strength)
       )
       .force('charge', d3.forceManyBody<any>()
-        .strength((d: any) => (d.kind === 'anchor' ? 0 : cfg.forces.node(d.data).charge)))
+        .strength((d: any) => (d.kind === 'anchor' ? 0 : activeCfg.forces.node(d.data).charge)))
       .force('center', d3.forceCenter(width / 2, height / 2)
         .strength(cfg.simulation.centerStrength))
       .force('collide', d3.forceCollide<any>()
@@ -382,10 +418,18 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
         }))
-      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
-      .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
-      .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
-      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
+      .force('anchorRepel', isV2
+        ? createComputedAnchorRepelForce(anchors, width * height, numCommunities)
+        : createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('clusterPull', isV2
+        ? createEmbeddednessClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, embeddedness, activeCfg.forces.areaCluster)
+        : createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
+      .force('areaAttract', isV2
+        ? createNullModelAreaAttractForce(anchors, crossWeights, activeCfg.forces.areaAttract)
+        : createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
+      .force('parentPull', isV2
+        ? createHierarchyParentPullForce(anchors, parentOf, activeCfg.forces.areaParent)
+        : createParentPullForce(anchors, areasById, cfg.forces.areaParent));
 
     simulation.alphaDecay(cfg.simulation.alphaDecay);
     simulation.velocityDecay(cfg.simulation.velocityDecay);
