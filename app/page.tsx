@@ -11,15 +11,24 @@ import StatsTreemap from './components/stats/StatsTreemap';
 import { SelectionProvider, useSelection } from './contexts/SelectionContext';
 import SearchSelectSidebar from './components/selection/SearchSelectSidebar';
 import ManageSelectionSidebar from './components/selection/ManageSelectionSidebar';
-import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig, DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import {
+  INTERNAL_PROCESSING_CONFIG,
+  createModulesViewConfig,
+  createDataFlowViewConfig,
+  DEFAULT_REPO_GRAPH_CONFIG,
+} from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
 import { AreaProvider } from '@/app/contexts/AreaContext';
 import type { Area } from '@/lib/areas/types';
 
-const VIEW_OPTIONS: Record<string, { label: string; config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig) }> = {
+const VIEW_OPTIONS: Record<string, {
+  label: string;
+  config: RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
+}> = {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
   modules: { label: 'Modules', config: createModulesViewConfig },
+  dataflow: { label: 'Data Flow', config: createDataFlowViewConfig },
 };
 
 function ManageSelectionSidebarWrapper({ repoPath }: { repoPath: string }) {
@@ -137,7 +146,9 @@ export default function HomePage() {
   const graphVisibleNodeIds = useMemo(() => {
     if (!analysisData) return new Set<string>();
     const rawConfig = VIEW_OPTIONS[selectedView].config;
-    const cfg = typeof rawConfig === 'function' ? rawConfig(analysisData.edges) : (rawConfig ?? DEFAULT_REPO_GRAPH_CONFIG);
+    const cfg = typeof rawConfig === 'function'
+      ? rawConfig(analysisData.edges, analysisData.nodes)
+      : (rawConfig ?? DEFAULT_REPO_GRAPH_CONFIG);
     const candidateIds = new Set(analysisData.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol));
     const connectedIds = new Set<string>();
     for (const e of analysisData.edges) {

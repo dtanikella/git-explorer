@@ -11,11 +11,30 @@ global.fetch = jest.fn(() =>
       success: true,
       data: {
         nodes: [
-          { scipSymbol: 'node1', label: 'file1.ts', module: 'src', inDegree: 1, outDegree: 2 },
-          { scipSymbol: 'node2', label: 'file2.ts', module: 'src', inDegree: 2, outDegree: 1 },
+          {
+            scipSymbol: 'node1',
+            name: 'processData',
+            syntaxType: 'FUNCTION',
+            filePath: '/test/repo/src/process.ts',
+            referencedAt: [],
+            outboundRefs: [],
+          },
+          {
+            scipSymbol: 'node2',
+            name: 'DataShape',
+            syntaxType: 'INTERFACE',
+            filePath: '/test/repo/src/types.ts',
+            referencedAt: [],
+            outboundRefs: [],
+          },
         ],
         edges: [
-          { source: 'node1', target: 'node2', count: 5 },
+          {
+            fromSymbol: 'node1',
+            toSymbol: 'node2',
+            kind: 'USES_TYPE',
+            isExternal: false,
+          },
         ],
       },
     }),
@@ -70,12 +89,6 @@ jest.mock('@/app/components/TabSidebar', () => {
   };
 });
 
-jest.mock('@/app/components/graph/GraphToolbar', () => {
-  return function MockGraphToolbar() {
-    return <div data-testid="graph-toolbar">Graph Toolbar</div>;
-  };
-});
-
 jest.mock('@/app/components/stats/StatsToolbar', () => {
   return function MockStatsToolbar() {
     return <div data-testid="stats-toolbar">Stats Toolbar</div>;
@@ -106,7 +119,7 @@ describe('View Switching Integration', () => {
     });
 
     // Should show graph tab by default
-    expect(screen.getByTestId('graph-toolbar')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
     expect(screen.queryByTestId('stats-toolbar')).not.toBeInTheDocument();
 
     // Switch to stats tab
@@ -126,9 +139,24 @@ describe('View Switching Integration', () => {
 
     // Should show graph toolbar and graph again
     await waitFor(() => {
-      expect(screen.getByTestId('graph-toolbar')).toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
       expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('stats-toolbar')).not.toBeInTheDocument();
+  });
+
+  it('exposes and switches to the Data Flow graph view', async () => {
+    render(<Home />);
+
+    fireEvent.click(screen.getByRole('button', { name: /select repository/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
+    });
+
+    const viewSelect = screen.getByRole('combobox');
+    expect(screen.getByRole('option', { name: 'Data Flow' })).toBeInTheDocument();
+    expect(() => fireEvent.change(viewSelect, { target: { value: 'dataflow' } })).not.toThrow();
+    expect(viewSelect).toHaveValue('dataflow');
   });
 });

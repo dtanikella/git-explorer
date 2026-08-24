@@ -18,7 +18,7 @@ import {
   createAnchorRepelForce,
 } from '@/lib/areas/forces';
 
-type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
+type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
 
 interface RepoGraphProps {
   repoPath: string;
@@ -94,7 +94,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     }
 
     return typeof config === 'function'
-      ? config(analysisData.edges)
+      ? config(analysisData.edges, analysisData.nodes)
       : (config ?? DEFAULT_REPO_GRAPH_CONFIG);
   }, [analysisData, config]);
 

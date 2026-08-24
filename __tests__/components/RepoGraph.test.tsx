@@ -177,7 +177,7 @@ describe('RepoGraph — props and rendering', () => {
 
     render(<RepoGraph repoPath="/repo" hideTestFiles={true} config={configFactory} analysisData={mockData} loading={false} error={null} />);
 
-    await waitFor(() => expect(configFactory).toHaveBeenCalledWith(mockData.edges));
+    await waitFor(() => expect(configFactory).toHaveBeenCalledWith(mockData.edges, mockData.nodes));
     await act(async () => {});
   });
 

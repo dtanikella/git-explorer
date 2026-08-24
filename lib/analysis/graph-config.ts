@@ -124,6 +124,19 @@ const PROCESSING_NODE_TYPES = new Set<SyntaxType>([
   SyntaxType.CLASS,
 ]);
 
+export const DATA_FLOW_PROCESSING_TYPES = new Set<SyntaxType>([
+  SyntaxType.FUNCTION,
+  SyntaxType.METHOD,
+  SyntaxType.CLASS,
+]);
+
+export const DATA_FLOW_DATA_TYPES = new Set<SyntaxType>([
+  SyntaxType.INTERFACE,
+  SyntaxType.TYPE_ALIAS,
+]);
+
+export const PROCESSING_NODE_RADIUS = 6;
+
 export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   filters: {
     node: () => true,
@@ -272,6 +285,33 @@ const MODULES_NODE_TYPES = new Set<SyntaxType>([
   SyntaxType.METHOD,
 ]);
 
+export function buildSymbolKindMap(nodes: AnalysisNode[]): Map<string, SyntaxType> {
+  return new Map(nodes.map((node) => [node.scipSymbol, node.syntaxType]));
+}
+
+export function countDataNodeUsage(
+  edges: AnalysisEdge[],
+  nodes: AnalysisNode[],
+): Map<string, number> {
+  const kindOf = buildSymbolKindMap(nodes);
+  const usageByTarget = new Map<string, number>();
+
+  for (const edge of edges) {
+    if (
+      edge.kind === EdgeKind.USES_TYPE &&
+      DATA_FLOW_PROCESSING_TYPES.has(kindOf.get(edge.fromSymbol) as SyntaxType) &&
+      DATA_FLOW_DATA_TYPES.has(kindOf.get(edge.toSymbol) as SyntaxType)
+    ) {
+      usageByTarget.set(
+        edge.toSymbol,
+        (usageByTarget.get(edge.toSymbol) ?? 0) + 1,
+      );
+    }
+  }
+
+  return usageByTarget;
+}
+
 export function createModulesViewConfig(
   edges: AnalysisEdge[],
 ): RepoGraphConfig {
@@ -315,6 +355,69 @@ export function createModulesViewConfig(
       node: (node: AnalysisNode): NodeForces => ({
         ...DEFAULT_NODE_FORCES,
         collideRadius: scaledValue(countInboundCalls(node), 8, 40),
+      }),
+    },
+  });
+}
+
+export function createDataFlowViewConfig(
+  edges: AnalysisEdge[],
+  nodes: AnalysisNode[],
+): RepoGraphConfig {
+  const kindOf = buildSymbolKindMap(nodes);
+  const usageByTarget = countDataNodeUsage(edges, nodes);
+
+  return mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+    filters: {
+      node: (node: AnalysisNode) =>
+        DATA_FLOW_PROCESSING_TYPES.has(node.syntaxType) ||
+        DATA_FLOW_DATA_TYPES.has(node.syntaxType),
+      edge: (edge: AnalysisEdge) =>
+        edge.kind === EdgeKind.USES_TYPE &&
+        !edge.isExternal &&
+        DATA_FLOW_PROCESSING_TYPES.has(kindOf.get(edge.fromSymbol) as SyntaxType) &&
+        DATA_FLOW_DATA_TYPES.has(kindOf.get(edge.toSymbol) as SyntaxType),
+    },
+    style: {
+      node: (node: AnalysisNode, _degree: number): NodeStyle => {
+        if (DATA_FLOW_DATA_TYPES.has(node.syntaxType)) {
+          return {
+            ...DEFAULT_NODE_STYLE,
+            color: '#10b981',
+            radius: scaledValue(
+              usageByTarget.get(node.scipSymbol) ?? 0,
+              PROCESSING_NODE_RADIUS * 2,
+              PROCESSING_NODE_RADIUS * 5,
+            ),
+            label: true,
+          };
+        }
+
+        return {
+          ...DEFAULT_NODE_STYLE,
+          color: '#9ca3af',
+          radius: PROCESSING_NODE_RADIUS,
+          label: false,
+        };
+      },
+      edge: (_edge: AnalysisEdge): EdgeStyle => ({
+        ...DEFAULT_EDGE_STYLE,
+        width: 1.5,
+        gradientSourceColor: '#d1d5db',
+        gradientTargetColor: '#000000',
+      }),
+    },
+    forces: {
+      node: (): NodeForces => ({
+        ...DEFAULT_NODE_FORCES,
+        charge: -200,
+      }),
+      edge: (edge: AnalysisEdge): EdgeForces => ({
+        distance: 90,
+        strength: Math.max(
+          0.05,
+          0.35 / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1),
+        ),
       }),
     },
   });
