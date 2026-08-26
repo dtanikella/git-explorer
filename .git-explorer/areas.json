@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "id": "storage",
+      "created_at": "2026-08-24T00:00:00.000Z",
+      "updated_at": "2026-08-24T00:00:00.000Z",
+      "name": "storage",
+      "type": "internal_service",
+      "contains": [],
+      "parent": null,
+      "children": [],
+      "clusterStrength": 0
+    },
+    {
+      "id": "api",
+      "created_at": "2026-08-24T00:00:00.000Z",
+      "updated_at": "2026-08-24T00:00:00.000Z",
+      "name": "api",
+      "type": "internal_service",
+      "contains": [],
+      "parent": null,
+      "children": [],
+      "clusterStrength": 0
+    },
+    {
+      "id": "ux",
+      "created_at": "2026-08-24T00:00:00.000Z",
+      "updated_at": "2026-08-24T00:00:00.000Z",
+      "name": "ux",
+      "type": "internal_service",
+      "contains": [],
+      "parent": null,
+      "children": [],
+      "clusterStrength": 0
+    }
+  ]
+}

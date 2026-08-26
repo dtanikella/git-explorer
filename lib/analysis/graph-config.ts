@@ -64,6 +64,7 @@ export interface RepoGraphConfig {
     areaAttract: number;
     areaParent: number;
     anchorRepel: number;
+    layerRadii?: Record<string, number>;
   };
   simulation: SimulationParams;
 }
@@ -360,6 +361,23 @@ export function createModulesViewConfig(
   });
 }
 
+const DATA_FLOW_NODE_TYPES = new Set<SyntaxType>([
+  ...DATA_FLOW_PROCESSING_TYPES,
+  ...DATA_FLOW_DATA_TYPES,
+]);
+
+// Target radii (simulation units, from canvas center) for the three manually-assigned
+// Area names a node can be tagged with in the Data Flow view: `storage` (DB/persistence-adjacent
+// types) pulled toward the center, `ux` (UI-facing types) pulled toward the outer ring, `api`
+// (shared contracts) in between. Untagged nodes are unaffected — see RepoGraph.tsx's `layerRadial`
+// force, which only applies nonzero strength to nodes whose area membership resolves to one of
+// these keys.
+export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
+  storage: 100,
+  api: 260,
+  ux: 420,
+};
+
 export function createDataFlowViewConfig(
   edges: AnalysisEdge[],
   nodes: AnalysisNode[],
@@ -369,14 +387,12 @@ export function createDataFlowViewConfig(
 
   return mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
     filters: {
-      node: (node: AnalysisNode) =>
-        DATA_FLOW_PROCESSING_TYPES.has(node.syntaxType) ||
-        DATA_FLOW_DATA_TYPES.has(node.syntaxType),
+      node: (node: AnalysisNode) => DATA_FLOW_NODE_TYPES.has(node.syntaxType),
       edge: (edge: AnalysisEdge) =>
-        edge.kind === EdgeKind.USES_TYPE &&
+        edge.kind !== EdgeKind.IMPORTS &&
         !edge.isExternal &&
-        DATA_FLOW_PROCESSING_TYPES.has(kindOf.get(edge.fromSymbol) as SyntaxType) &&
-        DATA_FLOW_DATA_TYPES.has(kindOf.get(edge.toSymbol) as SyntaxType),
+        DATA_FLOW_NODE_TYPES.has(kindOf.get(edge.fromSymbol) as SyntaxType) &&
+        DATA_FLOW_NODE_TYPES.has(kindOf.get(edge.toSymbol) as SyntaxType),
     },
     style: {
       node: (node: AnalysisNode, _degree: number): NodeStyle => {
@@ -419,6 +435,7 @@ export function createDataFlowViewConfig(
           0.35 / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1),
         ),
       }),
+      layerRadii: DATA_FLOW_LAYER_RADII,
     },
   });
 }
@@ -455,6 +472,7 @@ export function mergeConfigs(
         areaAttract: override.forces.areaAttract ?? result.forces.areaAttract,
         areaParent: override.forces.areaParent ?? result.forces.areaParent,
         anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
+        layerRadii: override.forces.layerRadii ?? result.forces.layerRadii,
       };
     }
     if (override.simulation) {

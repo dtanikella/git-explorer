@@ -697,7 +697,7 @@ describe('createDataFlowViewConfig', () => {
     expect(config.filters.node(interfaceNode)).toBe(true);
   });
 
-  it('drops a function-to-class type edge', () => {
+  it('keeps a function-to-class type edge as a processing-to-processing link', () => {
     const edge = makeEdge({
       kind: EdgeKind.USES_TYPE,
       fromSymbol: functionNode.scipSymbol,
@@ -705,8 +705,44 @@ describe('createDataFlowViewConfig', () => {
     });
     const config = createDataFlowViewConfig([edge], [functionNode, classNode]);
 
-    expect(config.filters.edge(edge)).toBe(false);
+    expect(config.filters.edge(edge)).toBe(true);
     expect(DATA_FLOW_DATA_TYPES.has(classNode.syntaxType)).toBe(false);
+  });
+
+  it('keeps a CALLS edge between two processing nodes', () => {
+    const secondFunction = { ...functionNode, scipSymbol: 'test#secondFunction.' };
+    const edge = makeEdge({
+      kind: EdgeKind.CALLS,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: secondFunction.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, secondFunction]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+  });
+
+  it('keeps an EXTENDS edge between two data nodes', () => {
+    const secondInterface = { ...interfaceNode, scipSymbol: 'test#SecondData.' };
+    const edge = makeEdge({
+      kind: EdgeKind.EXTENDS,
+      fromSymbol: interfaceNode.scipSymbol,
+      toSymbol: secondInterface.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [interfaceNode, secondInterface]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+  });
+
+  it('drops an IMPORTS edge even between two in-scope nodes', () => {
+    const secondFunction = { ...functionNode, scipSymbol: 'test#secondFunction.' };
+    const edge = makeEdge({
+      kind: EdgeKind.IMPORTS,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: secondFunction.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, secondFunction]);
+
+    expect(config.filters.edge(edge)).toBe(false);
   });
 
   it('sizes an interface by the number of qualifying users', () => {
@@ -800,6 +836,12 @@ describe('createDataFlowViewConfig', () => {
     expect(style.gradientTargetColor).toBe('#000000');
     expect(config.forces.edge(edge)).toEqual({ distance: 90, strength: 0.175 });
   });
+
+  it('exposes fixed storage/api/ux layer radii for the concentric layout, unlike other views', () => {
+    const config = createDataFlowViewConfig([], [functionNode, interfaceNode]);
+
+    expect(config.forces.layerRadii).toEqual({ storage: 100, api: 260, ux: 420 });
+  });
 });
 
 describe('createModulesViewConfig', () => {
@@ -809,6 +851,10 @@ describe('createModulesViewConfig', () => {
     makeEdge({ fromSymbol: 'test#bar.', toSymbol: 'test#baz.', kind: EdgeKind.CALLS }),
   ];
   const config = createModulesViewConfig(modulesEdges);
+
+  it('leaves layerRadii undefined (concentric layering is Data Flow-only)', () => {
+    expect(config.forces.layerRadii).toBeUndefined();
+  });
 
   describe('node filter', () => {
     it('accepts FUNCTION nodes', () => {
