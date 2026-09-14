@@ -1,4 +1,4 @@
-import { assembleResult } from '@/app/services/analysis/ts/graph-assembler';
+import { assembleResult } from '@/app/services/analysis/shared/graph-assembler';
 import { SyntaxType, EdgeKind, MISSING_NODE_TYPES, MISSING_EDGE_KINDS, type AnalysisNode, type AnalysisEdge } from '@/lib/analysis/types';
 
 describe('assembleResult', () => {

@@ -5,7 +5,7 @@ import {
   type AnalysisNode,
   type ParamInfo,
 } from '@/lib/analysis/types';
-import { qualifySymbol } from './symbol-utils';
+import { qualifySymbol } from '@/app/services/analysis/shared/symbol-utils';
 
 // ============================================================================
 // Types

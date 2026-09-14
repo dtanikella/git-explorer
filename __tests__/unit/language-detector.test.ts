@@ -16,10 +16,27 @@ describe('detectLanguage', () => {
     expect(fs.access).toHaveBeenCalledWith(expect.stringContaining('tsconfig.json'));
   });
 
-  it('returns null when tsconfig.json does not exist', async () => {
+  it('returns "ruby" when Gemfile exists and no tsconfig.json', async () => {
+    // First call (tsconfig.json) rejects, second (Gemfile) resolves
+    fs.access.mockRejectedValueOnce(new Error('ENOENT'));
+    fs.access.mockResolvedValueOnce(undefined);
+
+    const result = await detectLanguage('/my/repo');
+    expect(result).toBe('ruby');
+    expect(fs.access).toHaveBeenCalledWith(expect.stringContaining('Gemfile'));
+  });
+
+  it('returns null when neither tsconfig.json nor Gemfile exist', async () => {
     fs.access.mockRejectedValue(new Error('ENOENT'));
 
     const result = await detectLanguage('/my/repo');
     expect(result).toBeNull();
+  });
+
+  it('prefers typescript over ruby when both exist', async () => {
+    fs.access.mockResolvedValueOnce(undefined); // tsconfig.json exists
+
+    const result = await detectLanguage('/my/repo');
+    expect(result).toBe('typescript');
   });
 });

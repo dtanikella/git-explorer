@@ -84,11 +84,14 @@ function computeExpansions(
     }
   }
 
-  // Callers: visible nodes where a CALLS edge points TO any selected node
+  // Edge kinds that participate in caller/callee expansion
+  const CALLER_CALLEE_EDGE_KINDS = new Set([EdgeKind.CALLS, EdgeKind.INCLUDES]);
+
+  // Callers: visible nodes where a CALLS/INCLUDES edge points TO any selected node
   const callerCandidates: ExpansionCandidate[] = [];
   const callerMap = new Map<string, Set<string>>();
   for (const e of edges) {
-    if (e.kind !== EdgeKind.CALLS) continue;
+    if (!CALLER_CALLEE_EDGE_KINDS.has(e.kind)) continue;
     if (!selectedNodeIds.has(e.toSymbol)) continue;
     if (selectedNodeIds.has(e.fromSymbol)) continue;
     if (!visibleNodeIds.has(e.fromSymbol)) continue;
@@ -99,11 +102,11 @@ function computeExpansions(
     callerCandidates.push({ nodeId, sourceNodeIds: [...sources] });
   }
 
-  // Callees: visible nodes where a CALLS edge points FROM any selected node
+  // Callees: visible nodes where a CALLS/INCLUDES edge points FROM any selected node
   const calleeCandidates: ExpansionCandidate[] = [];
   const calleeMap = new Map<string, Set<string>>();
   for (const e of edges) {
-    if (e.kind !== EdgeKind.CALLS) continue;
+    if (!CALLER_CALLEE_EDGE_KINDS.has(e.kind)) continue;
     if (!selectedNodeIds.has(e.fromSymbol)) continue;
     if (selectedNodeIds.has(e.toSymbol)) continue;
     if (!visibleNodeIds.has(e.toSymbol)) continue;
