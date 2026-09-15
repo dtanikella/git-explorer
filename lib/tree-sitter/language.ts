@@ -16,6 +16,7 @@ interface LanguageMapping {
 const LANGUAGE_REGISTRY: Record<string, LanguageMapping> = {
   typescript: { module: 'tree-sitter-typescript', export: 'typescript' },
   tsx: { module: 'tree-sitter-typescript', export: 'tsx' },
+  ruby: { module: 'tree-sitter-ruby' },
 };
 
 const languageCache = new Map<string, Language>();

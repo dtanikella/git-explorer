@@ -19,6 +19,7 @@ export enum EdgeKind {
   IMPORTS = 'IMPORTS',
   EXTENDS = 'EXTENDS',
   IMPLEMENTS = 'IMPLEMENTS',
+  INCLUDES = 'INCLUDES',
   // NOT YET INCLUDED: OVERRIDES, DECORATES, RETURNS_TYPE, THROWS, GENERIC_PARAM
 }
 
@@ -66,6 +67,7 @@ export interface AnalysisEdge {
   toName: string;
   toSymbol: string;
   isExternal: boolean;
+  isAmbiguous: boolean;
   edgePosition: { line: number; col: number };
   isOptionalChain: boolean;
   isAsync: boolean;

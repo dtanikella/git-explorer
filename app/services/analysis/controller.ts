@@ -3,6 +3,7 @@ import type { AnalysisResult } from '@/lib/analysis/types';
 import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
 import { detectLanguage } from './language-detector';
 import { analyzeTsRepo } from './ts/controller';
+import { analyzeRubyRepo } from './ruby/controller';
 
 export interface AnalysisOptions {
   hideTestFiles?: boolean;
@@ -31,6 +32,8 @@ export async function analyzeRepo(
   switch (language) {
     case 'typescript':
       return analyzeTsRepo(repoPath, { hideTestFiles });
+    case 'ruby':
+      return analyzeRubyRepo(repoPath, { hideTestFiles });
     default:
       throw new UnsupportedLanguageError(repoPath);
   }
