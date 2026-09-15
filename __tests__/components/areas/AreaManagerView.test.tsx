@@ -9,7 +9,7 @@ describe('AreaManagerView shell', () => {
   const renderWithProvider = (areas: Area[], nodes: any[] = []) => {
     return render(
       <AreaProvider areas={areas}>
-        <AreaManagerView repoPath="/test" nodes={nodes} areas={areas} />
+        <AreaManagerView repoPath="/test" nodes={nodes} />
       </AreaProvider>
     );
   };

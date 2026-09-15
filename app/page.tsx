@@ -213,7 +213,6 @@ export default function HomePage() {
                 <AreaManagerView
                   repoPath={repoPath}
                   nodes={analysisData?.nodes ?? []}
-                  areas={areasData}
                 />
               </AreaProvider>
             ) : activeTab === 'graph' ? (
