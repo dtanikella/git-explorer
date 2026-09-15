@@ -209,11 +209,13 @@ export default function HomePage() {
                 Select a repository to visualize
               </div>
             ) : activeTab === 'areas' ? (
-              <AreaManagerView
-                repoPath={repoPath}
-                nodes={analysisData?.nodes ?? []}
-                areas={areasData}
-              />
+              <AreaProvider areas={areasData}>
+                <AreaManagerView
+                  repoPath={repoPath}
+                  nodes={analysisData?.nodes ?? []}
+                  areas={areasData}
+                />
+              </AreaProvider>
             ) : activeTab === 'graph' ? (
               <SelectionProvider
                 nodes={analysisData?.nodes ?? []}

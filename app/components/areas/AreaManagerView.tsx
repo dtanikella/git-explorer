@@ -1,5 +1,8 @@
 'use client';
 
+import { useAreaStore } from '@/app/contexts/AreaContext';
+import AreaTreeTable from './AreaTreeTable';
+
 interface AreaManagerViewProps {
   repoPath: string;
   nodes: any[];
@@ -7,6 +10,8 @@ interface AreaManagerViewProps {
 }
 
 export default function AreaManagerView({ repoPath, nodes, areas }: AreaManagerViewProps) {
+  const { runtimeState, setAreas } = useAreaStore();
+
   return (
     <div className="w-full h-full flex" data-testid="area-manager-view">
       <div className="flex-1 min-w-0 flex flex-col">
@@ -43,13 +48,13 @@ export default function AreaManagerView({ repoPath, nodes, areas }: AreaManagerV
         <div className="flex-1 flex" style={{ minHeight: 0 }}>
           {/* Main tree table area */}
           <div
-            data-testid="area-tree-table"
             className="flex-1 min-w-0"
             style={{ overflow: 'auto', padding: 4 }}
           >
-            <div style={{ fontSize: 12, color: '#9ca3af', padding: '24px 12px', textAlign: 'center' }}>
-              No areas yet. Create your first area.
-            </div>
+            <AreaTreeTable
+              areas={areas}
+              runtimeState={runtimeState}
+            />
           </div>
 
           {/* Node browser right rail */}
