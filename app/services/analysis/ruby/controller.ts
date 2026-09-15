@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import type { Dirent } from 'fs';
 import { loadLanguage } from '@/lib/tree-sitter/language';
 import { createParser } from '@/lib/tree-sitter/parser';
 import type { TreeWrapper } from '@/lib/tree-sitter/tree';
@@ -80,7 +81,7 @@ async function collectRubyFiles(repoPath: string): Promise<string[]> {
   const rootDir = path.resolve(repoPath);
 
   const walk = async (dirPath: string, relativePrefix: string): Promise<void> => {
-    let entries: string[];
+    let entries: Dirent[];
     try {
       entries = await fs.readdir(dirPath, { withFileTypes: true });
     } catch {
