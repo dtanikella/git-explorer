@@ -4,10 +4,11 @@ import '@testing-library/jest-dom';
 import TabSidebar from '@/app/components/TabSidebar';
 
 describe('TabSidebar', () => {
-  it('renders Graph and Stats tab buttons', () => {
+  it('renders Graph, Stats, and Areas tab buttons', () => {
     render(<TabSidebar activeTab="graph" onTabChange={jest.fn()} />);
     expect(screen.getByRole('button', { name: /graph/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stats/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /areas/i })).toBeInTheDocument();
   });
 
   it('highlights the active tab', () => {
@@ -16,10 +17,23 @@ describe('TabSidebar', () => {
     expect(statsBtn).toHaveClass('border-l-2');
   });
 
+  it('highlights the areas tab when active', () => {
+    render(<TabSidebar activeTab="areas" onTabChange={jest.fn()} />);
+    const areasBtn = screen.getByRole('button', { name: /areas/i });
+    expect(areasBtn).toHaveClass('border-l-2');
+  });
+
   it('calls onTabChange when clicking a tab', () => {
     const onTabChange = jest.fn();
     render(<TabSidebar activeTab="graph" onTabChange={onTabChange} />);
     fireEvent.click(screen.getByRole('button', { name: /stats/i }));
     expect(onTabChange).toHaveBeenCalledWith('stats');
+  });
+
+  it('calls onTabChange when clicking the areas tab', () => {
+    const onTabChange = jest.fn();
+    render(<TabSidebar activeTab="graph" onTabChange={onTabChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /areas/i }));
+    expect(onTabChange).toHaveBeenCalledWith('areas');
   });
 });
