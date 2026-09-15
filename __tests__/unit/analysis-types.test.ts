@@ -26,6 +26,7 @@ describe('EdgeKind enum', () => {
     expect(EdgeKind.IMPORTS).toBe('IMPORTS');
     expect(EdgeKind.EXTENDS).toBe('EXTENDS');
     expect(EdgeKind.IMPLEMENTS).toBe('IMPLEMENTS');
+    expect(EdgeKind.INCLUDES).toBe('INCLUDES');
   });
 });
 

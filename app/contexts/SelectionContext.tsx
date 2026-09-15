@@ -50,6 +50,7 @@ export function useSelection(): SelectionContextValue {
 
 const CALLER_CALLEE_EDGE_KINDS = new Set<EdgeKind>([
   EdgeKind.CALLS,
+  EdgeKind.INCLUDES,
   EdgeKind.INSTANTIATES,
   EdgeKind.USES_TYPE,
   EdgeKind.EXTENDS,
@@ -92,7 +93,7 @@ function computeExpansions(
     }
   }
 
-  // Callers: visible nodes where a relationship edge points TO any selected node
+  // Callers: visible nodes where a CALLS/INCLUDES/INSTANTIATES/USES_TYPE/EXTENDS/IMPLEMENTS edge points TO any selected node
   const callerCandidates: ExpansionCandidate[] = [];
   const callerMap = new Map<string, Set<string>>();
   for (const e of edges) {
@@ -107,7 +108,7 @@ function computeExpansions(
     callerCandidates.push({ nodeId, sourceNodeIds: [...sources] });
   }
 
-  // Callees: visible nodes where a relationship edge points FROM any selected node
+  // Callees: visible nodes where a CALLS/INCLUDES/INSTANTIATES/USES_TYPE/EXTENDS/IMPLEMENTS edge points FROM any selected node
   const calleeCandidates: ExpansionCandidate[] = [];
   const calleeMap = new Map<string, Set<string>>();
   for (const e of edges) {

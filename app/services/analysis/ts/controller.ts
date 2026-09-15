@@ -9,7 +9,7 @@ import type { AnalysisResult } from '@/lib/analysis/types';
 import { isTestFile } from '@/app/services/analysis/test-file-detector';
 import { extractNodes } from './node-extractor';
 import { extractEdges } from './edge-extractor';
-import { assembleResult } from './graph-assembler';
+import { assembleResult } from '@/app/services/analysis/shared/graph-assembler';
 
 export interface TsAnalysisOptions {
   hideTestFiles: boolean;

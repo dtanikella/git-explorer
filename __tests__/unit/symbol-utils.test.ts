@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { qualifySymbol } from '@/app/services/analysis/ts/symbol-utils';
+import { qualifySymbol } from '@/app/services/analysis/shared/symbol-utils';
 
 describe('qualifySymbol', () => {
   it('returns null for empty string', () => {

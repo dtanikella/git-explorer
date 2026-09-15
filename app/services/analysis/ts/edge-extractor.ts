@@ -4,7 +4,7 @@ import {
   type AnalysisEdge,
   type AnalysisNode,
 } from '@/lib/analysis/types';
-import { qualifySymbol } from './symbol-utils';
+import { qualifySymbol } from '@/app/services/analysis/shared/symbol-utils';
 
 // ============================================================================
 // Types
@@ -263,6 +263,7 @@ export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
         toName,
         toSymbol: qualifiedTarget,
         isExternal,
+        isAmbiguous: false,
         edgePosition: { line, col },
         isOptionalChain: isOptionalChainContext(tree, line, col),
         isAsync: isAsyncContext(tree, line, col),
