@@ -206,6 +206,7 @@ export default function AreaTreeTable({
       <React.Fragment key={area.id}>
         <div
           data-testid={`area-row-${area.id}`}
+          data-droppable={area.id}
           style={{
             display: 'flex',
             alignItems: 'center',

@@ -126,6 +126,7 @@ export default function NodeBrowserPane({
                   <div
                     key={node.scipSymbol}
                     data-testid={`node-item-${node.scipSymbol}`}
+                    data-draggable={node.scipSymbol}
                     onClick={() => onAssignNode?.(node.scipSymbol)}
                     style={{
                       display: 'flex',
