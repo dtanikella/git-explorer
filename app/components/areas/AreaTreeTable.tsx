@@ -7,8 +7,15 @@ interface AreaTreeTableProps {
   areas: Area[];
   runtimeState: Map<string, AreaRuntimeState>;
   nodeNames?: Record<string, string>;
-  onRenameArea?: (areaId: string, newName: string) => void;
+  renameAreaId?: string | null;
+  renameValue?: string;
+  onRenameStart?: (areaId: string, currentName: string) => void;
+  onRenameConfirm?: () => void;
+  onRenameCancel?: () => void;
+  onRenameKeyDown?: (e: React.KeyboardEvent) => void;
+  onRenameValueChange?: (value: string) => void;
   onDeleteArea?: (areaId: string) => void;
+  onDeleteStart?: (areaId: string) => void;
   onChangeType?: (areaId: string, newType: string) => void;
   onRemoveMember?: (areaId: string, nodeId: string) => void;
   onAddMember?: (areaId: string, nodeId: string) => void;
@@ -23,7 +30,14 @@ export default function AreaTreeTable({
   areas,
   runtimeState,
   nodeNames = {},
-  onRenameArea,
+  renameAreaId,
+  renameValue,
+  onRenameStart,
+  onRenameConfirm,
+  onRenameCancel,
+  onRenameKeyDown,
+  onRenameValueChange,
+  onDeleteStart,
   onDeleteArea,
   onChangeType,
   onRemoveMember,
@@ -201,6 +215,7 @@ export default function AreaTreeTable({
     const expanded = isExpanded(area.id);
     const hasChildren = area.children.length > 0;
     const hasMembers = area.contains.length > 0;
+    const isRenaming = renameAreaId === area.id;
 
     return (
       <React.Fragment key={area.id}>
@@ -234,10 +249,29 @@ export default function AreaTreeTable({
             {(hasChildren || hasMembers) ? (expanded ? '▼' : '▶') : ''}
           </span>
 
-          {/* Name */}
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
-            {area.name}
-          </span>
+          {/* Name or rename input */}
+          {isRenaming ? (
+            <input
+              data-testid={`inline-rename-input-${area.id}`}
+              autoFocus
+              value={renameValue ?? area.name}
+              onChange={(e) => onRenameValueChange?.(e.target.value)}
+              onKeyDown={onRenameKeyDown}
+              onBlur={onRenameConfirm}
+              style={{
+                flex: 1,
+                padding: '3px 6px',
+                fontSize: 12,
+                border: '1px solid #3b82f6',
+                borderRadius: 4,
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
+              {area.name}
+            </span>
+          )}
 
           {/* Type pill */}
           <span
@@ -273,7 +307,7 @@ export default function AreaTreeTable({
           <span style={{ flexShrink: 0, display: 'flex', gap: 4 }}>
             <button
               data-testid={`rename-area-${area.id}`}
-              onClick={() => onRenameArea?.(area.id, area.name)}
+              onClick={() => onRenameStart?.(area.id, area.name)}
               style={{
                 background: 'none',
                 border: 'none',
@@ -288,7 +322,7 @@ export default function AreaTreeTable({
             </button>
             <button
               data-testid={`delete-area-${area.id}`}
-              onClick={() => onDeleteArea?.(area.id)}
+              onClick={() => onDeleteStart?.(area.id)}
               style={{
                 background: 'none',
                 border: 'none',

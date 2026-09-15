@@ -17,6 +17,9 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
   const { areas, runtimeState, setAreas } = useAreaStore();
   const [createMode, setCreateMode] = useState(false);
   const [newAreaName, setNewAreaName] = useState('');
+  const [renameAreaId, setRenameAreaId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Build node names lookup from AnalysisNode[]
   const nodeNames = useMemo(() => {
@@ -83,6 +86,133 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
     },
     [handleConfirmCreate, handleCancelCreate]
   );
+
+  // Rename handlers
+  const handleRenameStart = useCallback((areaId: string, currentName: string) => {
+    setRenameAreaId(areaId);
+    setRenameValue(currentName);
+  }, []);
+
+  const handleRenameConfirm = useCallback(() => {
+    if (!renameAreaId || !renameValue.trim()) {
+      setRenameAreaId(null);
+      return;
+    }
+    const now = new Date().toISOString();
+    setAreas(
+      areas.map((a) =>
+        a.id === renameAreaId ? { ...a, name: renameValue.trim(), updated_at: now } : a
+      )
+    );
+    setRenameAreaId(null);
+    setRenameValue('');
+  }, [renameAreaId, renameValue, areas, setAreas]);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenameAreaId(null);
+    setRenameValue('');
+  }, []);
+
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleRenameConfirm();
+      else if (e.key === 'Escape') handleRenameCancel();
+    },
+    [handleRenameConfirm, handleRenameCancel]
+  );
+
+  // Delete handlers
+  const handleDeleteStart = useCallback((areaId: string) => {
+    const area = areas.find((a) => a.id === areaId);
+    if (!area) return;
+
+    // If area has children, show confirmation dialog
+    if (area.children.length > 0) {
+      setDeleteConfirm(areaId);
+    } else {
+      // Immediate delete
+      const now = new Date().toISOString();
+      // Update parent if exists
+      const updatedAreas = areas
+        .filter((a) => a.id !== areaId)
+        .map((a) =>
+          a.id === area.parent
+            ? { ...a, children: a.children.filter((c) => c !== areaId), updated_at: now }
+            : a
+        );
+      setAreas(updatedAreas);
+    }
+  }, [areas, setAreas]);
+
+  const handleDeleteOrphan = useCallback(() => {
+    if (!deleteConfirm) return;
+    const now = new Date().toISOString();
+    const areaToDelete = areas.find((a) => a.id === deleteConfirm);
+    if (!areaToDelete) return;
+
+    // Orphan: re-parent children to the deleted area's parent
+    const updatedAreas = areas
+      .filter((a) => a.id !== deleteConfirm)
+      .map((a) => {
+        if (a.id === areaToDelete.parent) {
+          // Remove deleted area from parent's children and add grandchildren
+          return {
+            ...a,
+            children: [
+              ...a.children.filter((c) => c !== deleteConfirm),
+              ...areaToDelete.children,
+            ],
+            updated_at: now,
+          };
+        }
+        if (areaToDelete.children.includes(a.id)) {
+          // Re-parent this child to the grandparent
+          return { ...a, parent: areaToDelete.parent, updated_at: now };
+        }
+        return a;
+      });
+    setAreas(updatedAreas);
+    setDeleteConfirm(null);
+  }, [deleteConfirm, areas, setAreas]);
+
+  const handleDeleteCollapse = useCallback(() => {
+    if (!deleteConfirm) return;
+    const now = new Date().toISOString();
+
+    // Collect all descendant IDs
+    const idsToRemove = new Set<string>([deleteConfirm]);
+    const stack = [...areas.filter((a) => a.parent === deleteConfirm || deleteConfirm === a.id)];
+    while (stack.length > 0) {
+      const a = stack.pop()!;
+      if (a.children) {
+        for (const cId of a.children) {
+          idsToRemove.add(cId);
+          const child = areas.find((ca) => ca.id === cId);
+          if (child) stack.push(child);
+        }
+      }
+    }
+
+    const updatedAreas = areas
+      .filter((a) => !idsToRemove.has(a.id))
+      .map((a) => {
+        // Clean up references to deleted areas
+        if (a.children) {
+          return {
+            ...a,
+            children: a.children.filter((c) => !idsToRemove.has(c)),
+            updated_at: now,
+          };
+        }
+        return a;
+      });
+    setAreas(updatedAreas);
+    setDeleteConfirm(null);
+  }, [deleteConfirm, areas, setAreas]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirm(null);
+  }, []);
 
   return (
     <div className="w-full h-full flex" data-testid="area-manager-view">
@@ -193,7 +323,105 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
               areas={areas}
               runtimeState={runtimeState}
               nodeNames={nodeNames}
+              renameAreaId={renameAreaId}
+              renameValue={renameValue}
+              onRenameStart={handleRenameStart}
+              onRenameConfirm={handleRenameConfirm}
+              onRenameCancel={handleRenameCancel}
+              onRenameKeyDown={handleRenameKeyDown}
+              onRenameValueChange={setRenameValue}
+              onDeleteStart={handleDeleteStart}
             />
+
+            {/* Delete confirmation dialog */}
+            {deleteConfirm && (
+              <div
+                data-testid="delete-confirm-dialog"
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 200,
+                }}
+                onClick={handleDeleteCancel}
+              >
+                <div
+                  style={{
+                    background: 'white',
+                    borderRadius: 12,
+                    padding: 24,
+                    minWidth: 300,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
+                    Delete area?
+                  </h3>
+                  <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+                    This area has child areas. What would you like to do with them?
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      data-testid="delete-orphan-btn"
+                      onClick={handleDeleteOrphan}
+                      style={{
+                        padding: '10px 16px',
+                        fontSize: 13,
+                        background: '#fef3c7',
+                        color: '#92400e',
+                        border: '1px solid #fde68a',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <strong>Orphan children</strong>
+                      <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
+                        Re-parent children to become top-level areas
+                      </div>
+                    </button>
+                    <button
+                      data-testid="delete-collapse-btn"
+                      onClick={handleDeleteCollapse}
+                      style={{
+                        padding: '10px 16px',
+                        fontSize: 13,
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        border: '1px solid #fecaca',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <strong>Collapse (delete all)</strong>
+                      <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
+                        Delete this area and all its children
+                      </div>
+                    </button>
+                    <button
+                      data-testid="delete-cancel-btn"
+                      onClick={handleDeleteCancel}
+                      style={{
+                        padding: '10px 16px',
+                        fontSize: 13,
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Node browser right rail */}
