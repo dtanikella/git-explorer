@@ -37,7 +37,7 @@ describe('indexTypeScriptRepo', () => {
     saveCachedIndex.mockResolvedValue(undefined);
 
     execFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: object, cb: (error: Error | null, stdout: string, stderr: string) => void) => {
         cb(null, 'Indexing complete', '');
         return { kill: jest.fn() };
       }
@@ -57,7 +57,7 @@ describe('indexTypeScriptRepo', () => {
     const processError = new Error('process failed') as Error & { code: number };
     processError.code = 1;
     execFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: object, cb: (error: Error | null, stdout: string, stderr: string) => void) => {
         cb(processError, '', 'tsconfig.json not found');
         return { kill: jest.fn() };
       }
@@ -71,7 +71,7 @@ describe('indexTypeScriptRepo', () => {
   it('skips cache check when forceReindex is true', async () => {
     saveCachedIndex.mockResolvedValue(undefined);
     execFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: object, cb: (error: Error | null, stdout: string, stderr: string) => void) => {
         cb(null, '', '');
         return { kill: jest.fn() };
       }

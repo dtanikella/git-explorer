@@ -15,6 +15,10 @@ import {
   countOutboundCalls,
   countInboundCalls,
   createModulesViewConfig,
+  createDataFlowViewConfig,
+  countDataNodeUsage,
+  DATA_FLOW_DATA_TYPES,
+  PROCESSING_NODE_RADIUS,
   type NodeStyler,
   type ScaleFn,
 } from '@/lib/analysis/graph-config';
@@ -577,6 +581,269 @@ describe('INTERNAL_PROCESSING_CONFIG', () => {
   });
 });
 
+describe('countDataNodeUsage', () => {
+  const functionNode = makeNode({
+    syntaxType: SyntaxType.FUNCTION,
+    scipSymbol: 'test#function.',
+  });
+  const secondFunctionNode = makeNode({
+    syntaxType: SyntaxType.FUNCTION,
+    scipSymbol: 'test#secondFunction.',
+  });
+  const interfaceNode = makeNode({
+    syntaxType: SyntaxType.INTERFACE,
+    scipSymbol: 'test#Data.',
+  });
+  const classNode = makeNode({
+    syntaxType: SyntaxType.CLASS,
+    scipSymbol: 'test#Class.',
+  });
+
+  it('counts qualifying function-to-interface USES_TYPE edges', () => {
+    const usage = countDataNodeUsage(
+      [makeEdge({
+        kind: EdgeKind.USES_TYPE,
+        fromSymbol: functionNode.scipSymbol,
+        toSymbol: interfaceNode.scipSymbol,
+      })],
+      [functionNode, interfaceNode],
+    );
+
+    expect(usage.get(interfaceNode.scipSymbol)).toBe(1);
+  });
+
+  it('does not count a function-to-class type reference', () => {
+    const usage = countDataNodeUsage(
+      [makeEdge({
+        kind: EdgeKind.USES_TYPE,
+        fromSymbol: functionNode.scipSymbol,
+        toSymbol: classNode.scipSymbol,
+      })],
+      [functionNode, classNode],
+    );
+
+    expect(usage).toEqual(new Map());
+  });
+
+  it('counts uses from different functions toward the same interface', () => {
+    const usage = countDataNodeUsage(
+      [
+        makeEdge({
+          kind: EdgeKind.USES_TYPE,
+          fromSymbol: functionNode.scipSymbol,
+          toSymbol: interfaceNode.scipSymbol,
+        }),
+        makeEdge({
+          kind: EdgeKind.USES_TYPE,
+          fromSymbol: secondFunctionNode.scipSymbol,
+          toSymbol: interfaceNode.scipSymbol,
+        }),
+      ],
+      [functionNode, secondFunctionNode, interfaceNode],
+    );
+
+    expect(usage.get(interfaceNode.scipSymbol)).toBe(2);
+  });
+
+  it('ignores non-USES_TYPE edges', () => {
+    const usage = countDataNodeUsage(
+      [makeEdge({
+        kind: EdgeKind.CALLS,
+        fromSymbol: functionNode.scipSymbol,
+        toSymbol: interfaceNode.scipSymbol,
+      })],
+      [functionNode, interfaceNode],
+    );
+
+    expect(usage).toEqual(new Map());
+  });
+});
+
+describe('createDataFlowViewConfig', () => {
+  const functionNode = makeNode({
+    syntaxType: SyntaxType.FUNCTION,
+    scipSymbol: 'test#function.',
+  });
+  const methodNode = makeNode({
+    syntaxType: SyntaxType.METHOD,
+    scipSymbol: 'test#method.',
+    referencedAt: Array.from({ length: 20 }, (_, i) => ({
+      filePath: `/src/ref${i}.ts`, line: i, col: 0, scipSymbol: `ref#${i}.`,
+    })),
+  });
+  const classNode = makeNode({
+    syntaxType: SyntaxType.CLASS,
+    scipSymbol: 'test#Class.',
+  });
+  const interfaceNode = makeNode({
+    syntaxType: SyntaxType.INTERFACE,
+    scipSymbol: 'test#Data.',
+  });
+  const typeAliasNode = makeNode({
+    syntaxType: SyntaxType.TYPE_ALIAS,
+    scipSymbol: 'test#Alias.',
+  });
+
+  it('keeps a function-to-interface type edge and both node kinds', () => {
+    const edge = makeEdge({
+      kind: EdgeKind.USES_TYPE,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: interfaceNode.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, interfaceNode]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+    expect(config.filters.node(functionNode)).toBe(true);
+    expect(config.filters.node(interfaceNode)).toBe(true);
+  });
+
+  it('keeps a function-to-class type edge as a processing-to-processing link', () => {
+    const edge = makeEdge({
+      kind: EdgeKind.USES_TYPE,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: classNode.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, classNode]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+    expect(DATA_FLOW_DATA_TYPES.has(classNode.syntaxType)).toBe(false);
+  });
+
+  it('keeps a CALLS edge between two processing nodes', () => {
+    const secondFunction = { ...functionNode, scipSymbol: 'test#secondFunction.' };
+    const edge = makeEdge({
+      kind: EdgeKind.CALLS,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: secondFunction.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, secondFunction]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+  });
+
+  it('keeps an EXTENDS edge between two data nodes', () => {
+    const secondInterface = { ...interfaceNode, scipSymbol: 'test#SecondData.' };
+    const edge = makeEdge({
+      kind: EdgeKind.EXTENDS,
+      fromSymbol: interfaceNode.scipSymbol,
+      toSymbol: secondInterface.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [interfaceNode, secondInterface]);
+
+    expect(config.filters.edge(edge)).toBe(true);
+  });
+
+  it('drops an IMPORTS edge even between two in-scope nodes', () => {
+    const secondFunction = { ...functionNode, scipSymbol: 'test#secondFunction.' };
+    const edge = makeEdge({
+      kind: EdgeKind.IMPORTS,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: secondFunction.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [functionNode, secondFunction]);
+
+    expect(config.filters.edge(edge)).toBe(false);
+  });
+
+  it('sizes an interface by the number of qualifying users', () => {
+    const secondFunction = { ...functionNode, scipSymbol: 'test#secondFunction.' };
+    const edges = [
+      makeEdge({
+        kind: EdgeKind.USES_TYPE,
+        fromSymbol: functionNode.scipSymbol,
+        toSymbol: interfaceNode.scipSymbol,
+      }),
+      makeEdge({
+        kind: EdgeKind.USES_TYPE,
+        fromSymbol: secondFunction.scipSymbol,
+        toSymbol: interfaceNode.scipSymbol,
+      }),
+      makeEdge({
+        kind: EdgeKind.USES_TYPE,
+        fromSymbol: functionNode.scipSymbol,
+        toSymbol: typeAliasNode.scipSymbol,
+      }),
+    ];
+    const config = createDataFlowViewConfig(
+      edges,
+      [functionNode, secondFunction, interfaceNode, typeAliasNode],
+    );
+
+    expect(edges.filter(config.filters.edge)).toHaveLength(3);
+    expect(config.style.node(interfaceNode, 0).radius).toBeGreaterThan(
+      config.style.node(typeAliasNode, 0).radius,
+    );
+  });
+
+  it('clamps data-node radius to the 2x/5x processing bounds', () => {
+    const edges = Array.from({ length: 1000 }, () => makeEdge({
+      kind: EdgeKind.USES_TYPE,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: interfaceNode.scipSymbol,
+    }));
+    const config = createDataFlowViewConfig(edges, [functionNode, interfaceNode]);
+    const style = config.style.node(interfaceNode, 0);
+
+    expect(style.radius).toBe(PROCESSING_NODE_RADIUS * 5);
+    expect(style.radius).toBeGreaterThanOrEqual(PROCESSING_NODE_RADIUS * 2);
+  });
+
+  it('uses constant gray radius and charge for processing node kinds', () => {
+    const config = createDataFlowViewConfig([], [functionNode, methodNode, classNode]);
+    const styles = [functionNode, methodNode, classNode].map((node) =>
+      config.style.node(node, 0),
+    );
+    const forces = [functionNode, methodNode, classNode].map((node) =>
+      config.forces.node(node),
+    );
+
+    expect(styles.map((style) => style.radius)).toEqual([
+      PROCESSING_NODE_RADIUS,
+      PROCESSING_NODE_RADIUS,
+      PROCESSING_NODE_RADIUS,
+    ]);
+    expect(styles.map((style) => style.color)).toEqual(['#9ca3af', '#9ca3af', '#9ca3af']);
+    expect(styles.every((style) => !style.label)).toBe(true);
+    expect(forces.every((force) => force.charge === -200)).toBe(true);
+  });
+
+  it('fails closed when an edge symbol is missing from nodes', () => {
+    const edge = makeEdge({
+      kind: EdgeKind.USES_TYPE,
+      fromSymbol: 'missing#from.',
+      toSymbol: interfaceNode.scipSymbol,
+    });
+    const config = createDataFlowViewConfig([edge], [interfaceNode]);
+
+    expect(() => config.filters.edge(edge)).not.toThrow();
+    expect(config.filters.edge(edge)).toBe(false);
+  });
+
+  it('uses a gradient edge and dampens strength for highly used data nodes', () => {
+    const edge = makeEdge({
+      kind: EdgeKind.USES_TYPE,
+      fromSymbol: functionNode.scipSymbol,
+      toSymbol: interfaceNode.scipSymbol,
+    });
+    const repeatedEdges = Array.from({ length: 4 }, () => edge);
+    const config = createDataFlowViewConfig(
+      repeatedEdges,
+      [functionNode, interfaceNode],
+    );
+    const style = config.style.edge(edge);
+
+    expect(style.gradientSourceColor).toBe('#d1d5db');
+    expect(style.gradientTargetColor).toBe('#000000');
+    expect(config.forces.edge(edge)).toEqual({ distance: 90, strength: 0.175 });
+  });
+
+  it('exposes fixed storage/api/ux layer radii for the concentric layout, unlike other views', () => {
+    const config = createDataFlowViewConfig([], [functionNode, interfaceNode]);
+
+    expect(config.forces.layerRadii).toEqual({ storage: 100, api: 260, ux: 420 });
+  });
+});
+
 describe('createModulesViewConfig', () => {
   const modulesEdges = [
     makeEdge({ fromSymbol: 'test#foo.', toSymbol: 'test#bar.', kind: EdgeKind.CALLS }),
@@ -584,6 +851,10 @@ describe('createModulesViewConfig', () => {
     makeEdge({ fromSymbol: 'test#bar.', toSymbol: 'test#baz.', kind: EdgeKind.CALLS }),
   ];
   const config = createModulesViewConfig(modulesEdges);
+
+  it('leaves layerRadii undefined (concentric layering is Data Flow-only)', () => {
+    expect(config.forces.layerRadii).toBeUndefined();
+  });
 
   describe('node filter', () => {
     it('accepts FUNCTION nodes', () => {

@@ -175,6 +175,39 @@ describe('SelectionContext', () => {
       expect(callees.candidates[0].nodeId).toBe('sym:d');
     });
 
+    it.each([
+      EdgeKind.INSTANTIATES,
+      EdgeKind.USES_TYPE,
+      EdgeKind.EXTENDS,
+      EdgeKind.IMPLEMENTS,
+    ])('treats %s edges as caller/callee relationships', (kind) => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      const edges = [makeEdge('sym:a', 'sym:c', kind)];
+      render(
+        <SelectionProvider nodes={testNodes} edges={edges} visibleNodeIds={visibleNodeIds} areas={[]}>
+          <TestConsumer onReady={(c) => { ctx = c; }} />
+        </SelectionProvider>
+      );
+      act(() => { ctx!.toggleNode('sym:c'); });
+      expect(ctx!.state.expansions.get('callers')!.candidates.map((c) => c.nodeId)).toEqual(['sym:a']);
+
+      act(() => { ctx!.toggleNode('sym:c'); }); // deselect
+      act(() => { ctx!.toggleNode('sym:a'); });
+      expect(ctx!.state.expansions.get('callees')!.candidates.map((c) => c.nodeId)).toEqual(['sym:c']);
+    });
+
+    it('does not treat IMPORTS edges as caller/callee relationships', () => {
+      let ctx: ReturnType<typeof useSelection> | null = null;
+      const edges = [makeEdge('sym:a', 'sym:c', EdgeKind.IMPORTS)];
+      render(
+        <SelectionProvider nodes={testNodes} edges={edges} visibleNodeIds={visibleNodeIds} areas={[]}>
+          <TestConsumer onReady={(c) => { ctx = c; }} />
+        </SelectionProvider>
+      );
+      act(() => { ctx!.toggleNode('sym:c'); });
+      expect(ctx!.state.expansions.get('callers')!.candidates.length).toBe(0);
+    });
+
     it('toggleExpansionGroup enables a group and adds candidates to activeNodeIds', () => {
       let ctx: ReturnType<typeof useSelection> | null = null;
       renderWithProvider((c) => { ctx = c; });

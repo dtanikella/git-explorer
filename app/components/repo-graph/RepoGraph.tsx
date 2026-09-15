@@ -18,7 +18,7 @@ import {
   createAnchorRepelForce,
 } from '@/lib/areas/forces';
 
-type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
+type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
 
 interface RepoGraphProps {
   repoPath: string;
@@ -94,7 +94,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     }
 
     return typeof config === 'function'
-      ? config(analysisData.edges)
+      ? config(analysisData.edges, analysisData.nodes)
       : (config ?? DEFAULT_REPO_GRAPH_CONFIG);
   }, [analysisData, config]);
 
@@ -386,6 +386,27 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
       .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
       .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
+
+    // Data Flow view only: pull nodes manually tagged with a `storage`/`api`/`ux` Area
+    // toward a concentric ring keyed by that area's name (see DATA_FLOW_LAYER_RADII).
+    // `cfg.forces.layerRadii` is undefined for every other view, so this is a no-op there.
+    if (cfg.forces.layerRadii) {
+      const layerRadii = cfg.forces.layerRadii;
+      const targetRadiusOf = (d: SimpleNode | AreaAnchorNode): number | null => {
+        if ('kind' in d && d.kind === 'anchor') return null;
+        const memberAreas = nodeToAreas.get((d as SimpleNode).id) ?? [];
+        const radii = memberAreas
+          .map((a) => layerRadii[a.name])
+          .filter((r): r is number => r != null);
+        if (radii.length === 0) return null;
+        return radii.reduce((sum, r) => sum + r, 0) / radii.length;
+      };
+      simulation.force(
+        'layerRadial',
+        d3.forceRadial<any>((d) => targetRadiusOf(d) ?? 0, width / 2, height / 2)
+          .strength((d) => (targetRadiusOf(d) == null ? 0 : 0.3)),
+      );
+    }
 
     simulation.alphaDecay(cfg.simulation.alphaDecay);
     simulation.velocityDecay(cfg.simulation.velocityDecay);

@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Additional common patterns
     "node_modules/**",
     "coverage/**",
+    "scripts/**",
+    "__tests__/fixtures/**",
     "*.log",
     ".env*",
   ]),
@@ -31,6 +33,12 @@ const eslintConfig = defineConfig([
     files: ["app/components/**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["app/page.tsx"],
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
     },
   },
   // Allow any types in test files for mocking

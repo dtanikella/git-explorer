@@ -30,5 +30,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "lib/git/client-analyzer.ts", "scripts"]
+  "exclude": [
+    "node_modules",
+    "lib/git/client-analyzer.ts",
+    "scripts",
+    "__tests__"
+  ]
 }

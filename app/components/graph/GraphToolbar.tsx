@@ -1,11 +1,11 @@
 'use client';
 
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import type { AnalysisEdge } from '@/lib/analysis/types';
+import type { AnalysisEdge, AnalysisNode } from '@/lib/analysis/types';
 
 interface ViewOption {
   label: string;
-  config: RepoGraphConfig | ((edges: AnalysisEdge[]) => RepoGraphConfig);
+  config: RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
 }
 
 interface GraphToolbarProps {
