@@ -1,16 +1,40 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import AreaTreeTable from './AreaTreeTable';
+import NodeBrowserPane from './NodeBrowserPane';
+import type { AnalysisNode } from '@/lib/analysis/types';
+import type { Area } from '@/lib/areas/types';
 
 interface AreaManagerViewProps {
   repoPath: string;
-  nodes: any[];
-  areas: any[];
+  nodes: AnalysisNode[];
+  areas: Area[];
 }
 
 export default function AreaManagerView({ repoPath, nodes, areas }: AreaManagerViewProps) {
   const { runtimeState, setAreas } = useAreaStore();
+
+  // Build node names lookup from AnalysisNode[]
+  const nodeNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of nodes) {
+      map[n.scipSymbol] = n.name;
+    }
+    return map;
+  }, [nodes]);
+
+  // Build set of all assigned node IDs
+  const assignedNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const area of areas) {
+      for (const nodeId of area.contains) {
+        ids.add(nodeId);
+      }
+    }
+    return ids;
+  }, [areas]);
 
   return (
     <div className="w-full h-full flex" data-testid="area-manager-view">
@@ -54,12 +78,12 @@ export default function AreaManagerView({ repoPath, nodes, areas }: AreaManagerV
             <AreaTreeTable
               areas={areas}
               runtimeState={runtimeState}
+              nodeNames={nodeNames}
             />
           </div>
 
           {/* Node browser right rail */}
           <div
-            data-testid="node-browser-pane"
             style={{
               width: 280,
               borderLeft: '1px solid #e5e7eb',
@@ -69,9 +93,10 @@ export default function AreaManagerView({ repoPath, nodes, areas }: AreaManagerV
               flexShrink: 0,
             }}
           >
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb', fontSize: 12, fontWeight: 600 }}>
-              Nodes
-            </div>
+            <NodeBrowserPane
+              nodes={nodes}
+              assignedNodeIds={assignedNodeIds}
+            />
           </div>
         </div>
       </div>
