@@ -142,6 +142,17 @@ npm install --legacy-peer-deps
 - Make sure you have a C++ toolchain installed (Xcode Command Line Tools on macOS, `build-essential` on Ubuntu).
 - Delete `node_modules` and `package-lock.json` and run `npm install --legacy-peer-deps` again.
 
+### Dev server dies silently on the first repo-analysis request
+
+`tree-sitter`'s native binding is compiled from source and tied to the exact Node ABI active during `npm install` — it is **not** portable across Node major versions the way most native modules are. If `npm install` ran under a different Node than the 20.x that `npm run dev`/`build`/`test` switch to, the binding segfaults the whole process (no stack trace, no error — the server just vanishes) the first time a route touches tree-sitter (e.g. `/api/repo-analysis`).
+
+This repo has an `.nvmrc` (`20`) and `engine-strict=true` in `.npmrc` so a plain `npm install` under the wrong Node fails loudly instead of silently building a bad binary; a `postinstall` script also verifies the binding loads and rebuilds it automatically if not. If you still hit this (e.g. installed with `--ignore-engines`, or via a package manager that skips `engines` checks), fix it with:
+
+```bash
+nvm use 20
+npm rebuild tree-sitter --build-from-source
+```
+
 ### "No supported language detected"
 
 The app currently looks for `tsconfig.json` to detect a TypeScript repo. Make sure the path you enter contains a `tsconfig.json`.

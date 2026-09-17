@@ -7,6 +7,7 @@ export class NodeWrapper {
   constructor(private readonly _node: SyntaxNode) {}
 
   // Identity
+  get id(): number { return this._node.id; }
   get type(): string { return this._node.type; }
   get text(): string { return this._node.text; }
   get isNamed(): boolean { return this._node.isNamed; }

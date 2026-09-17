@@ -235,6 +235,186 @@ describe('extractNodes', () => {
     expect(output.nodeMap.has('src/helpers.ts#local 3')).toBe(true);
   });
 
+  it('extracts a plain variable/constant declaration', () => {
+    const source = 'export const CONFIG = 42;';
+    const tree = parseTs(source);
+
+    // "CONFIG" starts at row 0, col 13
+    const scipDoc = mockScipDoc('src/config.ts', [
+      { range: [0, 13, 19], symbol: 'scip-ts npm . . config.ts/CONFIG.', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/config.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'CONFIG');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.VARIABLE);
+    expect(node!.isExported).toBe(true);
+  });
+
+  it('does not double-extract an arrow-function-valued variable as VARIABLE', () => {
+    const source = 'export const add = (a: number, b: number) => a + b;';
+    const tree = parseTs(source);
+
+    const scipDoc = mockScipDoc('src/utils.ts', [
+      { range: [0, 13, 16], symbol: 'scip-ts npm . . utils.ts/add.', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/utils.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const matches = output.nodes.filter((n) => n.name === 'add');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].syntaxType).toBe(SyntaxType.FUNCTION);
+  });
+
+  it('skips destructuring declarators (no single symbol name)', () => {
+    const source = 'export const { a, b } = getPair();';
+    const tree = parseTs(source);
+
+    const output = extractNodes({
+      parsedFiles: new Map([['src/utils.ts', { tree, source }]]),
+      scipDocuments: [mockScipDoc('src/utils.ts', [])],
+      repoPath: '/repo',
+    });
+
+    expect(output.nodes).toHaveLength(0);
+  });
+
+  it('extracts an enum declaration', () => {
+    const source = 'export enum Color { Red, Green }';
+    const tree = parseTs(source);
+
+    // "Color" starts at row 0, col 12
+    const scipDoc = mockScipDoc('src/models.ts', [
+      { range: [0, 12, 17], symbol: 'scip-ts npm . . models.ts/Color#', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/models.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'Color');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.ENUM);
+    expect(node!.isExported).toBe(true);
+  });
+
+  it('extracts a namespace declaration', () => {
+    const source = 'namespace Foo {\n  export const x = 1;\n}';
+    const tree = parseTs(source);
+
+    // "Foo" starts at row 0, col 10
+    const scipDoc = mockScipDoc('src/ns.ts', [
+      { range: [0, 10, 13], symbol: 'scip-ts npm . . ns.ts/Foo.', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/ns.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'Foo');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.NAMESPACE);
+  });
+
+  it('classifies a getter method_definition as GETTER', () => {
+    const source = 'class Foo {\n  get bar(): number { return 1; }\n}';
+    const tree = parseTs(source);
+
+    // "bar" starts at row 1, col 6
+    const scipDoc = mockScipDoc('src/foo.ts', [
+      { range: [1, 6, 9], symbol: 'scip-ts npm . . foo.ts/Foo#bar.', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/foo.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'bar');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.GETTER);
+    expect(node!.returnTypeText).toBe('number');
+  });
+
+  it('classifies a setter method_definition as SETTER', () => {
+    const source = 'class Foo {\n  set bar(value: number) { this._bar = value; }\n}';
+    const tree = parseTs(source);
+
+    // "bar" starts at row 1, col 6
+    const scipDoc = mockScipDoc('src/foo.ts', [
+      { range: [1, 6, 9], symbol: 'scip-ts npm . . foo.ts/Foo#bar.', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/foo.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'bar');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.SETTER);
+    expect(node!.params).toEqual([{ name: 'value', typeText: 'number', isOptional: false }]);
+  });
+
+  it('classifies a constructor method_definition as CONSTRUCTOR', () => {
+    const source = 'class Foo {\n  constructor(public name: string) {}\n}';
+    const tree = parseTs(source);
+
+    // "constructor" starts at row 1, col 2
+    const scipDoc = mockScipDoc('src/foo.ts', [
+      { range: [1, 2, 13], symbol: 'scip-ts npm . . foo.ts/Foo#`<constructor>`().', symbolRoles: 1 },
+    ]);
+
+    const input: NodeExtractionInput = {
+      parsedFiles: new Map([['src/foo.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      repoPath: '/repo',
+    };
+
+    const output = extractNodes(input);
+    const node = output.nodes.find((n) => n.name === 'constructor');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.CONSTRUCTOR);
+  });
+
+  it('extracts a decorator with a synthesized, position-qualified symbol', () => {
+    const source = '@Component()\nclass Foo {}';
+    const tree = parseTs(source);
+
+    const output = extractNodes({
+      parsedFiles: new Map([['src/foo.ts', { tree, source }]]),
+      scipDocuments: [mockScipDoc('src/foo.ts', [])],
+      repoPath: '/repo',
+    });
+
+    const node = output.nodes.find((n) => n.syntaxType === SyntaxType.DECORATOR);
+    expect(node).toBeDefined();
+    expect(node!.name).toBe('Component');
+    expect(node!.isDefinition).toBe(false);
+    expect(node!.scipSymbol).toBe('src/foo.ts#local decorator 0:0');
+  });
+
   it('does not collide local symbols across files', () => {
     const sourceA = 'function foo(): void {}';
     const sourceB = 'function bar(): void {}';

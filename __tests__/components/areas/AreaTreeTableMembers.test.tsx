@@ -97,4 +97,19 @@ describe('AreaTreeTable member sub-rows', () => {
     expect(screen.getByText('charge.ts')).toBeInTheDocument();
     expect(screen.getByText('shared.ts')).toBeInTheDocument();
   });
+
+  it('removes a member from the row\'s own area via the per-row remove button', () => {
+    const onRemoveMember = jest.fn();
+    render(
+      <AreaTreeTable
+        areas={mockAreas}
+        runtimeState={mockRuntimeState}
+        nodeNames={mockNodeNames}
+        onRemoveMember={onRemoveMember}
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-caret-auth'));
+    fireEvent.click(screen.getByTestId('remove-member-auth-sym-login'));
+    expect(onRemoveMember).toHaveBeenCalledWith('auth', 'sym-login');
+  });
 });

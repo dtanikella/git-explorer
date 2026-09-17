@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import type { AnalysisNode } from '@/lib/analysis/types';
+import { SYNTAX_TYPE_LABELS, SYNTAX_TYPE_BADGE_COLORS } from '@/lib/analysis/syntax-type-labels';
 
 interface NodeBrowserPaneProps {
   nodes: AnalysisNode[];
   assignedNodeIds?: Set<string>;
-  onAssignNode?: (nodeId: string) => void;
 }
 
 function truncatePath(filePath: string): string {
@@ -14,23 +15,98 @@ function truncatePath(filePath: string): string {
   return parts[parts.length - 1];
 }
 
+function DraggableNodeRow({
+  node,
+  isAssigned,
+  isSelected,
+  dragNodeIds,
+  onRowClick,
+}: {
+  node: AnalysisNode;
+  isAssigned: boolean;
+  isSelected: boolean;
+  dragNodeIds: string[];
+  onRowClick: (nodeId: string, e: React.MouseEvent) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `node-${node.scipSymbol}`,
+    data: { type: 'node', nodeId: node.scipSymbol, nodeIds: dragNodeIds },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      data-testid={`node-item-${node.scipSymbol}`}
+      data-draggable={node.scipSymbol}
+      data-selected={isSelected}
+      onClick={(e) => onRowClick(node.scipSymbol, e)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '3px 12px 3px 16px',
+        cursor: 'pointer',
+        fontSize: 11,
+        color: isAssigned ? '#6b7280' : '#374151',
+        background: isSelected ? '#dbeafe' : isAssigned ? '#f9fafb' : 'transparent',
+        opacity: isDragging ? 0.4 : 1,
+        touchAction: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <span
+        title={SYNTAX_TYPE_LABELS[node.syntaxType]}
+        style={{
+          fontSize: 8,
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.3px',
+          padding: '1px 4px',
+          borderRadius: 4,
+          flexShrink: 0,
+          color: isAssigned ? '#9ca3af' : SYNTAX_TYPE_BADGE_COLORS[node.syntaxType],
+          background: isAssigned ? '#f3f4f6' : `${SYNTAX_TYPE_BADGE_COLORS[node.syntaxType]}1a`,
+        }}
+      >
+        {SYNTAX_TYPE_LABELS[node.syntaxType]}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {truncatePath(node.name)}
+      </span>
+    </div>
+  );
+}
+
 export default function NodeBrowserPane({
   nodes,
   assignedNodeIds = new Set(),
-  onAssignNode,
 }: NodeBrowserPaneProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const anchorRef = useRef<string | null>(null);
 
-  // Group nodes by file path
-  const grouped = useMemo(() => {
+  // Distinct node kinds actually present, for the type filter's options
+  const presentTypes = useMemo(() => {
+    const types = new Set<AnalysisNode['syntaxType']>();
+    for (const n of nodes) types.add(n.syntaxType);
+    return [...types].sort((a, b) => SYNTAX_TYPE_LABELS[a].localeCompare(SYNTAX_TYPE_LABELS[b]));
+  }, [nodes]);
+
+  // Group nodes by file path, and keep the flattened visible order for shift-range-select
+  const { grouped, flatOrder } = useMemo(() => {
     const filtered = nodes.filter((n) => {
       if (searchQuery && !n.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       if (unassignedOnly && assignedNodeIds.has(n.scipSymbol)) return false;
+      if (typeFilter !== 'all' && n.syntaxType !== typeFilter) return false;
       return true;
     });
 
     const groups = new Map<string, AnalysisNode[]>();
+    const order: string[] = [];
     for (const node of filtered) {
       const filePath = node.filePath;
       const existing = groups.get(filePath);
@@ -39,9 +115,39 @@ export default function NodeBrowserPane({
       } else {
         groups.set(filePath, [node]);
       }
+      order.push(node.scipSymbol);
     }
-    return groups;
-  }, [nodes, searchQuery, unassignedOnly, assignedNodeIds]);
+    return { grouped: groups, flatOrder: order };
+  }, [nodes, searchQuery, unassignedOnly, typeFilter, assignedNodeIds]);
+
+  // Plain click selects just this row; cmd/ctrl-click toggles it in/out of the
+  // selection; shift-click extends the selection from the last-clicked row.
+  const handleRowClick = useCallback(
+    (nodeId: string, e: React.MouseEvent) => {
+      if (e.shiftKey && anchorRef.current) {
+        const from = flatOrder.indexOf(anchorRef.current);
+        const to = flatOrder.indexOf(nodeId);
+        if (from !== -1 && to !== -1) {
+          const [start, end] = from < to ? [from, to] : [to, from];
+          setSelectedIds(new Set(flatOrder.slice(start, end + 1)));
+        }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(nodeId)) next.delete(nodeId);
+          else next.add(nodeId);
+          return next;
+        });
+        anchorRef.current = nodeId;
+        return;
+      }
+      setSelectedIds(new Set([nodeId]));
+      anchorRef.current = nodeId;
+    },
+    [flatOrder]
+  );
 
   return (
     <div
@@ -60,6 +166,11 @@ export default function NodeBrowserPane({
           <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>
             ({nodes.length} nodes)
           </span>
+          {selectedIds.size > 1 && (
+            <span data-testid="selection-count" style={{ fontSize: 10, color: '#3b82f6', fontWeight: 600, marginLeft: 6 }}>
+              {selectedIds.size} selected
+            </span>
+          )}
         </div>
         <input
           data-testid="node-search-input"
@@ -77,6 +188,30 @@ export default function NodeBrowserPane({
             outline: 'none',
           }}
         />
+        <select
+          data-testid="node-type-filter"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            marginTop: 6,
+            padding: '4px 6px',
+            fontSize: 11,
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            outline: 'none',
+            color: '#374151',
+            background: 'white',
+          }}
+        >
+          <option value="all">All types</option>
+          {presentTypes.map((t) => (
+            <option key={t} value={t}>
+              {SYNTAX_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </select>
         <label
           data-testid="unassigned-toggle"
           style={{
@@ -103,7 +238,7 @@ export default function NodeBrowserPane({
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         {grouped.size === 0 ? (
           <div style={{ fontSize: 11, color: '#9ca3af', padding: '12px', textAlign: 'center' }}>
-            {searchQuery || unassignedOnly ? 'No matching nodes' : 'No nodes loaded'}
+            {searchQuery || unassignedOnly || typeFilter !== 'all' ? 'No matching nodes' : 'No nodes loaded'}
           </div>
         ) : (
           [...grouped.entries()].map(([filePath, fileNodes]) => (
@@ -120,30 +255,18 @@ export default function NodeBrowserPane({
               >
                 {filePath}
               </div>
-              {fileNodes.map((node) => {
-                const isAssigned = assignedNodeIds.has(node.scipSymbol);
+              {fileNodes.map((node, i) => {
+                const isSelected = selectedIds.has(node.scipSymbol);
+                const isMultiDrag = isSelected && selectedIds.size > 1;
                 return (
-                  <div
-                    key={node.scipSymbol}
-                    data-testid={`node-item-${node.scipSymbol}`}
-                    data-draggable={node.scipSymbol}
-                    onClick={() => onAssignNode?.(node.scipSymbol)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '3px 12px 3px 16px',
-                      cursor: onAssignNode ? 'pointer' : 'default',
-                      fontSize: 11,
-                      color: isAssigned ? '#6b7280' : '#374151',
-                      background: isAssigned ? '#f9fafb' : 'transparent',
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: isAssigned ? '#d1d5db' : '#3b82f6', flexShrink: 0 }} />
-                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {truncatePath(node.name)}
-                    </span>
-                  </div>
+                  <DraggableNodeRow
+                    key={`${filePath}::${node.scipSymbol}::${i}`}
+                    node={node}
+                    isAssigned={assignedNodeIds.has(node.scipSymbol)}
+                    isSelected={isSelected}
+                    dragNodeIds={isMultiDrag ? [...selectedIds] : [node.scipSymbol]}
+                    onRowClick={handleRowClick}
+                  />
                 );
               })}
             </div>

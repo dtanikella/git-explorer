@@ -56,6 +56,66 @@ const mockNodes: AnalysisNode[] = [
   },
 ];
 
+describe('NodeBrowserPane multiselect', () => {
+  const multiNodes: AnalysisNode[] = [
+    { ...mockNodes[0], name: 'a', scipSymbol: 'sym-a', filePath: 'src/shared.ts' },
+    { ...mockNodes[0], name: 'b', scipSymbol: 'sym-b', filePath: 'src/shared.ts' },
+    { ...mockNodes[0], name: 'c', scipSymbol: 'sym-c', filePath: 'src/shared.ts' },
+  ];
+
+  it('plain click selects a single row', () => {
+    render(
+      <DndContext>
+        <NodeBrowserPane nodes={multiNodes} />
+      </DndContext>
+    );
+    fireEvent.click(screen.getByTestId('node-item-sym-a'));
+    expect(screen.getByTestId('node-item-sym-a').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('node-item-sym-b').getAttribute('data-selected')).toBe('false');
+  });
+
+  it('cmd/ctrl-click toggles additional rows into the selection', () => {
+    render(
+      <DndContext>
+        <NodeBrowserPane nodes={multiNodes} />
+      </DndContext>
+    );
+    fireEvent.click(screen.getByTestId('node-item-sym-a'));
+    fireEvent.click(screen.getByTestId('node-item-sym-c'), { metaKey: true });
+    expect(screen.getByTestId('node-item-sym-a').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('node-item-sym-c').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('node-item-sym-b').getAttribute('data-selected')).toBe('false');
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+  });
+
+  it('shift-click selects a range from the last-clicked row', () => {
+    render(
+      <DndContext>
+        <NodeBrowserPane nodes={multiNodes} />
+      </DndContext>
+    );
+    fireEvent.click(screen.getByTestId('node-item-sym-a'));
+    fireEvent.click(screen.getByTestId('node-item-sym-c'), { shiftKey: true });
+    expect(screen.getByTestId('node-item-sym-a').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('node-item-sym-b').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('node-item-sym-c').getAttribute('data-selected')).toBe('true');
+  });
+
+  it('a plain click on an unselected row replaces the existing selection', () => {
+    render(
+      <DndContext>
+        <NodeBrowserPane nodes={multiNodes} />
+      </DndContext>
+    );
+    fireEvent.click(screen.getByTestId('node-item-sym-a'), { metaKey: true });
+    fireEvent.click(screen.getByTestId('node-item-sym-b'), { metaKey: true });
+    fireEvent.click(screen.getByTestId('node-item-sym-c'));
+    expect(screen.getByTestId('node-item-sym-a').getAttribute('data-selected')).toBe('false');
+    expect(screen.getByTestId('node-item-sym-b').getAttribute('data-selected')).toBe('false');
+    expect(screen.getByTestId('node-item-sym-c').getAttribute('data-selected')).toBe('true');
+  });
+});
+
 describe('Area DnD wiring', () => {
   it('renders area rows with data-droppable attribute', () => {
     render(

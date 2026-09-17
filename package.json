@@ -2,13 +2,17 @@
   "name": "git-explorer",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "source ~/.nvm/nvm.sh && nvm use 20 && next dev",
     "build": "source ~/.nvm/nvm.sh && nvm use 20 && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "source ~/.nvm/nvm.sh && nvm use 20 && jest",
-    "test:watch": "source ~/.nvm/nvm.sh && nvm use 20 && jest --watch"
+    "test:watch": "source ~/.nvm/nvm.sh && nvm use 20 && jest --watch",
+    "postinstall": "node scripts/verify-native-bindings.js"
   },
   "dependencies": {
     "@c4312/scip": "^0.1.0",

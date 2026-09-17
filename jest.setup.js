@@ -7,6 +7,20 @@ if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextDecoder = TextDecoder;
 }
 
+// Default fetch mock so components that autosave (e.g. AreaContext) don't
+// crash the test process when a test file doesn't define its own fetch mock.
+// Only installs when nothing has already set global.fetch (module-scope
+// assignments like `global.fetch = jest.fn(...)` in a test file run before
+// this, so they take precedence and are left alone).
+beforeEach(() => {
+  if (!global.fetch) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+  }
+});
+
 // Mock d3 modules globally for all tests
 jest.mock('d3-force', () => ({
   forceSimulation: jest.fn(() => {

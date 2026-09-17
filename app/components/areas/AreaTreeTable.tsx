@@ -1,12 +1,17 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { Area, AreaRuntimeState } from '@/lib/areas/types';
+import type { SyntaxType } from '@/lib/analysis/types';
+import { computeRollupMemberCounts } from '@/lib/areas/containment';
+import { SYNTAX_TYPE_LABELS, SYNTAX_TYPE_BADGE_COLORS } from '@/lib/analysis/syntax-type-labels';
 
 interface AreaTreeTableProps {
   areas: Area[];
   runtimeState: Map<string, AreaRuntimeState>;
   nodeNames?: Record<string, string>;
+  nodeTypes?: Record<string, SyntaxType>;
   renameAreaId?: string | null;
   renameValue?: string;
   onRenameStart?: (areaId: string, currentName: string) => void;
@@ -14,11 +19,16 @@ interface AreaTreeTableProps {
   onRenameCancel?: () => void;
   onRenameKeyDown?: (e: React.KeyboardEvent) => void;
   onRenameValueChange?: (value: string) => void;
-  onDeleteArea?: (areaId: string) => void;
   onDeleteStart?: (areaId: string) => void;
+  onAddChildArea?: (parentId: string) => void;
   onChangeType?: (areaId: string, newType: string) => void;
   onRemoveMember?: (areaId: string, nodeId: string) => void;
-  onAddMember?: (areaId: string, nodeId: string) => void;
+  createParentId?: string | null;
+  newChildAreaName?: string;
+  onNewChildAreaNameChange?: (value: string) => void;
+  onConfirmCreateChild?: () => void;
+  onCancelCreateChild?: () => void;
+  onCreateChildKeyDown?: (e: React.KeyboardEvent) => void;
 }
 
 function truncatePath(filePath: string): string {
@@ -26,10 +36,108 @@ function truncatePath(filePath: string): string {
   return parts[parts.length - 1];
 }
 
+function DraggableMemberRow({
+  nodeId,
+  areaId,
+  depth,
+  children,
+}: {
+  nodeId: string;
+  areaId: string;
+  depth: number;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `member-drag-${areaId}-${nodeId}`,
+    data: { type: 'node', nodeId, areaId },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid={`member-row-${areaId}-${nodeId}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 8px',
+        borderBottom: '1px solid #f5f5f5',
+        fontSize: 11,
+        paddingLeft: 26 + (depth + 1) * 20,
+        color: '#374151',
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <span
+        {...listeners}
+        {...attributes}
+        title="Drag to move to another area"
+        style={{ width: 14, flexShrink: 0, textAlign: 'center', cursor: 'grab', color: '#d1d5db', fontSize: 9, touchAction: 'none' }}
+      >
+        ⠿
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function DroppableAreaRow({
+  area,
+  depth,
+  children,
+}: {
+  area: Area;
+  depth: number;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `area-${area.id}`,
+    data: { type: 'area', areaId: area.id },
+  });
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `area-drag-${area.id}`,
+    data: { type: 'area', areaId: area.id, area },
+  });
+
+  return (
+    <div
+      ref={(el) => {
+        setDropRef(el);
+        setDragRef(el);
+      }}
+      data-testid={`area-row-${area.id}`}
+      data-droppable={area.id}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 8px',
+        borderBottom: '1px solid #f0f0f0',
+        fontSize: 12,
+        paddingLeft: 12 + depth * 20,
+        background: isOver ? '#eff6ff' : 'transparent',
+        boxShadow: isOver ? 'inset 0 0 0 1px #3b82f6' : 'none',
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <span
+        {...listeners}
+        {...attributes}
+        title="Drag to reparent"
+        style={{ cursor: 'grab', color: '#d1d5db', fontSize: 10, flexShrink: 0, touchAction: 'none' }}
+      >
+        ⠿
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export default function AreaTreeTable({
   areas,
   runtimeState,
   nodeNames = {},
+  nodeTypes = {},
   renameAreaId,
   renameValue,
   onRenameStart,
@@ -38,10 +146,15 @@ export default function AreaTreeTable({
   onRenameKeyDown,
   onRenameValueChange,
   onDeleteStart,
-  onDeleteArea,
+  onAddChildArea,
   onChangeType,
   onRemoveMember,
-  onAddMember,
+  createParentId,
+  newChildAreaName,
+  onNewChildAreaNameChange,
+  onConfirmCreateChild,
+  onCancelCreateChild,
+  onCreateChildKeyDown,
 }: AreaTreeTableProps) {
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
   const [popoverNodeId, setPopoverNodeId] = useState<string | null>(null);
@@ -69,6 +182,8 @@ export default function AreaTreeTable({
     return map;
   }, [areas]);
 
+  const rollupMemberCounts = useMemo(() => computeRollupMemberCounts(areas), [areas]);
+
   const topLevel = useMemo(() => areas.filter((a) => a.parent === null), [areas]);
 
   const toggleExpanded = useCallback((areaId: string) => {
@@ -92,29 +207,54 @@ export default function AreaTreeTable({
 
   const renderMemberRow = (nodeId: string, areaId: string, depth: number) => {
     const nodeName = nodeNames[nodeId] ?? nodeId;
+    const nodeType = nodeTypes[nodeId];
     const otherAreas = nodeToAreas.get(nodeId)?.filter((a) => a.id !== areaId) ?? [];
     const hasOtherMemberships = otherAreas.length > 0;
     const showPopover = popoverNodeId === nodeId;
 
     return (
-      <div
-        key={`${areaId}-${nodeId}`}
-        data-testid={`member-row-${areaId}-${nodeId}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '4px 8px',
-          borderBottom: '1px solid #f5f5f5',
-          fontSize: 11,
-          paddingLeft: 26 + (depth + 1) * 20,
-          color: '#374151',
-        }}
-      >
-        <span style={{ width: 14, flexShrink: 0 }} />
+      <DraggableMemberRow key={`${areaId}-${nodeId}`} nodeId={nodeId} areaId={areaId} depth={depth}>
+        {nodeType && (
+          <span
+            title={SYNTAX_TYPE_LABELS[nodeType]}
+            style={{
+              fontSize: 8,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.3px',
+              padding: '1px 4px',
+              borderRadius: 4,
+              flexShrink: 0,
+              color: SYNTAX_TYPE_BADGE_COLORS[nodeType],
+              background: `${SYNTAX_TYPE_BADGE_COLORS[nodeType]}1a`,
+            }}
+          >
+            {SYNTAX_TYPE_LABELS[nodeType]}
+          </span>
+        )}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {truncatePath(nodeName)}
         </span>
+        <button
+          data-testid={`remove-member-${areaId}-${nodeId}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveMember?.(areaId, nodeId);
+          }}
+          title="Remove from this area"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#d1d5db',
+            cursor: 'pointer',
+            fontSize: 12,
+            padding: '1px 4px',
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          ×
+        </button>
         {hasOtherMemberships && (
           <span
             data-testid={`multi-member-chip-${nodeId}-${areaId}`}
@@ -206,7 +346,7 @@ export default function AreaTreeTable({
             })}
           </div>
         )}
-      </div>
+      </DraggableMemberRow>
     );
   };
 
@@ -219,19 +359,7 @@ export default function AreaTreeTable({
 
     return (
       <React.Fragment key={area.id}>
-        <div
-          data-testid={`area-row-${area.id}`}
-          data-droppable={area.id}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 8px',
-            borderBottom: '1px solid #f0f0f0',
-            fontSize: 12,
-            paddingLeft: 12 + depth * 20,
-          }}
-        >
+        <DroppableAreaRow area={area} depth={depth}>
           {/* Expand caret */}
           <span
             data-testid={`expand-caret-${area.id}`}
@@ -268,7 +396,19 @@ export default function AreaTreeTable({
               }}
             />
           ) : (
-            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
+            <span
+              data-testid={`area-name-${area.id}`}
+              onClick={() => onRenameStart?.(area.id, area.name)}
+              title="Click to rename"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontWeight: 500,
+                cursor: 'text',
+              }}
+            >
               {area.name}
             </span>
           )}
@@ -298,27 +438,28 @@ export default function AreaTreeTable({
             {area.type}
           </span>
 
-          {/* Members count */}
+          {/* Members count (rolled up to include descendants) */}
           <span style={{ color: '#9ca3af', fontSize: 11, flexShrink: 0, width: 30, textAlign: 'right' }}>
-            {area.contains.length}
+            {rollupMemberCounts.get(area.id) ?? area.contains.length}
           </span>
 
           {/* Actions */}
           <span style={{ flexShrink: 0, display: 'flex', gap: 4 }}>
             <button
-              data-testid={`rename-area-${area.id}`}
-              onClick={() => onRenameStart?.(area.id, area.name)}
+              data-testid={`add-child-area-${area.id}`}
+              onClick={() => onAddChildArea?.(area.id)}
               style={{
                 background: 'none',
                 border: 'none',
                 color: '#6b7280',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 13,
                 padding: '2px 4px',
+                lineHeight: 1,
               }}
-              title="Rename"
+              title="Add child area"
             >
-              ✏️
+              +
             </button>
             <button
               data-testid={`delete-area-${area.id}`}
@@ -336,7 +477,72 @@ export default function AreaTreeTable({
               🗑️
             </button>
           </span>
-        </div>
+        </DroppableAreaRow>
+
+        {/* Inline child-area creation row */}
+        {createParentId === area.id && (
+          <div
+            data-testid={`inline-create-child-row-${area.id}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              paddingLeft: 12 + (depth + 1) * 20,
+              borderBottom: '1px solid #e5e7eb',
+              background: '#f0fdf4',
+            }}
+          >
+            <span style={{ width: 14, flexShrink: 0, color: '#22c55e', fontSize: 8 }}>▶</span>
+            <input
+              data-testid={`inline-create-child-input-${area.id}`}
+              autoFocus
+              value={newChildAreaName ?? ''}
+              onChange={(e) => onNewChildAreaNameChange?.(e.target.value)}
+              onKeyDown={onCreateChildKeyDown}
+              placeholder="Area name..."
+              style={{
+                flex: 1,
+                padding: '4px 8px',
+                fontSize: 12,
+                border: '1px solid #22c55e',
+                borderRadius: 6,
+                outline: 'none',
+              }}
+            />
+            <button
+              data-testid={`inline-create-child-confirm-${area.id}`}
+              onClick={onConfirmCreateChild}
+              disabled={!newChildAreaName?.trim()}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                background: newChildAreaName?.trim() ? '#22c55e' : '#d1d5db',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: newChildAreaName?.trim() ? 'pointer' : 'default',
+              }}
+            >
+              Create
+            </button>
+            <button
+              data-testid={`inline-create-child-cancel-${area.id}`}
+              onClick={onCancelCreateChild}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                background: 'white',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
         {/* Expanded content: children + member rows */}
         {expanded && (

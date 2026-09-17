@@ -63,13 +63,13 @@ describe('AreaManagerView rename/delete', () => {
 
   it('shows rename input when rename button is clicked', () => {
     renderWithProvider();
-    fireEvent.click(screen.getByTestId('rename-area-auth'));
+    fireEvent.click(screen.getByTestId('area-name-auth'));
     expect(screen.getByTestId('inline-rename-input-auth')).toBeInTheDocument();
   });
 
   it('renames area on confirm', () => {
     renderWithProvider();
-    fireEvent.click(screen.getByTestId('rename-area-auth'));
+    fireEvent.click(screen.getByTestId('area-name-auth'));
     const input = screen.getByTestId('inline-rename-input-auth');
     fireEvent.change(input, { target: { value: 'Renamed Auth' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -111,7 +111,7 @@ describe('AreaManagerView rename/delete', () => {
 
   it('cancels rename on Escape', () => {
     renderWithProvider();
-    fireEvent.click(screen.getByTestId('rename-area-auth'));
+    fireEvent.click(screen.getByTestId('area-name-auth'));
     const input = screen.getByTestId('inline-rename-input-auth');
     fireEvent.change(input, { target: { value: 'Changed' } });
     fireEvent.keyDown(input, { key: 'Escape' });

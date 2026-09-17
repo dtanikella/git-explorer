@@ -209,7 +209,7 @@ export default function HomePage() {
                 Select a repository to visualize
               </div>
             ) : activeTab === 'areas' ? (
-              <AreaProvider areas={areasData}>
+              <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
                 <AreaManagerView
                   repoPath={repoPath}
                   nodes={analysisData?.nodes ?? []}
@@ -222,7 +222,7 @@ export default function HomePage() {
                 visibleNodeIds={graphVisibleNodeIds}
                 areas={areasData}
               >
-                <AreaProvider areas={areasData}>
+                <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
                   <SelectionBridge
                     toggleRef={selectionToggleRef}
                     pendingId={pendingSelectionId}

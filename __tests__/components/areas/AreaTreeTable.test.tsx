@@ -60,10 +60,12 @@ describe('AreaTreeTable', () => {
     expect(screen.getByText('Members')).toBeInTheDocument();
   });
 
-  it('shows member count for areas', () => {
+  it('shows member count for areas, rolled up to include descendants', () => {
     render(<AreaTreeTable areas={mockAreas} runtimeState={mockRuntimeState} />);
-    // Auth has 2 members
-    expect(screen.getByText('2')).toBeInTheDocument();
+    // Auth has 2 direct members + Payments' 1 nested member = 3
+    expect(screen.getByText('3')).toBeInTheDocument();
+    // Utils has no members
+    expect(screen.getByText('0')).toBeInTheDocument();
   });
 
   it('shows type pill with color from runtime state', () => {

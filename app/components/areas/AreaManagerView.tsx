@@ -3,9 +3,11 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { generateAreaId } from '@/lib/areas/id';
+import { addNodeToArea as addNodeToAreaContainment, addNodesToArea, moveNodeToArea } from '@/lib/areas/containment';
 import AreaTreeTable from './AreaTreeTable';
 import NodeBrowserPane from './NodeBrowserPane';
-import type { AnalysisNode } from '@/lib/analysis/types';
+import { AreaDragProvider, type DragHandlers } from './AreaDragProvider';
+import type { AnalysisNode, SyntaxType } from '@/lib/analysis/types';
 import type { Area, AreaType } from '@/lib/areas/types';
 
 interface AreaManagerViewProps {
@@ -13,19 +15,38 @@ interface AreaManagerViewProps {
   nodes: AnalysisNode[];
 }
 
-export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProps) {
-  const { areas, runtimeState, setAreas } = useAreaStore();
+// Returns true if `candidateId` is `areaId` itself or one of its descendants.
+function isDescendantOrSelf(areas: Area[], areaId: string, candidateId: string): boolean {
+  if (areaId === candidateId) return true;
+  const area = areas.find((a) => a.id === areaId);
+  if (!area) return false;
+  return area.children.some((childId) => isDescendantOrSelf(areas, childId, candidateId));
+}
+
+
+export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
+  const { areas, runtimeState, setAreas, saveError, retrySave } = useAreaStore();
   const [createMode, setCreateMode] = useState(false);
   const [newAreaName, setNewAreaName] = useState('');
+  const [createChildParentId, setCreateChildParentId] = useState<string | null>(null);
+  const [newChildAreaName, setNewChildAreaName] = useState('');
   const [renameAreaId, setRenameAreaId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Build node names lookup from AnalysisNode[]
+  // Build node names/types lookups from AnalysisNode[]
   const nodeNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const n of nodes) {
       map[n.scipSymbol] = n.name;
+    }
+    return map;
+  }, [nodes]);
+
+  const nodeTypes = useMemo(() => {
+    const map: Record<string, SyntaxType> = {};
+    for (const n of nodes) {
+      map[n.scipSymbol] = n.syntaxType;
     }
     return map;
   }, [nodes]);
@@ -75,6 +96,57 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
     setCreateMode(false);
     setNewAreaName('');
   }, []);
+
+  // Child-area creation
+  const handleAddChildStart = useCallback((parentId: string) => {
+    setCreateChildParentId(parentId);
+    setNewChildAreaName('');
+  }, []);
+
+  const handleCancelCreateChild = useCallback(() => {
+    setCreateChildParentId(null);
+    setNewChildAreaName('');
+  }, []);
+
+  const handleConfirmCreateChild = useCallback(() => {
+    const name = newChildAreaName.trim();
+    if (!name || !createChildParentId) {
+      handleCancelCreateChild();
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const newArea: Area = {
+      id: generateAreaId(name),
+      created_at: now,
+      updated_at: now,
+      name,
+      type: 'business_domain' as AreaType,
+      contains: [],
+      parent: createChildParentId,
+      children: [],
+      clusterStrength: 0,
+    };
+
+    setAreas(
+      areas
+        .map((a) =>
+          a.id === createChildParentId
+            ? { ...a, children: [...a.children, newArea.id], updated_at: now }
+            : a
+        )
+        .concat(newArea)
+    );
+    handleCancelCreateChild();
+  }, [newChildAreaName, createChildParentId, areas, setAreas, handleCancelCreateChild]);
+
+  const handleCreateChildKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleConfirmCreateChild();
+      else if (e.key === 'Escape') handleCancelCreateChild();
+    },
+    [handleConfirmCreateChild, handleCancelCreateChild]
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -214,7 +286,95 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
     setDeleteConfirm(null);
   }, []);
 
+  const handleChangeType = useCallback(
+    (areaId: string, newType: string) => {
+      const now = new Date().toISOString();
+      setAreas(
+        areas.map((a) => (a.id === areaId ? { ...a, type: newType as AreaType, updated_at: now } : a))
+      );
+    },
+    [areas, setAreas]
+  );
+
+  const handleRemoveMember = useCallback(
+    (areaId: string, nodeId: string) => {
+      const now = new Date().toISOString();
+      setAreas(
+        areas.map((a) =>
+          a.id === areaId ? { ...a, contains: a.contains.filter((id) => id !== nodeId), updated_at: now } : a
+        )
+      );
+    },
+    [areas, setAreas]
+  );
+
+  const handleAddNodeToArea = useCallback(
+    (nodeId: string, areaId: string) => {
+      setAreas(addNodeToAreaContainment(areas, nodeId, areaId, new Date().toISOString()));
+    },
+    [areas, setAreas]
+  );
+
+  const handleNodeDragFromArea = useCallback(
+    (nodeId: string, fromAreaId: string, toAreaId: string) => {
+      setAreas(moveNodeToArea(areas, nodeId, fromAreaId, toAreaId, new Date().toISOString()));
+    },
+    [areas, setAreas]
+  );
+
+  const handleAddNodesToArea = useCallback(
+    (nodeIds: string[], areaId: string) => {
+      setAreas(addNodesToArea(areas, nodeIds, areaId, new Date().toISOString()));
+    },
+    [areas, setAreas]
+  );
+
+  const isCycleSafe = useCallback(
+    (areaId: string, potentialParentId: string | null): boolean => {
+      if (potentialParentId === null) return true;
+      if (areaId === potentialParentId) return false;
+      // Reparenting under one of your own descendants would create a cycle.
+      return !isDescendantOrSelf(areas, areaId, potentialParentId);
+    },
+    [areas]
+  );
+
+  const handleAreaReparent = useCallback(
+    (areaId: string, newParentId: string | null) => {
+      const area = areas.find((a) => a.id === areaId);
+      if (!area || area.parent === newParentId) return;
+      const now = new Date().toISOString();
+      const oldParentId = area.parent;
+
+      setAreas(
+        areas.map((a) => {
+          if (a.id === areaId) return { ...a, parent: newParentId, updated_at: now };
+          if (a.id === oldParentId) {
+            return { ...a, children: a.children.filter((c) => c !== areaId), updated_at: now };
+          }
+          if (a.id === newParentId) {
+            return { ...a, children: [...a.children, areaId], updated_at: now };
+          }
+          return a;
+        })
+      );
+    },
+    [areas, setAreas]
+  );
+
+  const dragHandlers: DragHandlers = useMemo(
+    () => ({
+      onNodeToArea: handleAddNodeToArea,
+      onAreaReparent: handleAreaReparent,
+      onNodeDragFromArea: handleNodeDragFromArea,
+      onNodesToArea: handleAddNodesToArea,
+      isCycleSafe,
+    }),
+    [handleAddNodeToArea, handleAreaReparent, handleNodeDragFromArea, handleAddNodesToArea, isCycleSafe]
+  );
+
   return (
+    <AreaDragProvider handlers={dragHandlers}>
     <div className="w-full h-full flex" data-testid="area-manager-view">
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Toolbar */}
@@ -246,6 +406,41 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
           >
             + New Area
           </button>
+
+          {saveError && (
+            <div
+              data-testid="save-error-toast"
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 10px',
+                fontSize: 11,
+                background: '#fef2f2',
+                color: '#991b1b',
+                border: '1px solid #fecaca',
+                borderRadius: 6,
+              }}
+            >
+              Couldn&apos;t save — {saveError}
+              <button
+                data-testid="save-error-retry"
+                onClick={retrySave}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: 11,
+                  background: '#991b1b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Body: tree table main + node browser right rail */}
@@ -323,6 +518,7 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
               areas={areas}
               runtimeState={runtimeState}
               nodeNames={nodeNames}
+              nodeTypes={nodeTypes}
               renameAreaId={renameAreaId}
               renameValue={renameValue}
               onRenameStart={handleRenameStart}
@@ -331,6 +527,15 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
               onRenameKeyDown={handleRenameKeyDown}
               onRenameValueChange={setRenameValue}
               onDeleteStart={handleDeleteStart}
+              onAddChildArea={handleAddChildStart}
+              onChangeType={handleChangeType}
+              onRemoveMember={handleRemoveMember}
+              createParentId={createChildParentId}
+              newChildAreaName={newChildAreaName}
+              onNewChildAreaNameChange={setNewChildAreaName}
+              onConfirmCreateChild={handleConfirmCreateChild}
+              onCancelCreateChild={handleCancelCreateChild}
+              onCreateChildKeyDown={handleCreateChildKeyDown}
             />
 
             {/* Delete confirmation dialog */}
@@ -443,5 +648,6 @@ export default function AreaManagerView({ repoPath, nodes }: AreaManagerViewProp
         </div>
       </div>
     </div>
+    </AreaDragProvider>
   );
 }

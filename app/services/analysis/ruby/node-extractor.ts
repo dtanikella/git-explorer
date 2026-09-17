@@ -253,6 +253,16 @@ function walkRubyDeclarations(
     return; // don't walk into the accessor call's children
   }
 
+  // Constant assignment (MAX_SIZE = 100) — Ruby's closest equivalent to a
+  // plain variable/constant declaration.
+  if (node.type === 'assignment') {
+    const left = node.childForFieldName('left');
+    if (left?.type === 'constant') {
+      processConstantAssignment(left, filePath, scopeStack, nodes, nodeMap);
+      return;
+    }
+  }
+
   // Recurse into body of classes/modules
   if ((node.type === 'class' || node.type === 'module') && syntaxType) {
     const body = node.childForFieldName('body');
@@ -360,6 +370,15 @@ function processMethodNode(
     isSingleton = true;
   }
 
+  // `initialize` is Ruby's constructor; `def foo=(value)` (an explicit
+  // `setter` name node) is a setter method.
+  let syntaxType: SyntaxType = SyntaxType.METHOD;
+  if (!isSingleton && name === 'initialize') {
+    syntaxType = SyntaxType.CONSTRUCTOR;
+  } else if (nameChild.type === 'setter') {
+    syntaxType = SyntaxType.SETTER;
+  }
+
   // Build qualified name
   const scopePath = qualifyScopePath(scopeStack);
   const separator = isSingleton ? '.' : '#';
@@ -371,7 +390,7 @@ function processMethodNode(
   const symbol = makeRubySymbol(filePath, qualifiedName);
 
   const node: AnalysisNode = {
-    syntaxType: SyntaxType.METHOD,
+    syntaxType,
     name,
     filePath,
     startLine: line,
@@ -379,6 +398,46 @@ function processMethodNode(
     isAsync: false,
     isExported: false,
     params: extractParams(methodNode),
+    returnTypeText: null,
+    scipSymbol: symbol,
+    isDefinition: true,
+    inTestFile: false,
+    referencedAt: [],
+    outboundRefs: [],
+  };
+
+  nodes.push(node);
+  nodeMap.set(symbol, node);
+}
+
+/**
+ * Handle a constant assignment (MAX_SIZE = 100) as a VARIABLE node — Ruby's
+ * closest equivalent to a plain variable/constant declaration.
+ */
+function processConstantAssignment(
+  leftNode: NodeWrapper,
+  filePath: string,
+  scopeStack: ScopeFrame[],
+  nodes: AnalysisNode[],
+  nodeMap: Map<string, AnalysisNode>,
+): void {
+  const name = leftNode.text;
+  if (!name) return;
+
+  const scopePath = qualifyScopePath(scopeStack);
+  const qualifiedName = scopePath ? `${scopePath}::${name}` : name;
+  const symbol = makeRubySymbol(filePath, qualifiedName);
+  if (nodeMap.has(symbol)) return;
+
+  const node: AnalysisNode = {
+    syntaxType: SyntaxType.VARIABLE,
+    name,
+    filePath,
+    startLine: leftNode.startPosition.row,
+    startCol: leftNode.startPosition.column,
+    isAsync: false,
+    isExported: false,
+    params: [],
     returnTypeText: null,
     scipSymbol: symbol,
     isDefinition: true,
@@ -422,7 +481,7 @@ function processAccessorMacro(
 
     if (!nodeMap.has(readerSymbol)) {
       const readerNode: AnalysisNode = {
-        syntaxType: SyntaxType.METHOD,
+        syntaxType: SyntaxType.GETTER,
         name: attrName,
         filePath,
         startLine: callNode.startPosition.row,
@@ -448,7 +507,7 @@ function processAccessorMacro(
 
       if (!nodeMap.has(writerSymbol)) {
         const writerNode: AnalysisNode = {
-          syntaxType: SyntaxType.METHOD,
+          syntaxType: SyntaxType.SETTER,
           name: `${attrName}=`,
           filePath,
           startLine: callNode.startPosition.row,
