@@ -11,6 +11,7 @@ import StatsTreemap from './components/stats/StatsTreemap';
 import { SelectionProvider, useSelection } from './contexts/SelectionContext';
 import SearchSelectSidebar from './components/selection/SearchSelectSidebar';
 import ManageSelectionSidebar from './components/selection/ManageSelectionSidebar';
+import AreaManagerView from './components/areas/AreaManagerView';
 import {
   INTERNAL_PROCESSING_CONFIG,
   createModulesViewConfig,
@@ -207,6 +208,13 @@ export default function HomePage() {
               <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
                 Select a repository to visualize
               </div>
+            ) : activeTab === 'areas' ? (
+              <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
+                <AreaManagerView
+                  repoPath={repoPath}
+                  nodes={analysisData?.nodes ?? []}
+                />
+              </AreaProvider>
             ) : activeTab === 'graph' ? (
               <SelectionProvider
                 nodes={analysisData?.nodes ?? []}
@@ -214,7 +222,7 @@ export default function HomePage() {
                 visibleNodeIds={graphVisibleNodeIds}
                 areas={areasData}
               >
-                <AreaProvider areas={areasData}>
+                <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
                   <SelectionBridge
                     toggleRef={selectionToggleRef}
                     pendingId={pendingSelectionId}

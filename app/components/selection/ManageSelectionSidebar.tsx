@@ -15,18 +15,7 @@ type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
 
 const NEW_AREA_SENTINEL = '__new__';
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-function generateAreaId(name: string): string {
-  const slug = slugify(name);
-  const suffix = Math.random().toString(16).slice(2, 6);
-  return `${slug}-${suffix}`;
-}
+import { generateAreaId } from '@/lib/areas/id';
 
 interface DraftArea {
   name: string;

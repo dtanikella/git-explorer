@@ -7,6 +7,7 @@ import { createParser } from '@/lib/tree-sitter/parser';
 import type { TreeWrapper } from '@/lib/tree-sitter/tree';
 import type { AnalysisResult } from '@/lib/analysis/types';
 import { isTestFile } from '@/app/services/analysis/test-file-detector';
+import { isGeneratedFile } from '@/app/services/analysis/generated-file-detector';
 import { extractNodes } from './node-extractor';
 import { extractEdges } from './edge-extractor';
 import { assembleResult } from '@/app/services/analysis/shared/graph-assembler';
@@ -36,6 +37,7 @@ export async function analyzeTsRepo(
   for (const doc of scipIndex.documents) {
     const filePath = doc.relativePath;
 
+    if (isGeneratedFile(filePath)) continue;
     if (options.hideTestFiles && isTestFile(filePath)) continue;
 
     const absolutePath = path.join(repoPath, filePath);

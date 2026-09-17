@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { Area, AreaRuntimeState } from '@/lib/areas/types';
 import { buildNodeToAreas } from '@/lib/areas/lookup';
@@ -13,6 +13,8 @@ export interface AreaStoreValue {
   toggleVisibility(areaId: string): void;
   getVisibleAreas(): Area[];
   getAreasForNode(scipSymbol: string): Area[];
+  saveError: string | null;
+  retrySave(): void;
 }
 
 const AreaContext = createContext<AreaStoreValue | null>(null);
@@ -57,18 +59,66 @@ function buildInitialRuntimeState(areas: Area[]): Map<string, AreaRuntimeState> 
 
 interface AreaProviderProps {
   areas: Area[];
+  repoPath: string;
   children: ReactNode;
+  onAreasChange?: (areas: Area[]) => void;
 }
 
-export function AreaProvider({ areas: initialAreas, children }: AreaProviderProps) {
+export function AreaProvider({ areas: initialAreas, repoPath, children, onAreasChange }: AreaProviderProps) {
   const [areas, setAreasState] = useState<Area[]>(initialAreas);
   const [runtimeState, setRuntimeState] = useState<Map<string, AreaRuntimeState>>(() =>
     buildInitialRuntimeState(areas),
   );
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Serializes writes to /api/areas so autosave-per-edit never fires
+  // concurrent overlapping saves; each queued save builds on the prior one.
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastFailedPayloadRef = useRef<Area[] | null>(null);
+  const repoPathRef = useRef(repoPath);
+  useEffect(() => {
+    repoPathRef.current = repoPath;
+  }, [repoPath]);
 
   useEffect(() => {
     setAreasState(initialAreas);
   }, [initialAreas]);
+
+  const persist = useCallback((payload: Area[]) => {
+    return fetch('/api/areas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save',
+        repoPath: repoPathRef.current,
+        data: { version: 1, areas: payload },
+      }),
+    })
+      .then(async (res) => {
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error || 'Save failed');
+        lastFailedPayloadRef.current = null;
+        setSaveError(null);
+      })
+      .catch((err) => {
+        lastFailedPayloadRef.current = payload;
+        setSaveError(err instanceof Error ? err.message : 'Save failed');
+      });
+  }, []);
+
+  const queueSave = useCallback(
+    (payload: Area[]) => {
+      saveQueueRef.current = saveQueueRef.current.then(() => persist(payload));
+    },
+    [persist],
+  );
+
+  const retrySave = useCallback(() => {
+    const payload = lastFailedPayloadRef.current;
+    if (!payload) return;
+    setSaveError(null);
+    queueSave(payload);
+  }, [queueSave]);
 
   // Rebuild runtime state when areas change (new areas get defaults)
   useEffect(() => {
@@ -84,9 +134,14 @@ export function AreaProvider({ areas: initialAreas, children }: AreaProviderProp
 
   const nodeToAreas = useMemo(() => buildNodeToAreas(areas), [areas]);
 
-  const setAreas = useCallback((newAreas: Area[]) => {
-    setAreasState(newAreas);
-  }, []);
+  const setAreas = useCallback(
+    (newAreas: Area[]) => {
+      setAreasState(newAreas);
+      queueSave(newAreas);
+      onAreasChange?.(newAreas);
+    },
+    [queueSave, onAreasChange],
+  );
 
   const toggleVisibility = useCallback((areaId: string) => {
     setRuntimeState((prev) => {
@@ -115,7 +170,9 @@ export function AreaProvider({ areas: initialAreas, children }: AreaProviderProp
     toggleVisibility,
     getVisibleAreas,
     getAreasForNode,
-  }), [areas, runtimeState, nodeToAreas, setAreas, toggleVisibility, getVisibleAreas, getAreasForNode]);
+    saveError,
+    retrySave,
+  }), [areas, runtimeState, nodeToAreas, setAreas, toggleVisibility, getVisibleAreas, getAreasForNode, saveError, retrySave]);
 
   return (
     <AreaContext.Provider value={value}>

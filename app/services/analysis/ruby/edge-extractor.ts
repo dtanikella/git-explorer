@@ -1,5 +1,5 @@
 import type { TreeWrapper } from '@/lib/tree-sitter/tree';
-import type { NodeWrapper } from '@/lib/tree-sitter/node';
+import { NodeWrapper } from '@/lib/tree-sitter/node';
 import {
   EdgeKind,
   SyntaxType,
@@ -16,6 +16,16 @@ export interface RubyEdgeExtractionInput {
   nodeMap: Map<string, AnalysisNode>;
   repoPath: string;
 }
+
+// method_definition-like node kinds Ruby's extractor now produces alongside
+// plain METHOD (getters/setters/constructor) — call-target resolution below
+// needs to treat all of them as "a method", not just SyntaxType.METHOD.
+const RUBY_METHOD_LIKE_TYPES = new Set<SyntaxType>([
+  SyntaxType.METHOD,
+  SyntaxType.GETTER,
+  SyntaxType.SETTER,
+  SyntaxType.CONSTRUCTOR,
+]);
 
 // ============================================================================
 // AST analysis helpers
@@ -168,7 +178,7 @@ function findEnclosingScope(
     if (parent.type === 'class' || parent.type === 'module') {
       const nameNode = parent.childForFieldName('name');
       if (nameNode) {
-        const className = flattenClassName(nameNode) ?? '';
+        const className = flattenClassName(new NodeWrapper(nameNode)) ?? '';
         const simpleName = className.includes('::') ? className.split('::').pop()! : className;
         scopeParts.unshift(simpleName);
       }
@@ -481,7 +491,7 @@ function findNodeByMixinName(name: string, nodeMap: Map<string, AnalysisNode>): 
   for (const node of nodeMap.values()) {
     if (node.name === name) return node;
     const parsed = parseRubySymbol(node.scipSymbol);
-    if (parsed && parsed.scope === name && node.syntaxType !== SyntaxType.METHOD) return node;
+    if (parsed && parsed.scope === name && !RUBY_METHOD_LIKE_TYPES.has(node.syntaxType)) return node;
   }
   return null;
 }
@@ -722,7 +732,7 @@ function processCallNode(
     let targetNode: AnalysisNode | null = null;
     let isAmbiguous = false;
     for (const node of nodeMap.values()) {
-      if (node.syntaxType === SyntaxType.METHOD && node.name === methodName) {
+      if (RUBY_METHOD_LIKE_TYPES.has(node.syntaxType) && node.name === methodName) {
         const parsed = parseRubySymbol(node.scipSymbol);
         if (parsed && parsed.scope === constantName && parsed.isSingleton) {
           if (targetNode) isAmbiguous = true;

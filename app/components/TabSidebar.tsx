@@ -1,6 +1,6 @@
 'use client';
 
-export type TabId = 'graph' | 'stats';
+export type TabId = 'graph' | 'stats' | 'areas';
 
 interface TabSidebarProps {
   activeTab: TabId;
@@ -31,6 +31,17 @@ export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) 
           <rect x="2" y="10" width="4" height="8" rx="0.5" />
           <rect x="8" y="6" width="4" height="12" rx="0.5" />
           <rect x="14" y="2" width="4" height="16" rx="0.5" />
+        </svg>
+      ),
+    },
+    {
+      id: 'areas',
+      label: 'Areas',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="8" cy="8" r="5" />
+          <circle cx="13" cy="8" r="5" />
+          <circle cx="10.5" cy="12" r="5" />
         </svg>
       ),
     },

@@ -118,6 +118,50 @@ describe('extractRubyNodes', () => {
     expect(topNode!.scipSymbol).toMatch(/ruby:src\/foo\.rb#top_level$/);
   });
 
+  it('classifies `initialize` as CONSTRUCTOR', () => {
+    const source = `class Foo\n  def initialize(name)\n    @name = name\n  end\nend`;
+    const tree = parseRuby(source);
+
+    const output = extractRubyNodes({
+      parsedFiles: new Map([['src/foo.rb', { tree, source }]]),
+      repoPath: '/repo',
+    });
+
+    const node = output.nodes.find(n => n.name === 'initialize');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.CONSTRUCTOR);
+    expect(node!.params).toEqual([{ name: 'name', typeText: null, isOptional: false }]);
+  });
+
+  it('classifies an explicit `def foo=` setter method as SETTER', () => {
+    const source = `class Foo\n  def name=(value)\n    @name = value\n  end\nend`;
+    const tree = parseRuby(source);
+
+    const output = extractRubyNodes({
+      parsedFiles: new Map([['src/foo.rb', { tree, source }]]),
+      repoPath: '/repo',
+    });
+
+    const node = output.nodes.find(n => n.name === 'name=');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.SETTER);
+  });
+
+  it('extracts a constant assignment as VARIABLE', () => {
+    const source = `class Foo\n  MAX_SIZE = 100\nend`;
+    const tree = parseRuby(source);
+
+    const output = extractRubyNodes({
+      parsedFiles: new Map([['src/foo.rb', { tree, source }]]),
+      repoPath: '/repo',
+    });
+
+    const node = output.nodes.find(n => n.name === 'MAX_SIZE');
+    expect(node).toBeDefined();
+    expect(node!.syntaxType).toBe(SyntaxType.VARIABLE);
+    expect(node!.scipSymbol).toContain('Foo::MAX_SIZE');
+  });
+
   it('synthesizes attr_accessor reader and writer methods', () => {
     const source = 'class Foo\n  attr_accessor :name, :age\nend';
     const tree = parseRuby(source);
@@ -130,12 +174,12 @@ describe('extractRubyNodes', () => {
     const output = extractRubyNodes(input);
     const nameNode = output.nodes.find(n => n.name === 'name');
     expect(nameNode).toBeDefined();
-    expect(nameNode!.syntaxType).toBe(SyntaxType.METHOD);
+    expect(nameNode!.syntaxType).toBe(SyntaxType.GETTER);
     expect(nameNode!.scipSymbol).toContain('#');
 
     const nameEqualsNode = output.nodes.find(n => n.name === 'name=');
     expect(nameEqualsNode).toBeDefined();
-    expect(nameEqualsNode!.syntaxType).toBe(SyntaxType.METHOD);
+    expect(nameEqualsNode!.syntaxType).toBe(SyntaxType.SETTER);
     expect(nameEqualsNode!.scipSymbol).toContain('#');
     expect(nameEqualsNode!.params).toEqual([{ name: 'value', typeText: null, isOptional: false }]);
   });
