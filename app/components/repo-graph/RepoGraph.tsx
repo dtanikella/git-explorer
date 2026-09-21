@@ -7,7 +7,7 @@ import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
-import { drawAreaOverlays } from '@/lib/areas/renderer';
+import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
 import { buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
@@ -69,6 +69,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const nodeToAreasRef = useRef(nodeToAreas);
   const getVisibleAreasRef = useRef(getVisibleAreas);
   const anchorsRef = useRef<Map<string, AreaAnchorNode>>(new Map());
+  const hullRadiusByAreaIdRef = useRef<Map<string, number>>(new Map());
+  const tuningRef = useRef({
+    marginPx: 20,
+    repelStrength: cfg.forces.anchorRepel,
+    parentPullStrength: cfg.forces.areaParent,
+  });
 
   useEffect(() => {
     activeNodeIdsRef.current = activeNodeIds;
@@ -257,6 +263,17 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
+
+      // Compute hull radii for every area (duplicated from drawAreaOverlays intentionally)
+      const areasForHull = areasRef.current;
+      const areasByIdForHull = new Map(areasForHull.map((a) => [a.id, a]));
+      const hullRadii = new Map<string, number>();
+      for (const area of areasForHull) {
+        const hull = computeAreaHull(area, nodePositionMap, areasByIdForHull);
+        if (hull) hullRadii.set(area.id, hull.r);
+      }
+      hullRadiusByAreaIdRef.current = hullRadii;
+
       drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap);
 
       // Draw edges
@@ -382,10 +399,10 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
         }))
-      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('anchorRepel', createAnchorRepelForce(anchors, areasById, hullRadiusByAreaIdRef, tuningRef))
       .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
       .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
-      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
+      .force('parentPull', createParentPullForce(anchors, areasById, tuningRef));
 
     // Data Flow view only: pull nodes manually tagged with a `storage`/`api`/`ux` Area
     // toward a concentric ring keyed by that area's name (see DATA_FLOW_LAYER_RADII).
@@ -613,6 +630,68 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       />
+
+      {/* Temporary tuning panel — will be removed after step 6 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 10,
+          background: 'rgba(255,255,255,0.95)',
+          border: '1px solid #d1d5db',
+          borderRadius: 8,
+          padding: '10px 14px',
+          fontSize: 11,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          minWidth: 180,
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 8, color: '#374151' }}>Area Force Tuning</div>
+        <label style={{ display: 'block', marginBottom: 6 }}>
+          <div style={{ color: '#6b7280', marginBottom: 2 }}>marginPx: {tuningRef.current.marginPx}</div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={tuningRef.current.marginPx}
+            onChange={(e) => {
+              tuningRef.current.marginPx = Number(e.target.value);
+              simulationRef.current?.alpha(0.3).restart();
+            }}
+            style={{ width: '100%' }}
+          />
+        </label>
+        <label style={{ display: 'block', marginBottom: 6 }}>
+          <div style={{ color: '#6b7280', marginBottom: 2 }}>repelStrength: {tuningRef.current.repelStrength}</div>
+          <input
+            type="range"
+            min={0}
+            max={10000}
+            value={tuningRef.current.repelStrength}
+            onChange={(e) => {
+              tuningRef.current.repelStrength = Number(e.target.value);
+              simulationRef.current?.alpha(0.3).restart();
+            }}
+            style={{ width: '100%' }}
+          />
+        </label>
+        <label style={{ display: 'block' }}>
+          <div style={{ color: '#6b7280', marginBottom: 2 }}>parentPullStrength: {tuningRef.current.parentPullStrength.toFixed(2)}</div>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.01}
+            value={tuningRef.current.parentPullStrength}
+            onChange={(e) => {
+              tuningRef.current.parentPullStrength = Number(e.target.value);
+              simulationRef.current?.alpha(0.3).restart();
+            }}
+            style={{ width: '100%' }}
+          />
+        </label>
+      </div>
     </div>
   );
 }

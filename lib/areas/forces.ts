@@ -76,11 +76,12 @@ export function createAreaAttractForce(
 export function createParentPullForce(
   anchors: AreaAnchorNode[],
   areasById: Map<string, Area>,
-  strength: number,
+  strengthRef: { current: number },
 ): (alpha: number) => void {
   const anchorsByAreaId = new Map(anchors.map((a) => [a.areaId, a]));
 
   return (alpha: number) => {
+    const strength = strengthRef.current;
     for (const anchor of anchors) {
       const area = areasById.get(anchor.areaId);
       if (!area || !area.parent) continue;
@@ -96,19 +97,37 @@ export function createParentPullForce(
 
 export function createAnchorRepelForce(
   anchors: AreaAnchorNode[],
-  strength: number,
+  areasById: Map<string, Area>,
+  hullRadiusByAreaId: { current: Map<string, number> },
+  tuning: { current: { marginPx: number; repelStrength: number } },
 ): (alpha: number) => void {
   return (alpha: number) => {
+    const hullRadii = hullRadiusByAreaId.current;
+    const { marginPx, repelStrength } = tuning.current;
     for (let i = 0; i < anchors.length; i++) {
       for (let j = i + 1; j < anchors.length; j++) {
         const a = anchors[i];
         const b = anchors[j];
         if (a.x == null || a.y == null || b.x == null || b.y == null) continue;
 
+        // Sibling-scoped: only repel anchors sharing the same parent (including both null for top-level)
+        const areaA = areasById.get(a.areaId);
+        const areaB = areasById.get(b.areaId);
+        if (!areaA || !areaB) continue;
+        if (areaA.parent !== areaB.parent) continue;
+
+        const rA = hullRadii.get(a.areaId) ?? 0;
+        const rB = hullRadii.get(b.areaId) ?? 0;
+        const threshold = rA + rB + marginPx;
+
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.max(Math.hypot(dx, dy), MIN_DISTANCE);
-        const magnitude = (strength * alpha) / (dist * dist);
+
+        // Zero force at/above threshold
+        if (dist >= threshold) continue;
+
+        const magnitude = (repelStrength * alpha) / (dist * dist);
         const fx = (dx / dist) * magnitude;
         const fy = (dy / dist) * magnitude;
 

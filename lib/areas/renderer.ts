@@ -5,7 +5,7 @@ const HULL_PADDING = 55; // px padding around member nodes
 
 export type HullResult =
   | { type: 'circle'; cx: number; cy: number; r: number }
-  | { type: 'polygon'; points: [number, number][] }
+  | { type: 'polygon'; points: [number, number][]; r: number }
   | null;
 
 export function getTransitiveContains(
@@ -65,7 +65,13 @@ export function computeAreaHull(
   if (!hull) return null;
 
   const expanded = expandHull(hull, HULL_PADDING);
-  return { type: 'polygon', points: expanded };
+  // Compute radius from centroid of expanded polygon
+  let cx = 0, cy = 0;
+  for (const [x, y] of expanded) { cx += x; cy += y; }
+  cx /= expanded.length;
+  cy /= expanded.length;
+  const r = Math.max(...expanded.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+  return { type: 'polygon', points: expanded, r };
 }
 
 export function expandHull(
