@@ -5,7 +5,7 @@ const HULL_PADDING = 55; // px padding around member nodes
 
 export type HullResult =
   | { type: 'circle'; cx: number; cy: number; r: number }
-  | { type: 'polygon'; points: [number, number][] }
+  | { type: 'polygon'; points: [number, number][]; r: number }
   | null;
 
 export function getTransitiveContains(
@@ -65,7 +65,19 @@ export function computeAreaHull(
   if (!hull) return null;
 
   const expanded = expandHull(hull, HULL_PADDING);
-  return { type: 'polygon', points: expanded };
+  let sumX = 0;
+  let sumY = 0;
+  for (const [x, y] of expanded) {
+    sumX += x;
+    sumY += y;
+  }
+  const centroidX = sumX / expanded.length;
+  const centroidY = sumY / expanded.length;
+  let r = 0;
+  for (const [x, y] of expanded) {
+    r = Math.max(r, Math.hypot(x - centroidX, y - centroidY));
+  }
+  return { type: 'polygon', points: expanded, r };
 }
 
 export function expandHull(

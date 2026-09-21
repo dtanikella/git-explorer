@@ -76,7 +76,7 @@ export function createAreaAttractForce(
 export function createParentPullForce(
   anchors: AreaAnchorNode[],
   areasById: Map<string, Area>,
-  strength: number,
+  strength: { current: number },
 ): (alpha: number) => void {
   const anchorsByAreaId = new Map(anchors.map((a) => [a.areaId, a]));
 
@@ -88,27 +88,44 @@ export function createParentPullForce(
       if (!parentAnchor) continue;
       if (anchor.x == null || anchor.y == null || parentAnchor.x == null || parentAnchor.y == null) continue;
 
-      anchor.vx = (anchor.vx ?? 0) + (parentAnchor.x - anchor.x) * strength * alpha;
-      anchor.vy = (anchor.vy ?? 0) + (parentAnchor.y - anchor.y) * strength * alpha;
+      anchor.vx = (anchor.vx ?? 0) + (parentAnchor.x - anchor.x) * strength.current * alpha;
+      anchor.vy = (anchor.vy ?? 0) + (parentAnchor.y - anchor.y) * strength.current * alpha;
     }
   };
 }
 
+export interface AnchorRepelTuning {
+  marginPx: number;
+  repelStrength: number;
+}
+
+/**
+ * Repels sibling area anchors (same parent, including top-level areas) once their
+ * hulls are closer than `rA + rB + marginPx`. Beyond that threshold the force is zero.
+ */
 export function createAnchorRepelForce(
   anchors: AreaAnchorNode[],
-  strength: number,
+  areasById: Map<string, Area>,
+  hullRadiusByAreaId: { current: Map<string, number> },
+  tuning: { current: AnchorRepelTuning },
 ): (alpha: number) => void {
   return (alpha: number) => {
+    const { marginPx, repelStrength } = tuning.current;
     for (let i = 0; i < anchors.length; i++) {
       for (let j = i + 1; j < anchors.length; j++) {
         const a = anchors[i];
         const b = anchors[j];
         if (a.x == null || a.y == null || b.x == null || b.y == null) continue;
+        if (areasById.get(a.areaId)?.parent !== areasById.get(b.areaId)?.parent) continue;
 
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.max(Math.hypot(dx, dy), MIN_DISTANCE);
-        const magnitude = (strength * alpha) / (dist * dist);
+        const rA = hullRadiusByAreaId.current.get(a.areaId) ?? 0;
+        const rB = hullRadiusByAreaId.current.get(b.areaId) ?? 0;
+        if (dist >= rA + rB + marginPx) continue;
+
+        const magnitude = (repelStrength * alpha) / (dist * dist);
         const fx = (dx / dist) * magnitude;
         const fy = (dy / dist) * magnitude;
 

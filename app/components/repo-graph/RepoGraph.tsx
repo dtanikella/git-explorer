@@ -7,7 +7,7 @@ import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
-import { drawAreaOverlays } from '@/lib/areas/renderer';
+import { computeAreaHull, drawAreaOverlays } from '@/lib/areas/renderer';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
 import { buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
@@ -55,6 +55,15 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const drawFrameRef = useRef<(() => void) | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
   const toggleNodeRef = useRef<(id: string) => void>(() => {});
+  const hullRadiusByAreaIdRef = useRef<Map<string, number>>(new Map());
+  // Read fresh on every tick by the anchor-repel and parent-pull forces, so tuning
+  // changes take effect without recreating the simulation.
+  const tuningRef = useRef({
+    marginPx: 20,
+    repelStrength: DEFAULT_REPO_GRAPH_CONFIG.forces.anchorRepel,
+    parentPullStrength: DEFAULT_REPO_GRAPH_CONFIG.forces.areaParent,
+  });
+  const [tuningDisplay, setTuningDisplay] = useState({ ...tuningRef.current });
 
   const [ctxError, setCtxError] = useState(false);
   const { activeNodeIds, hasSelection, toggleNode } = useSelection();
@@ -257,6 +266,13 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
+      const hullAreasById = new Map(areasRef.current.map((a) => [a.id, a]));
+      const hullRadii = new Map<string, number>();
+      for (const area of areasRef.current) {
+        const hull = computeAreaHull(area, nodePositionMap, hullAreasById);
+        if (hull) hullRadii.set(area.id, hull.r);
+      }
+      hullRadiusByAreaIdRef.current = hullRadii;
       drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap);
 
       // Draw edges
@@ -382,10 +398,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
         }))
-      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('anchorRepel', createAnchorRepelForce(anchors, areasById, hullRadiusByAreaIdRef, tuningRef))
       .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
       .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
-      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
+      .force('parentPull', createParentPullForce(anchors, areasById, {
+        get current() { return tuningRef.current.parentPullStrength; },
+      }));
 
     // Data Flow view only: pull nodes manually tagged with a `storage`/`api`/`ux` Area
     // toward a concentric ring keyed by that area's name (see DATA_FLOW_LAYER_RADII).
@@ -604,6 +622,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
   if (!analysisData) return null;
 
+  const tuningSliders: { key: keyof typeof tuningDisplay; label: string; min: number; max: number; step: number }[] = [
+    { key: 'marginPx', label: 'marginPx', min: 0, max: 100, step: 1 },
+    { key: 'repelStrength', label: 'repelStrength', min: 0, max: 10000, step: 50 },
+    { key: 'parentPullStrength', label: 'parentPullStrength', min: 0, max: 2, step: 0.01 },
+  ];
+
   return (
     <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 8, border: '1px solid #ccc', position: 'relative' }}>
       <canvas
@@ -613,6 +637,37 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       />
+      {/* TEMPORARY tuning panel — removed after the tuning session */}
+      <div
+        data-testid="area-tuning-panel"
+        style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 10, background: 'rgba(255,255,255,0.92)',
+          border: '1px solid #ccc', borderRadius: 6, padding: 8, fontSize: 12, width: 260,
+        }}
+      >
+        {tuningSliders.map(({ key, label, min, max, step }) => (
+          <label key={key} style={{ display: 'block', marginBottom: 6 }}>
+            <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>{label}</span>
+              <span data-testid={`tuning-value-${key}`}>{tuningDisplay[key]}</span>
+            </span>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={tuningDisplay[key]}
+              style={{ width: '100%' }}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                tuningRef.current[key] = value;
+                setTuningDisplay({ ...tuningRef.current });
+                simulationRef.current?.alpha(0.3).restart();
+              }}
+            />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
