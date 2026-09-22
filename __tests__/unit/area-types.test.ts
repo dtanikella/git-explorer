@@ -115,4 +115,27 @@ describe('Area types', () => {
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toMatch(/pinnedZones/);
   });
+
+  it('validateAreaFile accepts a file with color field', () => {
+    const valid: any = {
+      version: 1,
+      areas: [{
+        id: 'auth', created_at: '', updated_at: '', name: 'Auth',
+        type: 'business_domain', contains: [], parent: null, children: [], clusterStrength: 0,
+        color: '#f59e0b',
+      }],
+    };
+    expect(validateAreaFile(valid)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('validateAreaFile accepts a file without color field (backward compat)', () => {
+    const valid: any = {
+      version: 1,
+      areas: [{
+        id: 'auth', created_at: '', updated_at: '', name: 'Auth',
+        type: 'business_domain', contains: [], parent: null, children: [], clusterStrength: 0,
+      }],
+    };
+    expect(validateAreaFile(valid)).toEqual({ valid: true, errors: [] });
+  });
 });
