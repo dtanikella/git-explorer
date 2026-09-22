@@ -7,8 +7,9 @@ import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
-import { drawAreaOverlays } from '@/lib/areas/renderer';
+import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
+import { getDescendantIds } from '@/lib/areas/containment';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
 import { buildCrossAreaEdgeWeights, buildNodeCrossAreaTargets } from '@/lib/areas/cross-area-edges';
 import {
@@ -55,6 +56,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const zoomTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const simNodesRef = useRef<SimpleNode[]>([]);
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
+  const hoveredAreaIdRef = useRef<string | null>(null);
   const drawFrameRef = useRef<(() => void) | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
   const toggleNodeRef = useRef<(id: string) => void>(() => {});
@@ -216,13 +218,76 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         .style('top', event.pageY - 10 + 'px')
         .style('left', event.pageX + 10 + 'px');
     }
+
+    // Area hull hit-testing (deepest-only, never highlight ancestor alongside child)
+    const areaHitTest = () => {
+      if (!canvasRef.current) return null;
+      const cursorAreas: string[] = [];
+      const visibleAreas = areasRef.current.filter(
+        (a) => runtimeStateRef.current.get(a.id)?.visible !== false,
+      );
+      const nodePositionMap = new Map<string, { x: number; y: number; radius: number }>();
+      for (const n of simNodesRef.current) {
+        if (n.x == null || n.y == null) continue;
+        const cfg = configRef.current;
+        const nStyle = cfg.style.node(n.data, n.degree);
+        nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
+      }
+      const areasById = new Map(visibleAreas.map((a) => [a.id, a]));
+
+      for (const area of visibleAreas) {
+        const hull = computeAreaHull(area, nodePositionMap, areasById);
+        if (!hull) continue;
+        let contains = false;
+        if (hull.type === 'circle') {
+          const dx = mx - hull.cx;
+          const dy = my - hull.cy;
+          contains = Math.sqrt(dx * dx + dy * dy) <= hull.r;
+        } else {
+          contains = d3.polygonContains(hull.points, [mx, my]);
+        }
+        if (contains) cursorAreas.push(area.id);
+      }
+
+      if (cursorAreas.length === 0) return null;
+
+      // Find deepest area — the one with no visible descendant also containing the point
+      for (const id of cursorAreas) {
+        const descendants = getDescendantIds(visibleAreas, id);
+        const hasDescendantAlsoContaining = [...descendants].some((did) =>
+          cursorAreas.includes(did) &&
+          runtimeStateRef.current.get(did)?.visible !== false,
+        );
+        if (!hasDescendantAlsoContaining) {
+          return id;
+        }
+      }
+      // Fallback: first containing area (shouldn't normally reach here)
+      return cursorAreas[0];
+    };
+
+    const hitAreaId = areaHitTest();
+    if (hitAreaId !== hoveredAreaIdRef.current) {
+      hoveredAreaIdRef.current = hitAreaId;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.style.cursor = hitAreaId ? 'pointer' : 'default';
+      }
+      // Redraw to reflect highlight change
+      drawFrameRef.current?.();
+    }
   }, []);
 
   const handleMouseLeave = useCallback(() => {
     hoveredNodeRef.current = null;
+    hoveredAreaIdRef.current = null;
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = 'default';
+    }
     if (tooltipRef.current) {
       tooltipRef.current.style('visibility', 'hidden');
     }
+    drawFrameRef.current?.();
   }, []);
 
   // Force simulation + canvas rendering
@@ -260,7 +325,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
-      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap);
+      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current);
 
       // Draw edges
       for (const e of simEdges) {
