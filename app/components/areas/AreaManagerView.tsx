@@ -296,6 +296,16 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
     [areas, setAreas]
   );
 
+  const handleTogglePinZone = useCallback(
+    (areaId: string, zones: number[]) => {
+      const now = new Date().toISOString();
+      setAreas(
+        areas.map((a) => (a.id === areaId ? { ...a, pinnedZones: zones, updated_at: now } : a))
+      );
+    },
+    [areas, setAreas]
+  );
+
   const handleRemoveMember = useCallback(
     (areaId: string, nodeId: string) => {
       const now = new Date().toISOString();
@@ -530,6 +540,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
               onAddChildArea={handleAddChildStart}
               onChangeType={handleChangeType}
               onRemoveMember={handleRemoveMember}
+              onTogglePinZone={handleTogglePinZone}
               createParentId={createChildParentId}
               newChildAreaName={newChildAreaName}
               onNewChildAreaNameChange={setNewChildAreaName}
