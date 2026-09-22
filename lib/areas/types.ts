@@ -19,6 +19,7 @@ export interface Area {
   parent: string | null;
   children: string[];
   clusterStrength: number;
+  pinnedZones?: number[];
 }
 
 export interface AreaFile {
@@ -67,6 +68,19 @@ export function validateAreaFile(data: unknown): AreaValidationResult {
 
     if (typeof a.clusterStrength !== 'number' || a.clusterStrength < 0 || a.clusterStrength > 1) {
       errors.push(`Area "${a.id}": clusterStrength must be between 0 and 1`);
+    }
+
+    if (a.pinnedZones !== undefined) {
+      if (!Array.isArray(a.pinnedZones)) {
+        errors.push(`Area "${a.id}": pinnedZones must be an array`);
+      } else {
+        for (let i = 0; i < a.pinnedZones.length; i++) {
+          const z = a.pinnedZones[i];
+          if (!Number.isInteger(z) || z < 0 || z > 8) {
+            errors.push(`Area "${a.id}": pinnedZones[${i}] must be an integer 0-8`);
+          }
+        }
+      }
     }
   }
 

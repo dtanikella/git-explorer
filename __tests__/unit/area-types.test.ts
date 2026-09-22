@@ -64,4 +64,55 @@ describe('Area types', () => {
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toMatch(/clusterStrength/);
   });
+
+  it('validateAreaFile accepts a well-formed file with pinnedZones', () => {
+    const valid: any = {
+      version: 1,
+      areas: [{
+        id: 'auth', created_at: '', updated_at: '', name: 'Auth',
+        type: 'business_domain', contains: [], parent: null, children: [],
+        clusterStrength: 0, pinnedZones: [0, 4, 8],
+      }],
+    };
+    expect(validateAreaFile(valid)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('validateAreaFile accepts an old-format file without pinnedZones', () => {
+    const valid: any = {
+      version: 1,
+      areas: [{
+        id: 'auth', created_at: '', updated_at: '', name: 'Auth',
+        type: 'business_domain', contains: [], parent: null, children: [], clusterStrength: 0,
+      }],
+    };
+    expect(validateAreaFile(valid)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('validateAreaFile rejects pinnedZones with an out-of-range value', () => {
+    const invalid: any = {
+      version: 1,
+      areas: [{
+        id: 'x', created_at: '', updated_at: '', name: 'X',
+        type: 'utils', contains: [], parent: null, children: [], clusterStrength: 0,
+        pinnedZones: [9],
+      }],
+    };
+    const result = validateAreaFile(invalid);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/pinnedZones/);
+  });
+
+  it('validateAreaFile rejects pinnedZones with a non-integer value', () => {
+    const invalid: any = {
+      version: 1,
+      areas: [{
+        id: 'x', created_at: '', updated_at: '', name: 'X',
+        type: 'utils', contains: [], parent: null, children: [], clusterStrength: 0,
+        pinnedZones: [1.5],
+      }],
+    };
+    const result = validateAreaFile(invalid);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/pinnedZones/);
+  });
 });
