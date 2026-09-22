@@ -155,3 +155,31 @@ export function createAnchorRepelForce(
     }
   };
 }
+
+/**
+ * Pull each pinned area's anchor toward the centroid of its selected zone cells.
+ * Only applies when the area has non-empty pinnedZones.
+ * Velocity nudge uses the same alpha-scaled pattern as parentPull.
+ */
+export function createAreaPinForce(
+  anchors: AreaAnchorNode[],
+  areasById: Map<string, Area>,
+  width: number,
+  height: number,
+  strength: number,
+): (alpha: number) => void {
+  return (alpha: number) => {
+    for (const anchor of anchors) {
+      const area = areasById.get(anchor.areaId);
+      if (!area) continue;
+      const zones = area.pinnedZones ?? [];
+      if (zones.length === 0) continue;
+      const target = zoneCentroid(zones, width, height);
+      if (!target) continue;
+      if (anchor.x == null || anchor.y == null) continue;
+
+      anchor.vx = (anchor.vx ?? 0) + (target.x - anchor.x) * strength * alpha;
+      anchor.vy = (anchor.vy ?? 0) + (target.y - anchor.y) * strength * alpha;
+    }
+  };
+}

@@ -3,6 +3,7 @@ import {
   createAreaAttractForce,
   createParentPullForce,
   createAnchorRepelForce,
+  createAreaPinForce,
   zoneCentroid,
   type ForceNode,
 } from '@/lib/areas/forces';
@@ -148,5 +149,47 @@ describe('zoneCentroid', () => {
 
   it('returns null for empty array', () => {
     expect(zoneCentroid([], 600, 400)).toBeNull();
+  });
+});
+
+describe('createAreaPinForce', () => {
+  it('pulls a pinned anchor toward the zone centroid', () => {
+    const area = makeArea({ id: 'auth', pinnedZones: [4] });
+    const anchor = makeAnchor('auth', 0, 0);
+    const areasById = new Map([['auth', area]]);
+
+    const force = createAreaPinForce([anchor], areasById, 600, 400, 1);
+    force(1);
+
+    // Zone 4 centroid at (300, 200) => vx and vy should increase
+    expect(anchor.vx).toBeGreaterThan(0);
+    expect(anchor.vy).toBeGreaterThan(0);
+    // Exact: (300-0) * 1 * 1 = 300, (200-0) * 1 * 1 = 200
+    expect(anchor.vx).toBeCloseTo(300, 5);
+    expect(anchor.vy).toBeCloseTo(200, 5);
+  });
+
+  it('does nothing for an anchor whose area has pinnedZones: []', () => {
+    const area = makeArea({ id: 'auth', pinnedZones: [] });
+    const anchor = makeAnchor('auth', 0, 0);
+    const areasById = new Map([['auth', area]]);
+
+    const force = createAreaPinForce([anchor], areasById, 600, 400, 1);
+    force(1);
+
+    expect(anchor.vx).toBe(0);
+    expect(anchor.vy).toBe(0);
+  });
+
+  it('does nothing for an area without pinnedZones field', () => {
+    const area = makeArea({ id: 'auth' }); // no pinnedZones
+    const anchor = makeAnchor('auth', 0, 0);
+    const areasById = new Map([['auth', area]]);
+
+    const force = createAreaPinForce([anchor], areasById, 600, 400, 1);
+    force(1);
+
+    expect(anchor.vx).toBe(0);
+    expect(anchor.vy).toBe(0);
   });
 });
