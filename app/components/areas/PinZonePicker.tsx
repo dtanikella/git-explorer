@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface PinZonePickerProps {
   areaId: string;
@@ -18,6 +18,7 @@ const ZONE_LABELS = [
 // Compact 3x3 toggle grid for pinning an area to one or more regions of the
 // repo-graph canvas. Controlled: `value` holds selected row-major cell indices (0-8).
 export default function PinZonePicker({ areaId, value, onChange, size = 36 }: PinZonePickerProps) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const selected = new Set(value);
 
   const toggleZone = (index: number) => {
@@ -51,6 +52,7 @@ export default function PinZonePicker({ areaId, value, onChange, size = 36 }: Pi
     >
       {ZONE_LABELS.map((label, index) => {
         const isSelected = selected.has(index);
+        const isHovered = hoveredIndex === index;
         return (
           <button
             key={index}
@@ -59,13 +61,23 @@ export default function PinZonePicker({ areaId, value, onChange, size = 36 }: Pi
             aria-pressed={isSelected}
             title={`Pin toward ${label.replace('-', ' ')}`}
             onClick={() => toggleZone(index)}
+            onMouseEnter={() => setHoveredIndex(index)}
+            onMouseLeave={() => setHoveredIndex(null)}
             style={{
               width: cellSize,
               height: cellSize,
               padding: 0,
-              border: isSelected ? '1px solid #3b82f6' : '1px solid #d1d5db',
+              border: isSelected
+                ? '1px solid #3b82f6'
+                : isHovered
+                  ? '1px solid #3b82f6'
+                  : '1px solid #d1d5db',
               borderRadius: 2,
-              background: isSelected ? '#3b82f6' : '#ffffff',
+              background: isSelected
+                ? '#3b82f6'
+                : isHovered
+                  ? '#eff6ff'
+                  : '#ffffff',
               cursor: 'pointer',
               boxShadow: isSelected ? 'inset 0 0 0 1px #3b82f6' : 'none',
               transition: 'background 0.1s ease, border-color 0.1s ease',
