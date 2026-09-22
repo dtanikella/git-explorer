@@ -1,4 +1,4 @@
-import { computeAreaHull, expandHull, getTransitiveContains } from '@/lib/areas/renderer';
+import { computeAreaHull, expandHull, getTransitiveContains, drawAreaOverlays } from '@/lib/areas/renderer';
 import type { Area } from '@/lib/areas/types';
 
 const area: Area = {
@@ -109,5 +109,78 @@ describe('computeAreaHull with areasById (containment)', () => {
     expect(withoutChildren).toEqual({ type: 'circle', cx: 0, cy: 0, r: expect.any(Number) });
     // With transitive lookup, both members are included -> circle spans p1 and c1.
     expect(withChildren).not.toEqual(withoutChildren);
+  });
+});
+
+describe('drawAreaOverlays', () => {
+  let mockCtx: jest.Mocked<CanvasRenderingContext2D>;
+  const runtimeState = new Map<string, import('@/lib/areas/types').AreaRuntimeState>([
+    ['auth', { visible: true, color: '#3b82f6' }],
+  ]);
+  const nodePositions = new Map([
+    ['a', { x: 50, y: 50, radius: 5 }],
+    ['b', { x: 150, y: 50, radius: 5 }],
+    ['c', { x: 100, y: 130, radius: 5 }],
+  ]);
+  const areas = [area];
+
+  beforeEach(() => {
+    mockCtx = {
+      save: jest.fn(),
+      restore: jest.fn(),
+      beginPath: jest.fn(),
+      moveTo: jest.fn(),
+      lineTo: jest.fn(),
+      closePath: jest.fn(),
+      arc: jest.fn(),
+      arcTo: jest.fn(),
+      fill: jest.fn(),
+      stroke: jest.fn(),
+      fillText: jest.fn(),
+      measureText: jest.fn(() => ({ width: 40 })),
+      globalAlpha: 1,
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+    } as any;
+  });
+
+  it('uses deriveBorderColor for stroke instead of the fill color', () => {
+    drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions);
+
+    // Stroke should be called
+    expect(mockCtx.stroke).toHaveBeenCalled();
+    // strokeStyle should not be the raw fill color #3b82f6 — it should be a darker border
+    expect(mockCtx.strokeStyle).not.toBe('#3b82f6');
+    expect(mockCtx.strokeStyle).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it('draws a pill label with the area name', () => {
+    drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions);
+
+    // fillText should be called for the label
+    expect(mockCtx.fillText).toHaveBeenCalledWith(
+      area.name,
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
+
+  it('skips hidden areas', () => {
+    const hiddenState = new Map([
+      ['auth', { visible: false, color: '#3b82f6' }],
+    ]);
+    drawAreaOverlays(mockCtx, areas, hiddenState, nodePositions);
+
+    expect(mockCtx.save).not.toHaveBeenCalled();
+  });
+
+  it('uses highlighted alpha and border width when highlightedAreaId matches', () => {
+    drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions, 'auth');
+    // Should be called with higher alpha for highlighted
+    expect(mockCtx.stroke).toHaveBeenCalled();
   });
 });

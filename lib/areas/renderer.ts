@@ -1,7 +1,9 @@
 import * as d3 from 'd3';
 import type { Area, AreaRuntimeState } from './types';
+import { getAreaColor, deriveBorderColor } from './color';
 
 const HULL_PADDING = 55; // px padding around member nodes
+const PILL_LABEL_OFFSET = 14; // px above hull top edge for pill label
 
 export type HullResult =
   | { type: 'circle'; cx: number; cy: number; r: number }
@@ -100,6 +102,7 @@ export function drawAreaOverlays(
   areas: Area[],
   runtimeState: Map<string, AreaRuntimeState>,
   nodePositions: Map<string, { x: number; y: number; radius: number }>,
+  highlightedAreaId?: string | null,
 ): void {
   const areasById = new Map(areas.map((a) => [a.id, a]));
 
@@ -110,17 +113,21 @@ export function drawAreaOverlays(
     const hull = computeAreaHull(area, nodePositions, areasById);
     if (!hull) continue;
 
+    const fillColor = getAreaColor(area);
+    const borderColor = deriveBorderColor(fillColor);
+    const isHighlighted = highlightedAreaId === area.id;
+
     ctx.save();
 
     if (hull.type === 'circle') {
       ctx.beginPath();
       ctx.arc(hull.cx, hull.cy, hull.r, 0, 2 * Math.PI);
-      ctx.fillStyle = state.color;
-      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = fillColor;
+      ctx.globalAlpha = isHighlighted ? 0.22 : 0.08;
       ctx.fill();
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = state.color;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = isHighlighted ? 0.6 : 0.3;
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = isHighlighted ? 3.5 : 2.5;
       ctx.stroke();
     } else {
       ctx.beginPath();
@@ -130,15 +137,77 @@ export function drawAreaOverlays(
         ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.fillStyle = state.color;
-      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = fillColor;
+      ctx.globalAlpha = isHighlighted ? 0.22 : 0.08;
       ctx.fill();
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = state.color;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = isHighlighted ? 0.6 : 0.3;
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = isHighlighted ? 3.5 : 2.5;
       ctx.stroke();
     }
 
+    // Draw pill label
+    drawAreaLabel(ctx, hull, area.name, fillColor, isHighlighted);
+
     ctx.restore();
   }
+}
+
+function drawAreaLabel(
+  ctx: CanvasRenderingContext2D,
+  hull: Exclude<HullResult, null>,
+  name: string,
+  fillColor: string,
+  isHighlighted: boolean,
+): void {
+  let labelX: number, labelY: number;
+
+  if (hull.type === 'circle') {
+    labelX = hull.cx;
+    labelY = hull.cy - hull.r - PILL_LABEL_OFFSET;
+  } else {
+    // Polygon: centered at avg x, at min y - offset
+    let sumX = 0;
+    let minY = Infinity;
+    for (const [x, y] of hull.points) {
+      sumX += x;
+      if (y < minY) minY = y;
+    }
+    labelX = sumX / hull.points.length;
+    labelY = minY - PILL_LABEL_OFFSET;
+  }
+
+  const text = name;
+  const fontSize = isHighlighted ? 16 : 15;
+  ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  const textWidth = ctx.measureText(text).width;
+  const padding = 10;
+  const borderRadius = 8;
+  const pillWidth = textWidth + padding * 2;
+  const pillHeight = fontSize + padding;
+  const pillX = labelX - pillWidth / 2;
+  const pillY = labelY - pillHeight / 2;
+
+  // Rounded rect background
+  ctx.beginPath();
+  ctx.moveTo(pillX + borderRadius, pillY);
+  ctx.lineTo(pillX + pillWidth - borderRadius, pillY);
+  ctx.arcTo(pillX + pillWidth, pillY, pillX + pillWidth, pillY + borderRadius, borderRadius);
+  ctx.lineTo(pillX + pillWidth, pillY + pillHeight - borderRadius);
+  ctx.arcTo(pillX + pillWidth, pillY + pillHeight, pillX + pillWidth - borderRadius, pillY + pillHeight, borderRadius);
+  ctx.lineTo(pillX + borderRadius, pillY + pillHeight);
+  ctx.arcTo(pillX, pillY + pillHeight, pillX, pillY + pillHeight - borderRadius, borderRadius);
+  ctx.lineTo(pillX, pillY + borderRadius);
+  ctx.arcTo(pillX, pillY, pillX + borderRadius, pillY, borderRadius);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.globalAlpha = 1;
+  ctx.fill();
+
+  // White text
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 1;
+  ctx.fillText(text, labelX, labelY + 1);
 }
