@@ -102,7 +102,7 @@ export const DEFAULT_AREA_FORCES = {
   areaAttract: 0.15,
   areaParent: 0.5,
   anchorRepel: 4000,
-  areaPin: 0,
+  areaPin: 0.7,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
