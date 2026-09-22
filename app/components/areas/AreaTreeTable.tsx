@@ -6,6 +6,7 @@ import type { Area, AreaRuntimeState } from '@/lib/areas/types';
 import type { SyntaxType } from '@/lib/analysis/types';
 import { computeRollupMemberCounts } from '@/lib/areas/containment';
 import { SYNTAX_TYPE_LABELS, SYNTAX_TYPE_BADGE_COLORS } from '@/lib/analysis/syntax-type-labels';
+import PinZonePicker from './PinZonePicker';
 
 interface AreaTreeTableProps {
   areas: Area[];
@@ -23,6 +24,7 @@ interface AreaTreeTableProps {
   onAddChildArea?: (parentId: string) => void;
   onChangeType?: (areaId: string, newType: string) => void;
   onRemoveMember?: (areaId: string, nodeId: string) => void;
+  onTogglePinZone?: (areaId: string, zones: number[]) => void;
   createParentId?: string | null;
   newChildAreaName?: string;
   onNewChildAreaNameChange?: (value: string) => void;
@@ -149,6 +151,7 @@ export default function AreaTreeTable({
   onAddChildArea,
   onChangeType,
   onRemoveMember,
+  onTogglePinZone,
   createParentId,
   newChildAreaName,
   onNewChildAreaNameChange,
@@ -443,6 +446,15 @@ export default function AreaTreeTable({
             {rollupMemberCounts.get(area.id) ?? area.contains.length}
           </span>
 
+          {/* Pin zone picker */}
+          <span style={{ flexShrink: 0, width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <PinZonePicker
+              areaId={area.id}
+              value={area.pinnedZones ?? []}
+              onChange={(zones) => onTogglePinZone?.(area.id, zones)}
+            />
+          </span>
+
           {/* Actions */}
           <span style={{ flexShrink: 0, display: 'flex', gap: 4 }}>
             <button
@@ -581,6 +593,7 @@ export default function AreaTreeTable({
         <span style={{ flex: 1 }}>Name</span>
         <span style={{ flexShrink: 0, width: 'auto', minWidth: 80 }}>Type</span>
         <span style={{ flexShrink: 0, width: 30, textAlign: 'right' }}>Members</span>
+        <span style={{ flexShrink: 0, width: 36, textAlign: 'center' }}>Pin</span>
         <span style={{ flexShrink: 0, width: 48 }} />
       </div>
 

@@ -1,4 +1,4 @@
-import { areaPairKey, buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
+import { areaPairKey, buildCrossAreaEdgeWeights, buildNodeCrossAreaTargets } from '@/lib/areas/cross-area-edges';
 import type { Area } from '@/lib/areas/types';
 
 function makeArea(id: string, contains: string[]): Area {
@@ -70,5 +70,48 @@ describe('buildCrossAreaEdgeWeights', () => {
     const weights = buildCrossAreaEdgeWeights([['sym-login', 'sym-charge']], multiMap);
     expect(weights.get(areaPairKey('auth', 'billing'))).toBe(1);
     expect(weights.get(areaPairKey('shared', 'billing'))).toBe(1);
+  });
+});
+
+describe('buildNodeCrossAreaTargets', () => {
+  const auth = makeArea('auth', ['sym-login']);
+  const billing = makeArea('billing', ['sym-charge']);
+  const utils = makeArea('utils', ['sym-helper']);
+  const nodeToAreas = new Map<string, Area[]>([
+    ['sym-login', [auth]],
+    ['sym-charge', [billing]],
+    ['sym-helper', [utils]],
+  ]);
+
+  it('records the target area for both endpoints of a cross-area edge', () => {
+    const targets = buildNodeCrossAreaTargets([['sym-login', 'sym-charge']], nodeToAreas);
+    expect(targets.get('sym-login')?.get('billing')).toBe(1);
+    expect(targets.get('sym-charge')?.get('auth')).toBe(1);
+  });
+
+  it('accumulates weight across repeated edges into the same outside area', () => {
+    const targets = buildNodeCrossAreaTargets(
+      [
+        ['sym-login', 'sym-charge'],
+        ['sym-login', 'sym-charge'],
+      ],
+      nodeToAreas,
+    );
+    expect(targets.get('sym-login')?.get('billing')).toBe(2);
+  });
+
+  it('does not record a node\'s own area as a cross-area target', () => {
+    const sameAreaMap = new Map<string, Area[]>([
+      ['sym-login', [auth]],
+      ['sym-login-2', [auth]],
+    ]);
+    const targets = buildNodeCrossAreaTargets([['sym-login', 'sym-login-2']], sameAreaMap);
+    expect(targets.has('sym-login')).toBe(false);
+    expect(targets.has('sym-login-2')).toBe(false);
+  });
+
+  it('leaves a node with no edges out of the result entirely', () => {
+    const targets = buildNodeCrossAreaTargets([], nodeToAreas);
+    expect(targets.get('sym-helper')).toBeUndefined();
   });
 });

@@ -84,7 +84,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
       contains: [],
       parent: null,
       children: [],
-      clusterStrength: 0,
+      clusterStrength: 0.6,
     };
 
     setAreas([...areas, newArea]);
@@ -125,7 +125,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
       contains: [],
       parent: createChildParentId,
       children: [],
-      clusterStrength: 0,
+      clusterStrength: 0.6,
     };
 
     setAreas(
@@ -291,6 +291,16 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
       const now = new Date().toISOString();
       setAreas(
         areas.map((a) => (a.id === areaId ? { ...a, type: newType as AreaType, updated_at: now } : a))
+      );
+    },
+    [areas, setAreas]
+  );
+
+  const handleTogglePinZone = useCallback(
+    (areaId: string, zones: number[]) => {
+      const now = new Date().toISOString();
+      setAreas(
+        areas.map((a) => (a.id === areaId ? { ...a, pinnedZones: zones, updated_at: now } : a))
       );
     },
     [areas, setAreas]
@@ -530,6 +540,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
               onAddChildArea={handleAddChildStart}
               onChangeType={handleChangeType}
               onRemoveMember={handleRemoveMember}
+              onTogglePinZone={handleTogglePinZone}
               createParentId={createChildParentId}
               newChildAreaName={newChildAreaName}
               onNewChildAreaNameChange={setNewChildAreaName}
