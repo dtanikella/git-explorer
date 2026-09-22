@@ -3,6 +3,7 @@ import {
   createAreaAttractForce,
   createParentPullForce,
   createAnchorRepelForce,
+  zoneCentroid,
   type ForceNode,
 } from '@/lib/areas/forces';
 import type { AreaAnchorNode } from '@/lib/areas/anchors';
@@ -131,5 +132,21 @@ describe('createAnchorRepelForce', () => {
     expect(a.vx).toBeLessThan(0);
     expect(b.vx).toBeGreaterThan(0);
     expect(a.vx).toBeCloseTo(-b.vx!, 5);
+  });
+});
+
+describe('zoneCentroid', () => {
+  it('returns exact center for single cell index 4', () => {
+    const c = zoneCentroid([4], 600, 400);
+    expect(c).toEqual({ x: 300, y: 200 });
+  });
+
+  it('averages multiple cells (bottom row)', () => {
+    const c = zoneCentroid([6, 7, 8], 600, 600);
+    expect(c).toEqual({ x: 300, y: 500 });
+  });
+
+  it('returns null for empty array', () => {
+    expect(zoneCentroid([], 600, 400)).toBeNull();
   });
 });

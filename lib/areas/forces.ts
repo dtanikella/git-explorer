@@ -1,6 +1,18 @@
 import type { Area } from './types';
 import type { AreaAnchorNode } from './anchors';
 
+// ── Module-level summary of all area forces ──
+//
+// Force              | What it pulls               | graph-config.ts constant
+// ───────────────────┼─────────────────────────────┼─────────────────────────
+// clusterPull        | member nodes toward anchor  | forces.areaCluster
+// areaAttract        | anchors toward each other   | forces.areaAttract
+// parentPull         | child anchor toward parent  | forces.areaParent
+// anchorRepel        | anchors away from each other| forces.anchorRepel
+// areaPin            | anchor toward zone centroid | forces.areaPin
+//
+// All forces use alpha-scaled velocity nudges (no hard fx/fy pinning).
+
 export interface ForceNode {
   id: string;
   x?: number;
@@ -10,6 +22,29 @@ export interface ForceNode {
 }
 
 const MIN_DISTANCE = 1;
+
+/**
+ * Compute the centroid of one or more grid zone cells.
+ * The 3x3 grid spans [0,width] x [0,height]; each cell's center is at
+ * ((col+0.5)*width/3, (row+0.5)*height/3). Returns the arithmetic mean
+ * of all selected cell centers, or null when zones is empty.
+ */
+export function zoneCentroid(
+  zones: number[],
+  width: number,
+  height: number,
+): { x: number; y: number } | null {
+  if (zones.length === 0) return null;
+  let sumX = 0;
+  let sumY = 0;
+  for (const index of zones) {
+    const row = Math.floor(index / 3);
+    const col = index % 3;
+    sumX += (col + 0.5) * (width / 3);
+    sumY += (row + 0.5) * (height / 3);
+  }
+  return { x: sumX / zones.length, y: sumY / zones.length };
+}
 
 export function createClusterPullForce(
   nodes: ForceNode[],
