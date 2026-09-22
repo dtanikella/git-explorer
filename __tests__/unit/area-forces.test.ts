@@ -193,3 +193,42 @@ describe('createAreaPinForce', () => {
     expect(anchor.vy).toBe(0);
   });
 });
+
+describe('simulation integration', () => {
+  it('all five area forces can be called sequentially without throwing (pinned parent + unpinned child)', () => {
+    const childArea = makeArea({ id: 'child', parent: 'parent' });
+    const parentArea = makeArea({ id: 'parent', pinnedZones: [0, 1, 2] }); // top row
+
+    const childAnchor = makeAnchor('child', 10, 10);
+    const parentAnchor = makeAnchor('parent', 100, 100);
+    const anchors = [childAnchor, parentAnchor];
+
+    const areasById = new Map([
+      ['child', childArea],
+      ['parent', parentArea],
+    ]);
+
+    const forces = [
+      createAnchorRepelForce(anchors, 4000),
+      createAreaAttractForce(anchors, new Map(), 0.15),
+      createParentPullForce(anchors, areasById, 0.5),
+      createAreaPinForce(anchors, areasById, 800, 600, 0.7),
+    ];
+
+    // Simulate 50 ticks by calling each force in sequence
+    for (let tick = 1; tick <= 50; tick++) {
+      const alpha = 0.1 * (1 - tick / 50); // decaying alpha
+      for (const force of forces) {
+        force(alpha);
+      }
+    }
+
+    // Pinned parent anchor should have nonzero velocity from areaPin
+    expect(parentAnchor.vx).not.toBe(0);
+    expect(parentAnchor.vy).not.toBe(0);
+
+    // Child anchor (unpinned) should have nonzero velocity from parentPull
+    expect(childAnchor.vx).not.toBe(0);
+    expect(childAnchor.vy).not.toBe(0);
+  });
+});

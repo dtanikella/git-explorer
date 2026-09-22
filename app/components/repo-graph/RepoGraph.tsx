@@ -16,6 +16,7 @@ import {
   createAreaAttractForce,
   createParentPullForce,
   createAnchorRepelForce,
+  createAreaPinForce,
 } from '@/lib/areas/forces';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
@@ -385,7 +386,8 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
       .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
       .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
-      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent));
+      .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent))
+      .force('areaPin', createAreaPinForce(anchors, areasById, width, height, cfg.forces.areaPin));
 
     // Data Flow view only: pull nodes manually tagged with a `storage`/`api`/`ux` Area
     // toward a concentric ring keyed by that area's name (see DATA_FLOW_LAYER_RADII).

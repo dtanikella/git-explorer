@@ -64,6 +64,7 @@ export interface RepoGraphConfig {
     areaAttract: number;
     areaParent: number;
     anchorRepel: number;
+    areaPin: number;
     layerRadii?: Record<string, number>;
   };
   simulation: SimulationParams;
@@ -101,6 +102,7 @@ export const DEFAULT_AREA_FORCES = {
   areaAttract: 0.15,
   areaParent: 0.5,
   anchorRepel: 4000,
+  areaPin: 0,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
@@ -472,6 +474,7 @@ export function mergeConfigs(
         areaAttract: override.forces.areaAttract ?? result.forces.areaAttract,
         areaParent: override.forces.areaParent ?? result.forces.areaParent,
         anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
+        areaPin: override.forces.areaPin ?? result.forces.areaPin,
         layerRadii: override.forces.layerRadii ?? result.forces.layerRadii,
       };
     }
