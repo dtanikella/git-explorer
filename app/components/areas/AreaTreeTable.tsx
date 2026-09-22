@@ -5,8 +5,34 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { Area, AreaRuntimeState } from '@/lib/areas/types';
 import type { SyntaxType } from '@/lib/analysis/types';
 import { computeRollupMemberCounts } from '@/lib/areas/containment';
+import { getAreaColor, deriveBorderColor } from '@/lib/areas/color';
 import { SYNTAX_TYPE_LABELS, SYNTAX_TYPE_BADGE_COLORS } from '@/lib/analysis/syntax-type-labels';
 import PinZonePicker from './PinZonePicker';
+
+const PRESET_COLORS = [
+  '#ef4444',
+  '#f97316',
+  '#f59e0b',
+  '#eab308',
+  '#84cc16',
+  '#10b981',
+  '#06b6d4',
+  '#3b82f6',
+  '#6366f1',
+  '#8b5cf6',
+  '#d946ef',
+  '#ec4899',
+  '#78716c',
+  '#0f172a',
+];
+
+const HEX_PATTERN = /^#?[0-9a-fA-F]{6}$/;
+
+function normalizeHex(value: string): string | null {
+  const trimmed = value.trim();
+  if (!HEX_PATTERN.test(trimmed)) return null;
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+}
 
 interface AreaTreeTableProps {
   areas: Area[];
@@ -25,6 +51,7 @@ interface AreaTreeTableProps {
   onChangeType?: (areaId: string, newType: string) => void;
   onRemoveMember?: (areaId: string, nodeId: string) => void;
   onTogglePinZone?: (areaId: string, zones: number[]) => void;
+  onSetAreaColor?: (areaId: string, color: string) => void;
   createParentId?: string | null;
   newChildAreaName?: string;
   onNewChildAreaNameChange?: (value: string) => void;
@@ -152,6 +179,7 @@ export default function AreaTreeTable({
   onChangeType,
   onRemoveMember,
   onTogglePinZone,
+  onSetAreaColor,
   createParentId,
   newChildAreaName,
   onNewChildAreaNameChange,
@@ -162,6 +190,9 @@ export default function AreaTreeTable({
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
   const [popoverNodeId, setPopoverNodeId] = useState<string | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const [colorPopoverAreaId, setColorPopoverAreaId] = useState<string | null>(null);
+  const [colorPopoverPosition, setColorPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const [colorPopoverHexValue, setColorPopoverHexValue] = useState<string>('');
 
   const areasById = useMemo(() => {
     const map = new Map<string, Area>();
@@ -198,6 +229,49 @@ export default function AreaTreeTable({
     });
     setPopoverNodeId(null);
   }, []);
+
+  const handleColorSwatchClick = useCallback((areaId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setColorPopoverPosition({ top: rect.bottom + 4, left: rect.left });
+    if (colorPopoverAreaId === areaId) {
+      setColorPopoverAreaId(null);
+    } else {
+      setColorPopoverAreaId(areaId);
+      setColorPopoverHexValue('');
+    }
+  }, [colorPopoverAreaId]);
+
+  const handleColorPresetSelect = useCallback((hex: string) => {
+    if (colorPopoverAreaId) {
+      onSetAreaColor?.(colorPopoverAreaId, hex);
+      setColorPopoverAreaId(null);
+    }
+  }, [colorPopoverAreaId, onSetAreaColor]);
+
+  const handleColorHexCommit = useCallback(() => {
+    if (!colorPopoverAreaId) return;
+    const normalized = normalizeHex(colorPopoverHexValue);
+    if (normalized) {
+      onSetAreaColor?.(colorPopoverAreaId, normalized);
+      setColorPopoverAreaId(null);
+    }
+  }, [colorPopoverAreaId, colorPopoverHexValue, onSetAreaColor]);
+
+  const handleColorHexChange = useCallback((value: string) => {
+    setColorPopoverHexValue(value);
+    // Live preview: if valid hex, update immediately
+    const normalized = normalizeHex(value);
+    if (normalized && colorPopoverAreaId) {
+      onSetAreaColor?.(colorPopoverAreaId, normalized);
+    }
+  }, [colorPopoverAreaId, onSetAreaColor]);
+
+  const handleColorHexKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleColorHexCommit();
+    }
+  }, [handleColorHexCommit]);
 
   const handlePopoverClick = useCallback((nodeId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -301,7 +375,7 @@ export default function AreaTreeTable({
           >
             <div style={{ fontWeight: 600, marginBottom: 6, color: '#374151' }}>Also in:</div>
             {otherAreas.map((area) => {
-              const color = runtimeState.get(area.id)?.color ?? '#6b7280';
+              const color = getAreaColor(area);
               const isCurrentArea = area.id === areaId;
               return (
                 <div
@@ -354,7 +428,7 @@ export default function AreaTreeTable({
   };
 
   const renderRow = (area: Area, depth: number) => {
-    const color = runtimeState.get(area.id)?.color ?? '#6b7280';
+    const color = getAreaColor(area);
     const expanded = isExpanded(area.id);
     const hasChildren = area.children.length > 0;
     const hasMembers = area.contains.length > 0;
@@ -379,6 +453,22 @@ export default function AreaTreeTable({
           >
             {(hasChildren || hasMembers) ? (expanded ? '▼' : '▶') : ''}
           </span>
+
+          {/* Color swatch */}
+          <span
+            data-testid={`color-swatch-${area.id}`}
+            onClick={(e) => handleColorSwatchClick(area.id, e)}
+            title="Click to set area color"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 6,
+              flexShrink: 0,
+              cursor: 'pointer',
+              background: color,
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.12)',
+            }}
+          />
 
           {/* Name or rename input */}
           {isRenaming ? (
@@ -490,6 +580,91 @@ export default function AreaTreeTable({
             </button>
           </span>
         </DroppableAreaRow>
+
+        {/* Color popover */}
+        {colorPopoverAreaId === area.id && colorPopoverPosition && (
+          <div
+            data-testid={`color-popover-${area.id}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: colorPopoverPosition.top,
+              left: colorPopoverPosition.left,
+              background: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: 10,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              padding: 14,
+              zIndex: 100,
+              width: 226,
+              fontSize: 11,
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 8 }}>
+              Area color
+            </div>
+            {/* Preset swatches: 7x2 grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 10 }}>
+              {PRESET_COLORS.map((presetHex) => (
+                <span
+                  key={presetHex}
+                  onClick={() => handleColorPresetSelect(presetHex)}
+                  role="button"
+                  aria-label={`Color ${presetHex}`}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    background: presetHex,
+                    boxShadow: presetHex === color
+                      ? '0 0 0 2px white, 0 0 0 4px #374151'
+                      : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
+                  }}
+                />
+              ))}
+            </div>
+            {/* Hex input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+              <input
+                data-testid={`color-hex-input-${area.id}`}
+                type="text"
+                value={colorPopoverHexValue}
+                onChange={(e) => handleColorHexChange(e.target.value)}
+                onKeyDown={handleColorHexKeyDown}
+                onBlur={handleColorHexCommit}
+                placeholder={color}
+                style={{
+                  flex: 1,
+                  fontFamily: 'ui-monospace, "SF Mono", monospace',
+                  fontSize: 12,
+                  padding: '5px 8px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 6,
+                  color: '#374151',
+                  background: '#f9fafb',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            {/* Border preview */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  flexShrink: 0,
+                  background: color,
+                  border: `2.5px solid ${deriveBorderColor(color)}`,
+                }}
+              />
+              <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.35 }}>
+                Border auto-derives: <b style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{deriveBorderColor(color)}</b> (35% darker)
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Inline child-area creation row */}
         {createParentId === area.id && (
