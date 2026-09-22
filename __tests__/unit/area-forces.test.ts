@@ -4,6 +4,11 @@ import {
   createParentPullForce,
   createAnchorRepelForce,
   createAreaPinForce,
+  createCrossAreaPullForce,
+  createAreaHullCollisionForce,
+  areAreasRelated,
+  computeAreaRadii,
+  resolveAreaRegion,
   zoneCentroid,
   type ForceNode,
 } from '@/lib/areas/forces';
@@ -127,12 +132,40 @@ describe('createAnchorRepelForce', () => {
     const a = makeAnchor('auth', 0, 0);
     const b = makeAnchor('billing', 10, 0);
 
-    const force = createAnchorRepelForce([a, b], 100);
+    const force = createAnchorRepelForce([a, b], [], new Map(), new Map(), 100);
     force(1);
 
     expect(a.vx).toBeLessThan(0);
     expect(b.vx).toBeGreaterThan(0);
     expect(a.vx).toBeCloseTo(-b.vx!, 5);
+  });
+
+  it('pushes harder, at the same raw anchor distance, when the areas are bigger', () => {
+    const authArea = makeArea({ id: 'auth' });
+    const billingArea = makeArea({ id: 'billing' });
+    const areasById = new Map([
+      ['auth', authArea],
+      ['billing', billingArea],
+    ]);
+
+    const runWithMembers = (memberOffsets: number[]) => {
+      const a = makeAnchor('auth', 0, 0);
+      const b = makeAnchor('billing', 100, 0);
+      const nodes: ForceNode[] = memberOffsets.map((offset, i) => ({
+        id: `auth-member-${i}`,
+        x: offset,
+        y: 0,
+      }));
+      const nodeToAreas = new Map(nodes.map((n) => [n.id, [authArea]]));
+      const force = createAnchorRepelForce([a, b], nodes, nodeToAreas, areasById, 100);
+      force(1);
+      return Math.abs(a.vx!);
+    };
+
+    const smallAreaPush = runWithMembers([1]); // tiny footprint
+    const bigAreaPush = runWithMembers([40]); // big footprint, same anchor distance
+
+    expect(bigAreaPush).toBeGreaterThan(smallAreaPush);
   });
 });
 
@@ -194,25 +227,284 @@ describe('createAreaPinForce', () => {
   });
 });
 
+describe('resolveAreaRegion', () => {
+  it('gives a top-level area the full canvas', () => {
+    const area = makeArea({ id: 'top', parent: null });
+    const region = resolveAreaRegion(area, new Map([['top', area]]), 900, 300);
+    expect(region).toEqual({ x: 0, y: 0, width: 900, height: 300 });
+  });
+
+  it("nests a child's region inside its pinned parent's selected cell", () => {
+    const parent = makeArea({ id: 'parent', pinnedZones: [0] }); // top-left cell
+    const child = makeArea({ id: 'child', parent: 'parent' });
+    const areasById = new Map([
+      ['parent', parent],
+      ['child', child],
+    ]);
+    const region = resolveAreaRegion(child, areasById, 900, 300);
+    expect(region).toEqual({ x: 0, y: 0, width: 300, height: 100 });
+  });
+
+  it('passes the region through unchanged when the parent has no pin of its own', () => {
+    const parent = makeArea({ id: 'parent' }); // no pinnedZones
+    const child = makeArea({ id: 'child', parent: 'parent' });
+    const areasById = new Map([
+      ['parent', parent],
+      ['child', child],
+    ]);
+    const region = resolveAreaRegion(child, areasById, 900, 300);
+    expect(region).toEqual({ x: 0, y: 0, width: 900, height: 300 });
+  });
+});
+
+describe('createCrossAreaPullForce', () => {
+  it('pulls a node toward the edge of its own region facing the outside area it interacts with', () => {
+    const own = makeArea({ id: 'own', clusterStrength: 1 });
+    const outside = makeArea({ id: 'outside' });
+    const node: ForceNode = { id: 'sym-bridge', x: 300, y: 200, vx: 0, vy: 0 };
+    const nodeToAreas = new Map([['sym-bridge', [own]]]);
+    const crossTargets = new Map([['sym-bridge', new Map([['outside', 1]])]]);
+    const outsideAnchor = makeAnchor('outside', 5000, 200); // far to the right
+    const anchorsById = new Map([['outside', outsideAnchor]]);
+    const areasById = new Map([
+      ['own', own],
+      ['outside', outside],
+    ]);
+
+    const force = createCrossAreaPullForce(
+      [node],
+      nodeToAreas,
+      crossTargets,
+      anchorsById,
+      areasById,
+      600,
+      400,
+      1,
+    );
+    force(1);
+
+    // Own region is the full 600x400 canvas, center (300,200); outside anchor is due
+    // east, so the node should be pulled toward the region's right edge (x=600).
+    expect(node.vx).toBeGreaterThan(0);
+    expect(node.vy).toBeCloseTo(0, 5);
+  });
+
+  it('leaves a node with no cross-area targets untouched', () => {
+    const own = makeArea({ id: 'own', clusterStrength: 1 });
+    const node: ForceNode = { id: 'sym-internal', x: 300, y: 200, vx: 0, vy: 0 };
+    const nodeToAreas = new Map([['sym-internal', [own]]]);
+    const areasById = new Map([['own', own]]);
+
+    const force = createCrossAreaPullForce(
+      [node],
+      nodeToAreas,
+      new Map(),
+      new Map(),
+      areasById,
+      600,
+      400,
+      1,
+    );
+    force(1);
+
+    expect(node.vx).toBe(0);
+    expect(node.vy).toBe(0);
+  });
+
+  it('leaves a node with no area membership untouched', () => {
+    const node: ForceNode = { id: 'sym-orphan', x: 300, y: 200, vx: 0, vy: 0 };
+    const force = createCrossAreaPullForce(
+      [node],
+      new Map(),
+      new Map([['sym-orphan', new Map([['outside', 1]])]]),
+      new Map(),
+      new Map(),
+      600,
+      400,
+      1,
+    );
+    force(1);
+
+    expect(node.vx).toBe(0);
+    expect(node.vy).toBe(0);
+  });
+});
+
+describe('computeAreaRadii', () => {
+  it('is the distance to the farthest direct member', () => {
+    const area = makeArea({ id: 'auth' });
+    const anchor = makeAnchor('auth', 0, 0);
+    const nodes: ForceNode[] = [
+      { id: 'near', x: 3, y: 0 },
+      { id: 'far', x: 10, y: 0 },
+    ];
+    const nodeToAreas = new Map([
+      ['near', [area]],
+      ['far', [area]],
+    ]);
+    const radii = computeAreaRadii(nodes, nodeToAreas, new Map([['auth', area]]), new Map([['auth', anchor]]));
+    expect(radii.get('auth')).toBe(10);
+  });
+
+  it("extends a parent's radius to reach past its child's bounding circle", () => {
+    const parent = makeArea({ id: 'parent', children: ['child'] });
+    const child = makeArea({ id: 'child', parent: 'parent' });
+    const parentAnchor = makeAnchor('parent', 0, 0);
+    const childAnchor = makeAnchor('child', 100, 0);
+    const nodes: ForceNode[] = [{ id: 'child-member', x: 110, y: 0 }]; // 10 from childAnchor
+    const nodeToAreas = new Map([['child-member', [child]]]);
+    const areasById = new Map([
+      ['parent', parent],
+      ['child', child],
+    ]);
+    const anchorsById = new Map([
+      ['parent', parentAnchor],
+      ['child', childAnchor],
+    ]);
+    const radii = computeAreaRadii(nodes, nodeToAreas, areasById, anchorsById);
+    // parent has no direct members; its radius must reach past the child's
+    // anchor (distance 100) plus the child's own radius (10) = 110
+    expect(radii.get('parent')).toBe(110);
+    expect(radii.get('child')).toBe(10);
+  });
+
+  it('is zero for an area with no members and no children', () => {
+    const area = makeArea({ id: 'empty' });
+    const anchor = makeAnchor('empty', 0, 0);
+    const radii = computeAreaRadii([], new Map(), new Map([['empty', area]]), new Map([['empty', anchor]]));
+    expect(radii.get('empty')).toBe(0);
+  });
+});
+
+describe('areAreasRelated', () => {
+  const grandparent = makeArea({ id: 'gp' });
+  const parent = makeArea({ id: 'parent', parent: 'gp' });
+  const child = makeArea({ id: 'child', parent: 'parent' });
+  const sibling = makeArea({ id: 'sibling' });
+  const areasById = new Map([
+    ['gp', grandparent],
+    ['parent', parent],
+    ['child', child],
+    ['sibling', sibling],
+  ]);
+
+  it('treats direct parent/child as related', () => {
+    expect(areAreasRelated(parent, child, areasById)).toBe(true);
+  });
+
+  it('treats grandparent/grandchild (transitive) as related', () => {
+    expect(areAreasRelated(grandparent, child, areasById)).toBe(true);
+  });
+
+  it('treats unrelated areas as not related', () => {
+    expect(areAreasRelated(child, sibling, areasById)).toBe(false);
+  });
+});
+
+describe('createAreaHullCollisionForce', () => {
+  it('pushes overlapping unrelated areas apart', () => {
+    const areaA = makeArea({ id: 'a', contains: ['node-a'] });
+    const areaB = makeArea({ id: 'b', contains: ['node-b'] });
+    const nodeA: ForceNode = { id: 'node-a', x: 0, y: 0, vx: 0, vy: 0 };
+    const nodeB: ForceNode = { id: 'node-b', x: 5, y: 0, vx: 0, vy: 0 }; // well within hull padding
+    const areasById = new Map([
+      ['a', areaA],
+      ['b', areaB],
+    ]);
+
+    const force = createAreaHullCollisionForce([nodeA, nodeB], [areaA, areaB], areasById, 1);
+    force(1);
+
+    expect(nodeA.vx).toBeLessThan(0);
+    expect(nodeB.vx).toBeGreaterThan(0);
+  });
+
+  it('does nothing for two areas whose hulls do not overlap', () => {
+    const areaA = makeArea({ id: 'a', contains: ['node-a'] });
+    const areaB = makeArea({ id: 'b', contains: ['node-b'] });
+    const nodeA: ForceNode = { id: 'node-a', x: 0, y: 0, vx: 0, vy: 0 };
+    const nodeB: ForceNode = { id: 'node-b', x: 100000, y: 0, vx: 0, vy: 0 }; // far away
+    const areasById = new Map([
+      ['a', areaA],
+      ['b', areaB],
+    ]);
+
+    const force = createAreaHullCollisionForce([nodeA, nodeB], [areaA, areaB], areasById, 1);
+    force(1);
+
+    expect(nodeA.vx).toBe(0);
+    expect(nodeB.vx).toBe(0);
+  });
+
+  it('does not push a parent and child apart even when their hulls nest', () => {
+    const parent = makeArea({ id: 'parent', contains: ['node-parent'], children: ['child'] });
+    const child = makeArea({ id: 'child', parent: 'parent', contains: ['node-child'] });
+    const nodeParent: ForceNode = { id: 'node-parent', x: 0, y: 0, vx: 0, vy: 0 };
+    const nodeChild: ForceNode = { id: 'node-child', x: 1, y: 0, vx: 0, vy: 0 };
+    const areasById = new Map([
+      ['parent', parent],
+      ['child', child],
+    ]);
+
+    const force = createAreaHullCollisionForce([nodeParent, nodeChild], [parent, child], areasById, 1);
+    force(1);
+
+    expect(nodeParent.vx).toBe(0);
+    expect(nodeChild.vx).toBe(0);
+  });
+});
+
 describe('simulation integration', () => {
-  it('all five area forces can be called sequentially without throwing (pinned parent + unpinned child)', () => {
+  it('all seven area forces can be called sequentially without throwing (pinned parent + unpinned child + colliding sibling)', () => {
     const childArea = makeArea({ id: 'child', parent: 'parent' });
     const parentArea = makeArea({ id: 'parent', pinnedZones: [0, 1, 2] }); // top row
+    const siblingArea = makeArea({ id: 'sibling' }); // unrelated to child/parent
 
     const childAnchor = makeAnchor('child', 10, 10);
     const parentAnchor = makeAnchor('parent', 100, 100);
-    const anchors = [childAnchor, parentAnchor];
+    const siblingAnchor = makeAnchor('sibling', 51, 51);
+    const anchors = [childAnchor, parentAnchor, siblingAnchor];
 
     const areasById = new Map([
       ['child', childArea],
       ['parent', parentArea],
+      ['sibling', siblingArea],
+    ]);
+    const areas = [childArea, parentArea, siblingArea];
+
+    const bridgeNode: ForceNode = { id: 'sym-bridge', x: 50, y: 50, vx: 0, vy: 0 };
+    const siblingNode: ForceNode = { id: 'sym-sibling', x: 52, y: 52, vx: 0, vy: 0 };
+    childArea.contains.push('sym-bridge');
+    siblingArea.contains.push('sym-sibling');
+    const allNodes = [bridgeNode, siblingNode];
+
+    const nodeToAreas = new Map([
+      ['sym-bridge', [childArea]],
+      ['sym-sibling', [siblingArea]],
+    ]);
+    const nodeCrossAreaTargets = new Map([['sym-bridge', new Map([['parent', 1]])]]);
+    const anchorsById = new Map([
+      ['child', childAnchor],
+      ['parent', parentAnchor],
+      ['sibling', siblingAnchor],
     ]);
 
     const forces = [
-      createAnchorRepelForce(anchors, 4000),
+      createAnchorRepelForce(anchors, allNodes, nodeToAreas, areasById, 4000),
       createAreaAttractForce(anchors, new Map(), 0.15),
       createParentPullForce(anchors, areasById, 0.5),
       createAreaPinForce(anchors, areasById, 800, 600, 0.7),
+      createCrossAreaPullForce(
+        allNodes,
+        nodeToAreas,
+        nodeCrossAreaTargets,
+        anchorsById,
+        areasById,
+        800,
+        600,
+        0.25,
+      ),
+      createAreaHullCollisionForce(allNodes, areas, areasById, 0.5),
     ];
 
     // Simulate 50 ticks by calling each force in sequence
@@ -230,5 +522,15 @@ describe('simulation integration', () => {
     // Child anchor (unpinned) should have nonzero velocity from parentPull
     expect(childAnchor.vx).not.toBe(0);
     expect(childAnchor.vy).not.toBe(0);
+
+    // Bridge node (in child area, interacting with parent) should have nonzero
+    // velocity from crossAreaPull
+    expect(bridgeNode.vx).not.toBe(0);
+    expect(bridgeNode.vy).not.toBe(0);
+
+    // Bridge and sibling nodes started overlapping (unrelated areas) — hull
+    // collision should have pushed them in opposite directions
+    expect(bridgeNode.vx).toBeLessThan(0);
+    expect(siblingNode.vx).toBeGreaterThan(0);
   });
 });

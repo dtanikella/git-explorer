@@ -65,6 +65,8 @@ export interface RepoGraphConfig {
     areaParent: number;
     anchorRepel: number;
     areaPin: number;
+    crossAreaPull: number;
+    areaHullCollision: number;
     layerRadii?: Record<string, number>;
   };
   simulation: SimulationParams;
@@ -86,7 +88,7 @@ export const DEFAULT_EDGE_STYLE: EdgeStyle = {
 };
 
 export const DEFAULT_NODE_FORCES: NodeForces = {
-  charge: -200,
+  charge: -400,
   collideRadius: 10,
   fx: null,
   fy: null,
@@ -102,12 +104,14 @@ export const DEFAULT_AREA_FORCES = {
   areaAttract: 0.15,
   areaParent: 0.5,
   anchorRepel: 4000,
-  areaPin: 0.7,
+  areaPin: 0.5,
+  crossAreaPull: 0.25,
+  areaHullCollision: 0.5,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
   centerStrength: 0.1,
-  collisionPadding: 3,
+  collisionPadding: 10,
   alphaDecay: 0.0228,
   velocityDecay: 0.4,
 };
@@ -475,6 +479,8 @@ export function mergeConfigs(
         areaParent: override.forces.areaParent ?? result.forces.areaParent,
         anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
         areaPin: override.forces.areaPin ?? result.forces.areaPin,
+        crossAreaPull: override.forces.crossAreaPull ?? result.forces.crossAreaPull,
+        areaHullCollision: override.forces.areaHullCollision ?? result.forces.areaHullCollision,
         layerRadii: override.forces.layerRadii ?? result.forces.layerRadii,
       };
     }

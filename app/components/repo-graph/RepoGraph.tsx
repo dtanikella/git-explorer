@@ -10,13 +10,15 @@ import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays } from '@/lib/areas/renderer';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
-import { buildCrossAreaEdgeWeights } from '@/lib/areas/cross-area-edges';
+import { buildCrossAreaEdgeWeights, buildNodeCrossAreaTargets } from '@/lib/areas/cross-area-edges';
 import {
   createClusterPullForce,
   createAreaAttractForce,
   createParentPullForce,
   createAnchorRepelForce,
   createAreaPinForce,
+  createCrossAreaPullForce,
+  createAreaHullCollisionForce,
 } from '@/lib/areas/forces';
 
 type ConfigOrFactory = RepoGraphConfig | ((edges: AnalysisEdge[], nodes: AnalysisNode[]) => RepoGraphConfig);
@@ -357,10 +359,12 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     const anchors = buildAreaAnchors(areas, anchorsRef.current);
     anchorsRef.current = new Map(anchors.map((a) => [a.areaId, a]));
     const areasById = new Map(areas.map((a) => [a.id, a]));
-    const crossAreaWeights = buildCrossAreaEdgeWeights(
-      simEdges.map((e) => [e.source as unknown as string, e.target as unknown as string]),
-      nodeToAreas,
-    );
+    const simEdgePairs: Array<[string, string]> = simEdges.map((e) => [
+      e.source as unknown as string,
+      e.target as unknown as string,
+    ]);
+    const crossAreaWeights = buildCrossAreaEdgeWeights(simEdgePairs, nodeToAreas);
+    const nodeCrossAreaTargets = buildNodeCrossAreaTargets(simEdgePairs, nodeToAreas);
     const allSimNodes: Array<SimpleNode | AreaAnchorNode> = [...simNodes, ...anchors];
 
     const simulation = d3
@@ -383,11 +387,27 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
         }))
-      .force('anchorRepel', createAnchorRepelForce(anchors, cfg.forces.anchorRepel))
+      .force('anchorRepel', createAnchorRepelForce(anchors, simNodes, nodeToAreas, areasById, cfg.forces.anchorRepel))
       .force('clusterPull', createClusterPullForce(simNodes, nodeToAreas, anchorsRef.current, cfg.forces.areaCluster))
       .force('areaAttract', createAreaAttractForce(anchors, crossAreaWeights, cfg.forces.areaAttract))
       .force('parentPull', createParentPullForce(anchors, areasById, cfg.forces.areaParent))
-      .force('areaPin', createAreaPinForce(anchors, areasById, width, height, cfg.forces.areaPin));
+      .force('areaPin', createAreaPinForce(anchors, areasById, width, height, cfg.forces.areaPin))
+      .force('crossAreaPull', createCrossAreaPullForce(
+        simNodes,
+        nodeToAreas,
+        nodeCrossAreaTargets,
+        anchorsRef.current,
+        areasById,
+        width,
+        height,
+        cfg.forces.crossAreaPull,
+      ))
+      .force('areaHullCollision', createAreaHullCollisionForce(
+        simNodes,
+        areas,
+        areasById,
+        cfg.forces.areaHullCollision,
+      ));
 
     // Data Flow view only: pull nodes manually tagged with a `storage`/`api`/`ux` Area
     // toward a concentric ring keyed by that area's name (see DATA_FLOW_LAYER_RADII).

@@ -84,7 +84,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
       contains: [],
       parent: null,
       children: [],
-      clusterStrength: 0,
+      clusterStrength: 0.6,
     };
 
     setAreas([...areas, newArea]);
@@ -125,7 +125,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
       contains: [],
       parent: createChildParentId,
       children: [],
-      clusterStrength: 0,
+      clusterStrength: 0.6,
     };
 
     setAreas(

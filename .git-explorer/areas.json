@@ -25,7 +25,7 @@
         "selection-935e",
         "state-e58f"
       ],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "api-5d72",
@@ -60,7 +60,7 @@
       ],
       "parent": null,
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "ruby-956b",
@@ -169,7 +169,7 @@
       ],
       "parent": "analysis-0367",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "typescript-74fa",
@@ -259,7 +259,7 @@
       ],
       "parent": "analysis-0367",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "repograph-ff20",
@@ -405,7 +405,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "search-select-sidebar-141b",
@@ -455,7 +455,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "manage-selection-sidebar-4390",
@@ -515,7 +515,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "stats-tree-map-a9af",
@@ -546,7 +546,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "repo-selector-4268",
@@ -565,7 +565,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "services-ef1d",
@@ -578,7 +578,7 @@
       "children": [
         "analysis-0367"
       ],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "analysis-0367",
@@ -608,7 +608,7 @@
         "ruby-956b",
         "graph-config-3f36"
       ],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "selection-935e",
@@ -630,7 +630,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "graph-config-3f36",
@@ -669,7 +669,7 @@
       ],
       "parent": "analysis-0367",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "libraries-18f4",
@@ -682,7 +682,7 @@
       "children": [
         "tree-sitter-3e16"
       ],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "tree-sitter-3e16",
@@ -752,7 +752,7 @@
       ],
       "parent": "libraries-18f4",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     },
     {
       "id": "state-e58f",
@@ -810,7 +810,7 @@
       ],
       "parent": "ux-03cb",
       "children": [],
-      "clusterStrength": 0
+      "clusterStrength": 1
     }
   ]
 }

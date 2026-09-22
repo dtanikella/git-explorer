@@ -247,7 +247,7 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
         contains: [...effectiveNodeIds],
         parent: pendingCreate.parent,
         children: [...pendingCreate.children],
-        clusterStrength: 0,
+        clusterStrength: 0.6,
       };
       updatedAreas = [...updatedAreas, newArea];
       if (pendingCreate.parent) {
