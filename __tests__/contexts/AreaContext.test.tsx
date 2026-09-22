@@ -96,4 +96,34 @@ describe('AreaContext', () => {
     expect(result.current.runtimeState.get('payments')!.visible).toBe(true);
     expect(result.current.runtimeState.get('auth')).toBeDefined();
   });
+
+  it('setAreaColor updates runtime state immediately', () => {
+    const { result } = renderHook(() => useAreaStore(), { wrapper });
+    const authColorBefore = result.current.runtimeState.get('auth')!.color;
+
+    act(() => {
+      result.current.setAreaColor('auth', '#f59e0b');
+    });
+
+    // Runtime state should be updated immediately
+    expect(result.current.runtimeState.get('auth')!.color).toBe('#f59e0b');
+    // Area model should also be updated
+    const authArea = result.current.areas.find((a) => a.id === 'auth');
+    expect(authArea?.color).toBe('#f59e0b');
+    // Unchanged area should retain its old color
+    expect(result.current.runtimeState.get('utils')!.color).not.toBe('#f59e0b');
+  });
+
+  it('setAreaColor updates area model with the color field', () => {
+    const { result } = renderHook(() => useAreaStore(), { wrapper });
+
+    act(() => {
+      result.current.setAreaColor('auth', '#f59e0b');
+    });
+
+    const authArea = result.current.areas.find((a) => a.id === 'auth');
+    expect(authArea?.color).toBe('#f59e0b');
+    // Persistent save is triggered through the same setAreas path
+    // (verified by the area model being updated)
+  });
 });
