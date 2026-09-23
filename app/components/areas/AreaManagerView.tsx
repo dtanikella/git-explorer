@@ -25,7 +25,7 @@ function isDescendantOrSelf(areas: Area[], areaId: string, candidateId: string):
 
 
 export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
-  const { areas, runtimeState, setAreas, saveError, retrySave } = useAreaStore();
+  const { areas, runtimeState, setAreas, saveError, retrySave, setAreaColor } = useAreaStore();
   const [createMode, setCreateMode] = useState(false);
   const [newAreaName, setNewAreaName] = useState('');
   const [createChildParentId, setCreateChildParentId] = useState<string | null>(null);
@@ -541,6 +541,7 @@ export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
               onChangeType={handleChangeType}
               onRemoveMember={handleRemoveMember}
               onTogglePinZone={handleTogglePinZone}
+              onSetAreaColor={setAreaColor}
               createParentId={createChildParentId}
               newChildAreaName={newChildAreaName}
               onNewChildAreaNameChange={setNewChildAreaName}

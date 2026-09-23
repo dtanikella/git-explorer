@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useMemo, useCallback, useEffect, u
 import type { ReactNode } from 'react';
 import type { Area, AreaRuntimeState } from '@/lib/areas/types';
 import { buildNodeToAreas } from '@/lib/areas/lookup';
+import { hashToColor, getAreaColor } from '@/lib/areas/color';
 
 export interface AreaStoreValue {
   areas: Area[];
@@ -15,6 +16,7 @@ export interface AreaStoreValue {
   getAreasForNode(scipSymbol: string): Area[];
   saveError: string | null;
   retrySave(): void;
+  setAreaColor(areaId: string, color: string): void;
 }
 
 const AreaContext = createContext<AreaStoreValue | null>(null);
@@ -25,33 +27,12 @@ export function useAreaStore(): AreaStoreValue {
   return ctx;
 }
 
-function hashToColor(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    hash = hash & hash;
-  }
-  // Generate HSL with good saturation and lightness for overlay visibility
-  const hue = Math.abs(hash % 360);
-  const sat = 60 + Math.abs((hash >> 8) % 20); // 60-80%
-  const lit = 40 + Math.abs((hash >> 16) % 15); // 40-55%
-  // Convert HSL to hex
-  const h = hue, s = sat / 100, l = lit / 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
 function buildInitialRuntimeState(areas: Area[]): Map<string, AreaRuntimeState> {
   const map = new Map<string, AreaRuntimeState>();
   for (const area of areas) {
     map.set(area.id, {
       visible: true,
-      color: hashToColor(area.id),
+      color: getAreaColor(area),
     });
   }
   return map;
@@ -126,7 +107,7 @@ export function AreaProvider({ areas: initialAreas, repoPath, children, onAreasC
       const next = new Map<string, AreaRuntimeState>();
       for (const area of areas) {
         const existing = prev.get(area.id);
-        next.set(area.id, existing ?? { visible: true, color: hashToColor(area.id) });
+        next.set(area.id, existing ?? { visible: true, color: getAreaColor(area) });
       }
       return next;
     });
@@ -142,6 +123,24 @@ export function AreaProvider({ areas: initialAreas, repoPath, children, onAreasC
     },
     [queueSave, onAreasChange],
   );
+
+  const setAreaColor = useCallback((areaId: string, color: string) => {
+    const updated = areas.map((a) =>
+      a.id === areaId ? { ...a, color } : a,
+    );
+    setAreasState(updated);
+    queueSave(updated);
+    onAreasChange?.(updated);
+    // Update runtime state immediately for instant preview
+    setRuntimeState((prev) => {
+      const next = new Map(prev);
+      const state = next.get(areaId);
+      if (state) {
+        next.set(areaId, { ...state, color });
+      }
+      return next;
+    });
+  }, [areas, queueSave, onAreasChange]);
 
   const toggleVisibility = useCallback((areaId: string) => {
     setRuntimeState((prev) => {
@@ -172,7 +171,8 @@ export function AreaProvider({ areas: initialAreas, repoPath, children, onAreasC
     getAreasForNode,
     saveError,
     retrySave,
-  }), [areas, runtimeState, nodeToAreas, setAreas, toggleVisibility, getVisibleAreas, getAreasForNode, saveError, retrySave]);
+    setAreaColor,
+  }), [areas, runtimeState, nodeToAreas, setAreas, toggleVisibility, getVisibleAreas, getAreasForNode, saveError, retrySave, setAreaColor]);
 
   return (
     <AreaContext.Provider value={value}>

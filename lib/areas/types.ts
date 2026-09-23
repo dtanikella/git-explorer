@@ -20,6 +20,7 @@ export interface Area {
   children: string[];
   clusterStrength: number;
   pinnedZones?: number[];
+  color?: string;
 }
 
 export interface AreaFile {
