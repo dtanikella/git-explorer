@@ -25,6 +25,7 @@ import type { Area } from '@/lib/areas/types';
 import CompareBar from './components/diff/CompareBar';
 import DiffStatePanel from './components/diff/DiffStatePanel';
 import { useDiff } from './components/diff/useDiff';
+import { createDiffViewConfig } from '@/lib/diff/diff-view-config';
 
 const VIEW_OPTIONS: Record<string, {
   label: string;
@@ -87,6 +88,14 @@ export default function HomePage() {
 
   // Diff tab state
   const diffState = useDiff(repoPath);
+  // Diff view config factory: (edges, nodes) => config
+  // Cast to any because the diff view config works with any nodes carrying diffStatus
+  const diffViewConfig = useCallback(
+    (_edges: AnalysisEdge[], nodes: AnalysisNode[]) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      createDiffViewConfig(nodes as any, areasData),
+    [areasData],
+  );
 
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -248,11 +257,16 @@ export default function HomePage() {
                     if (diffState.result.state === 'no-changes') {
                       return <DiffStatePanel state="no-changes" />;
                     }
-                    // ok state — graph rendering placeholder for step 16
+                    // ok state — render repo graph with diff config
                     return (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                        Diff graph rendering (step 16).
-                      </div>
+                      <RepoGraph
+                        repoPath={repoPath}
+                        hideTestFiles={true}
+                        config={diffViewConfig}
+                        analysisData={diffState.result.data}
+                        loading={diffState.loading}
+                        error={null}
+                      />
                     );
                   })()}
                 </div>

@@ -47,6 +47,26 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
+/**
+ * Desaturate a hex color toward its own luminance gray by the given factor (0–1).
+ * At saturation 1 the color is unchanged; at 0 it becomes the gray of equal luminance.
+ */
+function saturateColor(hex: string, saturation: number): string {
+  if (saturation >= 1) return hex;
+
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+
+  const gray = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+
+  const nr = Math.round(gray + (r - gray) * saturation);
+  const ng = Math.round(gray + (g - gray) * saturation);
+  const nb = Math.round(gray + (b - gray) * saturation);
+
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}
+
 export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -387,7 +407,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
-        c.fillStyle = nStyle.color;
+        // Apply saturation if specified: desaturate toward luminance gray
+        const fillColor = (nStyle.saturation != null && nStyle.saturation < 1)
+          ? saturateColor(nStyle.color, nStyle.saturation)
+          : nStyle.color;
+        c.fillStyle = fillColor;
         c.globalAlpha = finalAlpha;
         c.fill();
         c.globalAlpha = 1.0;
@@ -401,6 +425,17 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           c.textAlign = 'center';
           c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
           c.globalAlpha = 1.0;
+        }
+
+        // Ghost ring for deleted nodes
+        if (nStyle.ghostRing) {
+          c.beginPath();
+          c.arc(n.x, n.y, nStyle.radius + 3, 0, 2 * Math.PI);
+          c.strokeStyle = nStyle.color;
+          c.lineWidth = 1.5;
+          c.setLineDash([3, 3]);
+          c.stroke();
+          c.setLineDash([]);
         }
 
         if (selectedNodeIdsRef.current.has(n.id)) {
