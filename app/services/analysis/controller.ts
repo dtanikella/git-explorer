@@ -20,6 +20,21 @@ export interface AnalysisOptions {
   hideTestFiles?: boolean;
 }
 
+/**
+ * Runs the full analysis pipeline for a repository: detects language,
+ * delegates to the language-specific controller, and returns the result.
+ *
+ * @remarks
+ * Validates the path exists, detects the language (TypeScript or Ruby),
+ * and calls the appropriate sub-controller.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @param options - Optional analysis options (e.g., `hideTestFiles`).
+ * @returns The full {@link AnalysisResult} with nodes, edges, and metadata.
+ * @throws {@link AnalysisError} When the path does not exist.
+ * @throws {@link UnsupportedLanguageError} When language cannot be detected.
+ * @see commit 4dff751
+ */
 export async function analyzeRepo(
   repoPath: string,
   options?: AnalysisOptions,

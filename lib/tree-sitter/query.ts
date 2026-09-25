@@ -23,6 +23,12 @@ export class QueryWrapper {
     this._languageName = languageName;
   }
 
+  /**
+   * Runs the query against a node and returns all matches.
+   *
+   * @param node - The root node to query.
+   * @returns An array of {@link QueryMatch} objects.
+   */
   matches(node: NodeWrapper): QueryMatch[] {
     const rawMatches = this._query.matches(node.raw);
     return rawMatches.map(m => ({
@@ -34,6 +40,12 @@ export class QueryWrapper {
     }));
   }
 
+  /**
+   * Runs the query against a node and returns all captures.
+   *
+   * @param node - The root node to query.
+   * @returns An array of {@link QueryCapture} objects.
+   */
   captures(node: NodeWrapper): QueryCapture[] {
     const rawCaptures = this._query.captures(node.raw);
     return rawCaptures.map(c => ({

@@ -33,10 +33,20 @@ export class ParserWrapper {
     };
   }
 
+  /**
+   * Sets the timeout for parse operations in microseconds.
+   *
+   * @param timeout - Timeout in microseconds; 0 means no timeout.
+   */
   setTimeoutMicros(timeout: number): void {
     this._parser.setTimeoutMicros(timeout);
   }
 
+  /**
+   * Returns the language instance this parser was created with.
+   *
+   * @returns The tree-sitter {@link Language} instance.
+   */
   getLanguage(): Language {
     return this._parser.getLanguage();
   }
