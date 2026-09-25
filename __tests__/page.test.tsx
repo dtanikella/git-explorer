@@ -78,6 +78,34 @@ jest.mock('@/app/components/repo-graph/RepoGraph', () => {
   };
 });
 
+// Mock diff components to avoid real network calls in page tests
+jest.mock('@/app/components/diff/CompareBar', () => {
+  return function MockCompareBar() {
+    return <div data-testid="compare-bar" />;
+  };
+});
+
+jest.mock('@/app/components/diff/DiffStatePanel', () => {
+  return function MockDiffStatePanel({ state }: { state: string }) {
+    return <div data-testid="diff-state-panel" data-state={state} />;
+  };
+});
+
+jest.mock('@/app/components/diff/useDiff', () => ({
+  useDiff: () => ({
+    refs: null,
+    base: '',
+    compare: '',
+    result: null,
+    loading: false,
+    error: null,
+    shaValidation: null,
+    setBase: jest.fn(),
+    setCompare: jest.fn(),
+    validateSha: jest.fn(),
+  }),
+}));
+
 // Mock TabSidebar
 jest.mock('@/app/components/TabSidebar', () => {
   return function MockTabSidebar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
@@ -85,6 +113,8 @@ jest.mock('@/app/components/TabSidebar', () => {
       <div data-testid="tab-sidebar">
         <button onClick={() => onTabChange('graph')}>Graph</button>
         <button onClick={() => onTabChange('stats')}>Stats</button>
+        <button onClick={() => onTabChange('areas')}>Areas</button>
+        <button onClick={() => onTabChange('diff')}>Diff</button>
       </div>
     );
   };

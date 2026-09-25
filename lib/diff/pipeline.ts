@@ -2,7 +2,6 @@ import type { AnalysisResult } from '@/lib/analysis/types';
 import type {
   GitAnalysisResult,
   LabelledDeclaration,
-  DiffCounts,
   DiffResponse,
 } from './types';
 import { listChangedTsFiles, type ChangedFile } from './git-diff';
@@ -53,7 +52,7 @@ export async function runDiffPipeline(
   let changedFiles: ChangedFile[];
   try {
     changedFiles = await listChangedTsFiles(repoPath, base, compare, { hideTestFiles });
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof DifftUnavailableError) {
       return {
         success: false,
@@ -63,16 +62,17 @@ export async function runDiffPipeline(
       };
     }
 
+    const error = err as { message?: string; stderr?: string };
     // Check for bad ref (git rev-parse failure)
     if (
-      err.message?.includes('fatal:') ||
-      err.stderr?.includes('fatal:')
+      error.message?.includes('fatal:') ||
+      error.stderr?.includes('fatal:')
     ) {
       return {
         success: false,
         state: 'error',
         code: 'BAD_REF',
-        error: `Invalid ref: ${err.stderr || err.message}`,
+        error: `Invalid ref: ${error.stderr || error.message}`,
       };
     }
 
@@ -80,7 +80,7 @@ export async function runDiffPipeline(
       success: false,
       state: 'error',
       code: 'ANALYSIS_FAILED',
-      error: err.message || 'Unknown error listing changed files',
+      error: error.message || 'Unknown error listing changed files',
     };
   }
 
@@ -110,12 +110,13 @@ export async function runDiffPipeline(
         changedFiles: 0,
         unmatched: [],
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { message?: string };
       return {
         success: false,
         state: 'error',
         code: 'ANALYSIS_FAILED',
-        error: err.message || 'Analysis failed',
+        error: error.message || 'Analysis failed',
       };
     }
   }
@@ -132,12 +133,13 @@ export async function runDiffPipeline(
       analyzeCommit(repoPath, compare, { hideTestFiles }),
       analyzeCommit(repoPath, base, { hideTestFiles }),
     ]);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { message?: string };
     return {
       success: false,
       state: 'error',
       code: 'ANALYSIS_FAILED',
-      error: err.message || 'Analysis failed',
+      error: error.message || 'Analysis failed',
     };
   }
 
