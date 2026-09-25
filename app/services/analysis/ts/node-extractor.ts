@@ -52,6 +52,14 @@ const METHOD_LIKE_TYPES = new Set<SyntaxType>([
   SyntaxType.CONSTRUCTOR,
 ]);
 
+/**
+ * Classifies a method_definition node as CONSTRUCTOR, GETTER, SETTER, or
+ * METHOD based on its name and child node types.
+ *
+ * @param declNode - The method_definition AST node.
+ * @param name - The method name text.
+ * @returns The appropriate {@link SyntaxType}.
+ */
 function classifyMethodDefinition(declNode: NodeWrapper, name: string): SyntaxType {
   if (name === 'constructor') return SyntaxType.CONSTRUCTOR;
   for (const child of declNode.children) {
@@ -67,6 +75,13 @@ function classifyMethodDefinition(declNode: NodeWrapper, name: string): SyntaxTy
 
 type ScipDefLookup = Map<string, { symbol: string }>; // key: "line:col"
 
+/**
+ * Builds a lookup map from SCIP occurrence position to symbol, filtering
+ * to only definition occurrences.
+ *
+ * @param occurrences - SCIP occurrence array with range and symbol data.
+ * @returns A map keyed by `"line:col"` to the symbol string.
+ */
 function buildScipDefLookup(
   occurrences: Array<{ range: number[]; symbol: string; symbolRoles: number }>,
 ): ScipDefLookup {
@@ -84,17 +99,35 @@ function buildScipDefLookup(
 // AST Helpers
 // ============================================================================
 
+/**
+ * Gets the identifier text from a node's `name` child field.
+ *
+ * @param node - The AST node with a `name` child field.
+ * @returns The name text, or null if no name field exists.
+ */
 function getIdentifierName(node: NodeWrapper): string | null {
   const nameChild = node.childForFieldName('name');
   return nameChild ? nameChild.text : null;
 }
 
+/**
+ * Checks whether a node is wrapped in an `export_statement`.
+ *
+ * @param node - The node to check.
+ * @returns True when the parent is an export statement.
+ */
 function isExported(node: NodeWrapper): boolean {
   const parent = node.parent;
   if (!parent) return false;
   return parent.type === 'export_statement';
 }
 
+/**
+ * Checks whether a node has an `async` modifier child.
+ *
+ * @param node - The node to check.
+ * @returns True when a child node has type `async`.
+ */
 function isAsyncFunction(node: NodeWrapper): boolean {
   for (const child of node.children) {
     if (child.type === 'async') return true;
@@ -102,6 +135,12 @@ function isAsyncFunction(node: NodeWrapper): boolean {
   return false;
 }
 
+/**
+ * Extracts parameter information from a function-like node.
+ *
+ * @param node - The function-like AST node with a `parameters` child.
+ * @returns An array of {@link ParamInfo} with names and optional types.
+ */
 function extractParams(node: NodeWrapper): ParamInfo[] {
   const params: ParamInfo[] = [];
   const paramsNode = node.childForFieldName('parameters');
@@ -123,6 +162,12 @@ function extractParams(node: NodeWrapper): ParamInfo[] {
   return params;
 }
 
+/**
+ * Extracts the return type annotation text from a function-like node.
+ *
+ * @param node - The function-like AST node.
+ * @returns The type text, or null if no return type annotation exists.
+ */
 function extractReturnType(node: NodeWrapper): string | null {
   const returnType = node.childForFieldName('return_type');
   if (!returnType) return null;
@@ -168,6 +213,16 @@ export function extractNodes(input: NodeExtractionInput): NodeExtractionOutput {
   return { nodes, nodeMap };
 }
 
+/**
+ * Walks all declaration-type descendant nodes in a tree-sitter AST and
+ * builds analysis nodes for each one.
+ *
+ * @param rootNode - The root tree-sitter node of a parsed file.
+ * @param filePath - The file path for node metadata.
+ * @param defLookup - SCIP definition lookup built by {@link buildScipDefLookup}.
+ * @param nodes - Output array, mutated in place.
+ * @param nodeMap - Output map, mutated in place.
+ */
 function walkDeclarations(
   rootNode: NodeWrapper,
   filePath: string,

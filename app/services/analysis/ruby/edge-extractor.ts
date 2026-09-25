@@ -158,6 +158,16 @@ function parseRubySymbol(symbol: string): { scope: string; name: string; isSingl
 /**
  * Find the enclosing scope for a given position in the file.
  */
+/**
+ * Finds the function/method body that encloses a given source position.
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line number.
+ * @param col - 0-indexed column number.
+ * @param filePath - Path for error context.
+ * @returns The scope path and singleton status, or null if not inside a
+ *   function/method body.
+ */
 function findEnclosingScope(
   tree: TreeWrapper,
   line: number,
@@ -203,6 +213,15 @@ function findEnclosingScope(
 // Find enclosing method node
 // ============================================================================
 
+/**
+ * Finds the nearest enclosing Ruby AST node (method, class, or block)
+ * at a given source position.
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line number.
+ * @param col - 0-indexed column number.
+ * @returns The closest enclosing node, or null.
+ */
 function findEnclosingRubyNode(
   tree: TreeWrapper,
   line: number,
