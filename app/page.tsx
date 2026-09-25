@@ -215,6 +215,15 @@ export default function HomePage() {
                   nodes={analysisData?.nodes ?? []}
                 />
               </AreaProvider>
+            ) : activeTab === 'diff' ? (
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                {/* Compare bar — step 14 */}
+                <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-md overflow-hidden">
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                    Choose a branch to compare.
+                  </div>
+                </div>
+              </div>
             ) : activeTab === 'graph' ? (
               <SelectionProvider
                 nodes={analysisData?.nodes ?? []}
