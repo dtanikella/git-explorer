@@ -1,12 +1,19 @@
-// Guards against a recurring failure: tree-sitter's native binding is compiled
-// from source (node-gyp), so it's tied to the exact Node ABI active at `npm
-// install` time. This repo's dev/build/test scripts force Node 20 at runtime
-// (see .nvmrc), so if `npm install` ran under a different Node, the binding
-// segfaults the whole process on first use with no JS-catchable error.
-//
-// This runs as `postinstall`: try loading tree-sitter in a subprocess (so a
-// segfault here doesn't take down npm install itself); if it crashes, rebuild
-// it for the current Node and verify again before giving up.
+/**
+ * Post-install guard: verify tree-sitter native binding works under the
+ * current Node ABI, and rebuild if not.
+ *
+ * Usage: run via `postinstall` in package.json, not directly.
+ *
+ * Guards against a recurring failure: tree-sitter's native binding is compiled
+ * from source (node-gyp), so it's tied to the exact Node ABI active at `npm
+ * install` time. This repo's dev/build/test scripts force Node 20 at runtime
+ * (see .nvmrc), so if `npm install` ran under a different Node, the binding
+ * segfaults the whole process on first use with no JS-catchable error.
+ *
+ * This runs as `postinstall`: try loading tree-sitter in a subprocess (so a
+ * segfault here doesn't take down npm install itself); if it crashes, rebuild
+ * it for the current Node and verify again before giving up.
+ */
 
 const { spawnSync } = require("child_process");
 
