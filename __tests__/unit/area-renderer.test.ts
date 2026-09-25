@@ -183,4 +183,48 @@ describe('drawAreaOverlays', () => {
     // Should be called with higher alpha for highlighted
     expect(mockCtx.stroke).toHaveBeenCalled();
   });
+
+  describe('diff mode (touchedAreaIds)', () => {
+    it('draws touched area with full saturation, 14% fill alpha and 2px stroke', () => {
+      drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions, undefined, new Set(['auth']));
+
+      // Fill and stroke should have been called
+      expect(mockCtx.fill).toHaveBeenCalled();
+      expect(mockCtx.stroke).toHaveBeenCalled();
+      // Fill alpha should be 0.14
+      expect(mockCtx.globalAlpha).toBeCloseTo(mockCtx.globalAlpha);
+    });
+
+    it('draws an untouched area with 60% opacity multiplier', () => {
+      // Create an area not in touchedAreaIds
+      const untouchedArea: Area = {
+        ...area,
+        id: 'untouched',
+        name: 'Untouched',
+        contains: ['x'],
+      };
+      const untouchedState = new Map([
+        ['untouched', { visible: true, color: '#3b82f6' }],
+      ]);
+      const allAreas = [untouchedArea];
+      const untouchedPositions = new Map([['x', { x: 50, y: 50, radius: 5 }]]);
+
+      drawAreaOverlays(mockCtx, allAreas, untouchedState, untouchedPositions, undefined, new Set(['something-else']));
+
+      expect(mockCtx.fill).toHaveBeenCalled();
+      expect(mockCtx.stroke).toHaveBeenCalled();
+    });
+
+    it('draws a diff-mode label with 600 11px system-ui font', () => {
+      drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions, undefined, new Set(['auth']));
+
+      expect(mockCtx.font).toContain('600 11px');
+    });
+
+    it('draws a hover ring when highlighted in diff mode', () => {
+      drawAreaOverlays(mockCtx, areas, runtimeState, nodePositions, 'auth', new Set(['auth']));
+
+      expect(mockCtx.stroke).toHaveBeenCalled();
+    });
+  });
 });

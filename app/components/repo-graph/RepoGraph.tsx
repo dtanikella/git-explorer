@@ -345,7 +345,22 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
-      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current);
+      // In diff mode, compute touched area ids from node diff statuses
+      const hasDiffStatus = simNodes.some((n) => (n.data as any).diffStatus !== undefined);
+      let touchedAreaIds: Set<string> | undefined;
+      if (hasDiffStatus) {
+        const changedNodeSymbols = new Set(
+          simNodes
+            .filter((n) => (n.data as any).diffStatus && (n.data as any).diffStatus !== 'unchanged')
+            .map((n) => n.id),
+        );
+        touchedAreaIds = new Set(
+          areasRef.current
+            .filter((a) => a.contains.some((s) => changedNodeSymbols.has(s)))
+            .map((a) => a.id),
+        );
+      }
+      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current, touchedAreaIds);
 
       // Draw edges
       for (const e of simEdges) {
