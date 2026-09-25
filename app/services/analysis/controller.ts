@@ -1,3 +1,14 @@
+/**
+ * Top-level analysis controller: detects language and dispatches to
+ * the appropriate language-specific pipeline.
+ *
+ * @remarks
+ * Consumed by the repo-analysis API route. Delegates to
+ * {@link analyzeTsRepo} or {@link analyzeRubyRepo} based on language
+ * detection.
+ *
+ * @packageDocumentation
+ */
 import * as fs from 'fs/promises';
 import type { AnalysisResult } from '@/lib/analysis/types';
 import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
