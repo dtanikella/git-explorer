@@ -19,6 +19,14 @@ The analysis uses a real [SCIP](https://github.com/sourcegraph/scip) index and a
 - **Node.js** (recommended: **20.x**; other versions may work but are not regularly tested)
 - **npm** (comes with Node)
 - **Git** installed and available in `PATH`
+- **difftastic >= 0.71.0** (binary named `difft`) on `PATH`. Install with:
+  ```bash
+  brew install difftastic
+  ```
+  or
+  ```bash
+  cargo install difftastic
+  ```
 - A modern web browser
 
 ## Quick start
