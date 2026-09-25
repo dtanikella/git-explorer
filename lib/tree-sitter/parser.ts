@@ -14,6 +14,13 @@ export class ParserWrapper {
     this._languageName = languageName;
   }
 
+  /**
+   * Parses source text and returns the parse result.
+   *
+   * @param source - The source code to parse.
+   * @returns A {@link ParseResult} with tree, error flag, and language.
+   * @throws {@link TreeSitterParseError} When parsing fails or times out.
+   */
   parse(source: string): ParseResult {
     const tree = this._parser.parse(source);
     if (!tree) {

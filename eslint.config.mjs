@@ -101,7 +101,7 @@ const eslintConfig = defineConfig([
       "jsdoc/check-param-names": ["warn", { checkDestructured: false }],
 
       // === No type annotations in JSDoc (TSDoc style) ===
-      "jsdoc/no-types": "warn",
+      "jsdoc/no-types": "error",
 
       // === Disable cosmetic/formatting rules that produce excessive noise ===
       "jsdoc/tag-lines": "off",
