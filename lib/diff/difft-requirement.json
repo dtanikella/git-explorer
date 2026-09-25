@@ -1,0 +1,4 @@
+{
+  "minVersion": "0.71.0",
+  "install": ["brew install difftastic", "cargo install difftastic"]
+}

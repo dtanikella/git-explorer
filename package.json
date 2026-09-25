@@ -12,7 +12,7 @@
     "lint": "eslint",
     "test": "source ~/.nvm/nvm.sh && nvm use 20 && jest",
     "test:watch": "source ~/.nvm/nvm.sh && nvm use 20 && jest --watch",
-    "postinstall": "node scripts/verify-native-bindings.js"
+    "postinstall": "node scripts/verify-native-bindings.js && node scripts/check-difftastic.js"
   },
   "dependencies": {
     "@c4312/scip": "^0.1.0",
