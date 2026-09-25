@@ -8,7 +8,7 @@ import type { TabId } from './components/TabSidebar';
 import GraphToolbar from './components/graph/GraphToolbar';
 import StatsToolbar from './components/stats/StatsToolbar';
 import StatsTreemap from './components/stats/StatsTreemap';
-import { SelectionProvider, useSelection } from './contexts/SelectionContext';
+import { SelectionProvider, useSelection, useSelectionState } from './contexts/SelectionContext';
 import SearchSelectSidebar from './components/selection/SearchSelectSidebar';
 import ManageSelectionSidebar from './components/selection/ManageSelectionSidebar';
 import AreaManagerView from './components/areas/AreaManagerView';
@@ -178,7 +178,7 @@ export default function HomePage() {
 
   const graphVisibleNodeIds = useMemo(() => computeVisibleNodeIds(analysisData), [computeVisibleNodeIds, analysisData]);
 
-  // Git diff: the changed nodes are permanently selected in the graph
+  // Git diff data
   const diffData = diffState.result?.success && diffState.result.state === 'ok' ? diffState.result.data : null;
   const diffVisibleNodeIds = useMemo(() => computeVisibleNodeIds(diffData), [computeVisibleNodeIds, diffData]);
   const diffLockedNodeIds = useMemo(
@@ -189,6 +189,22 @@ export default function HomePage() {
     ),
     [diffData],
   );
+
+  // Per-tab selection state — hooks always called at top level
+  const graphSelectionState = useSelectionState({
+    nodes: analysisData?.nodes ?? [],
+    edges: analysisData?.edges ?? [],
+    visibleNodeIds: graphVisibleNodeIds,
+    areas: areasData,
+  });
+
+  const diffSelectionState = useSelectionState({
+    nodes: diffData?.nodes ?? [],
+    edges: diffData?.edges ?? [],
+    visibleNodeIds: diffVisibleNodeIds,
+    areas: areasData,
+    seedNodeIds: diffLockedNodeIds,
+  });
 
   const handleRepositorySelect = useCallback((path: string) => {
     setRepoPath(path);
@@ -204,22 +220,16 @@ export default function HomePage() {
   }, []);
 
   // The RepoGraph workspace shared by the graph tab and the git diff tab.
-  // In diff mode `lockedNodeIds` are permanently selected on top of any user selection.
+  // Takes a pre-built selection value for per-tab persistence.
   const renderGraphView = (opts: {
     data: AnalysisResult | null;
     visibleNodeIds: Set<string>;
     isLoading: boolean;
     err: string | null;
-    lockedNodeIds?: Set<string>;
+    selectionValue: ReturnType<typeof useSelectionState>;
     bridgeSelection?: boolean;
   }) => (
-    <SelectionProvider
-      nodes={opts.data?.nodes ?? []}
-      edges={opts.data?.edges ?? []}
-      visibleNodeIds={opts.visibleNodeIds}
-      lockedNodeIds={opts.lockedNodeIds}
-      areas={areasData}
-    >
+    <SelectionProvider value={opts.selectionValue}>
       <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
         {opts.bridgeSelection && (
           <SelectionBridge
@@ -340,7 +350,7 @@ export default function HomePage() {
                       visibleNodeIds: diffVisibleNodeIds,
                       isLoading: false,
                       err: null,
-                      lockedNodeIds: diffLockedNodeIds,
+                      selectionValue: diffSelectionState,
                     });
                   })()}
                 </div>
@@ -351,6 +361,7 @@ export default function HomePage() {
                 visibleNodeIds: graphVisibleNodeIds,
                 isLoading: loading,
                 err: error,
+                selectionValue: graphSelectionState,
                 bridgeSelection: true,
               })
             ) : (

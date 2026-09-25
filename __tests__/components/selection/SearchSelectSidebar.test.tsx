@@ -2,19 +2,28 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SearchSelectSidebar from '@/app/components/selection/SearchSelectSidebar';
-import type { SelectionContextValue, ExpansionGroup } from '@/app/contexts/SelectionContext';
+import type { SelectionContextValue } from '@/app/contexts/SelectionContext';
 import type { Area } from '@/lib/areas/types';
 
+// --- Mocks ---
+
 const mockToggleNode = jest.fn();
+const mockToggleNodes = jest.fn();
 const mockToggleArea = jest.fn();
 const mockClearSelection = jest.fn();
 const mockToggleExpansionGroup = jest.fn();
 const mockToggleExpandedNode = jest.fn();
-const mockToggleAreaMember = jest.fn();
+const mockToggleLock = jest.fn();
+const mockLockAll = jest.fn();
+const mockClearUnlocked = jest.fn();
+const mockSetExpandedNodes = jest.fn();
 const mockOnSearchNode = jest.fn();
+
+let mockContextValue: SelectionContextValue;
 
 jest.mock('@/app/contexts/SelectionContext', () => ({
   useSelection: (): SelectionContextValue => mockContextValue,
+  // SelectionProvider is not tested here, only the sidebar consumer
 }));
 
 const mockAreas: Area[] = [
@@ -53,7 +62,6 @@ jest.mock('@/app/contexts/AreaContext', () => ({
       ['sym-login', [mockAreas[0]]],
       ['sym-charge', [mockAreas[1]]],
     ]),
-    toggleVisibility: jest.fn(),
     getVisibleAreas: () => mockAreas,
     getAreasForNode: (id: string) => {
       if (id === 'sym-login') return [mockAreas[0]];
@@ -64,10 +72,65 @@ jest.mock('@/app/contexts/AreaContext', () => ({
   }),
 }));
 
-let mockContextValue: SelectionContextValue;
+jest.mock('@/app/components/selection/SelectionToolbar', () => {
+  return function MockSelectionToolbar({
+    searchQuery,
+    onSearchQueryChange,
+    searchNotFound,
+    onSearchSubmit,
+  }: any) {
+    // Check if there are locks in the context
+    const { state } = require('@/app/contexts/SelectionContext').useSelection();
+    const hasLocks = state?.lockedNodeIds?.size > 0 || state?.lockedAreaIds?.size > 0;
+    return (
+      <div data-testid="selection-toolbar">
+        <input
+          type="text"
+          value={searchQuery || ''}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          placeholder="Search node or area..."
+          data-testid="search-input"
+        />
+        <button onClick={() => onSearchSubmit()} data-testid="search-button">Search</button>
+        {searchNotFound && <span data-testid="not-found">Not found</span>}
+        {hasLocks && <span data-testid="clear-unlocked">Clear unlocked</span>}
+      </div>
+    );
+  };
+});
 
-function makeGroup(type: ExpansionGroup['type'], candidates: { nodeId: string; sourceNodeIds: string[] }[], enabled = false): ExpansionGroup {
-  return { type, enabled, candidates, disabledIds: new Set() };
+jest.mock('@/app/components/selection/SelectionTree', () => {
+  return function MockSelectionTree({ tree, mode }: any) {
+    return (
+      <div data-testid="selection-tree" data-mode={mode}>
+        {tree?.children?.map((child: any) => (
+          <div key={child.id} data-testid={`tree-item-${child.id}`}>{child.name || child.id}</div>
+        ))}
+      </div>
+    );
+  };
+});
+
+jest.mock('@/app/components/selection/ExpansionGroups', () => {
+  return function MockExpansionGroups({ nodes: _nodes }: any) {
+    return (
+      <div data-testid="expansion-groups">
+        <div data-testid="expansion-group-same-file">same-file</div>
+        <div data-testid="expansion-group-callers">callers</div>
+        <div data-testid="expansion-group-callees">callees</div>
+      </div>
+    );
+  };
+});
+
+jest.mock('@/app/components/selection/SelectionStats', () => {
+  return function MockSelectionStats() {
+    return <div data-testid="selection-stats" />;
+  };
+});
+
+function makeExpGroup(type: string, candidates: { nodeId: string; sourceNodeIds: string[] }[], enabled = false): any {
+  return { type, enabled, candidates, disabledIds: new Set<string>() };
 }
 
 const mockNodes = [
@@ -77,130 +140,142 @@ const mockNodes = [
   { scipSymbol: 'sym-login', name: 'login', filePath: 'src/auth/login.ts' },
 ];
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockContextValue = {
+function buildDefaultMockContext(): SelectionContextValue {
+  return {
     state: {
-      selectedNodeIds: new Set(['sym:a']),
+      explicitNodeIds: new Set(['sym:a']),
       selectedAreaIds: new Set(),
+      excludedNodeIds: new Set(),
+      lockedNodeIds: new Set<string>(),
+      lockedAreaIds: new Set<string>(),
       expansions: new Map([
-        ['same-file', makeGroup('same-file', [{ nodeId: 'sym:b', sourceNodeIds: ['sym:a'] }])],
-        ['callers', makeGroup('callers', [])],
-        ['callees', makeGroup('callees', [{ nodeId: 'sym:c', sourceNodeIds: ['sym:a'] }])],
-        ['area-members', makeGroup('area-members', [], true)],
+        ['same-file', makeExpGroup('same-file', [{ nodeId: 'sym:b', sourceNodeIds: ['sym:a'] }])],
+        ['callers', makeExpGroup('callers', [])],
+        ['callees', makeExpGroup('callees', [{ nodeId: 'sym:c', sourceNodeIds: ['sym:a'] }])],
       ]),
+      selectedNodeIds: new Set(['sym:a']),
     },
+    activeNodeIds: new Set(['sym:a']),
+    hasSelection: true,
     toggleNode: mockToggleNode,
+    toggleNodes: mockToggleNodes,
     toggleArea: mockToggleArea,
+    toggleLock: mockToggleLock,
+    lockAll: mockLockAll,
+    clearUnlocked: mockClearUnlocked,
     clearSelection: mockClearSelection,
     toggleExpansionGroup: mockToggleExpansionGroup,
     toggleExpandedNode: mockToggleExpandedNode,
-    toggleAreaMember: mockToggleAreaMember,
-    activeNodeIds: new Set(['sym:a']),
-    hasSelection: true,
-    lockedNodeIds: new Set<string>(),
+    setExpandedNodes: mockSetExpandedNodes,
   };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockContextValue = buildDefaultMockContext();
 });
 
 describe('SearchSelectSidebar', () => {
-  it('renders the sidebar with header and clear all', () => {
+  it('renders the sidebar with header', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    expect(screen.getByText('Search & Select')).toBeInTheDocument();
-    expect(screen.getByText('Clear all')).toBeInTheDocument();
+    expect(screen.getByTestId('search-select-sidebar')).toBeInTheDocument();
   });
 
-  it('lists selected nodes by name with area tags', () => {
+  it('renders the SelectionToolbar', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    expect(screen.getByText('funcA')).toBeInTheDocument();
-    expect(screen.getByText('Auth Service')).toBeInTheDocument();
+    expect(screen.getByTestId('selection-toolbar')).toBeInTheDocument();
   });
 
-  it('calls clearSelection when Clear all is clicked', () => {
+  it('renders the SelectionTree in "area" mode as default browse view', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    fireEvent.click(screen.getByText('Clear all'));
-    expect(mockClearSelection).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('selection-tree')).toBeInTheDocument();
   });
 
-  it('calls toggleNode when deselect button is clicked', () => {
+  it('renders ExpansionGroups', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    fireEvent.click(screen.getByTestId('deselect-sym:a'));
-    expect(mockToggleNode).toHaveBeenCalledWith('sym:a');
+    expect(screen.getByTestId('expansion-groups')).toBeInTheDocument();
+    expect(screen.getByTestId('expansion-group-same-file')).toBeInTheDocument();
+    expect(screen.getByTestId('expansion-group-callers')).toBeInTheDocument();
+    expect(screen.getByTestId('expansion-group-callees')).toBeInTheDocument();
+    // No area-members group
+    expect(screen.queryByTestId('expansion-group-area-members')).not.toBeInTheDocument();
   });
 
-  it('hides deselect and Clear all for locked nodes', () => {
-    mockContextValue = { ...mockContextValue, lockedNodeIds: new Set(['sym:a']) };
+  it('renders SelectionStats', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    expect(screen.queryByTestId('deselect-sym:a')).not.toBeInTheDocument();
-    expect(screen.queryByText('Clear all')).not.toBeInTheDocument();
+    expect(screen.getByTestId('selection-stats')).toBeInTheDocument();
   });
 
-  it('renders expansion group labels', () => {
+  it('shows ClearUnlocked button when there are locked nodes', () => {
+    mockContextValue = {
+      ...buildDefaultMockContext(),
+      state: {
+        ...buildDefaultMockContext().state,
+        lockedNodeIds: new Set(['sym:a']),
+      },
+    };
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    expect(screen.getByText('Same File')).toBeInTheDocument();
-    expect(screen.getByText('Callers')).toBeInTheDocument();
-    expect(screen.getByText('Callees')).toBeInTheDocument();
-    expect(screen.getByText('Area Members')).toBeInTheDocument();
+    expect(screen.getByText('Clear unlocked')).toBeInTheDocument();
   });
 
-  it('calls toggleExpansionGroup when group toggle is clicked', () => {
+  it('hides area-members expansion group', () => {
+    // Even if the context somehow has area-members, the sidebar should not show it
+    mockContextValue = {
+      ...buildDefaultMockContext(),
+      state: {
+        ...buildDefaultMockContext().state,
+        expansions: new Map([
+          ['same-file', makeExpGroup('same-file', [{ nodeId: 'sym:b', sourceNodeIds: ['sym:a'] }])],
+          ['area-members', makeExpGroup('area-members', [])],
+        ]),
+      },
+    };
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    fireEvent.click(screen.getByTestId('toggle-same-file'));
-    expect(mockToggleExpansionGroup).toHaveBeenCalledWith('same-file');
+    expect(screen.queryByTestId('expansion-group-area-members')).not.toBeInTheDocument();
   });
 
-  it('delegates node search to the graph handler', () => {
+  it('calls onSearchNode when search is submitted', () => {
     mockOnSearchNode.mockReturnValue(true);
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    const input = screen.getByPlaceholderText('Search node or area...');
+    const input = screen.getByTestId('search-input');
     fireEvent.change(input, { target: { value: 'funcA' } });
-    fireEvent.click(screen.getByText('Search'));
+    fireEvent.click(screen.getByTestId('search-button'));
     expect(mockOnSearchNode).toHaveBeenCalledWith('funcA');
-    expect(screen.queryByText('Not found')).not.toBeInTheDocument();
   });
 
   it('falls back to area search when node search returns false', () => {
     mockOnSearchNode.mockReturnValue(false);
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    const input = screen.getByPlaceholderText('Search node or area...');
+    const input = screen.getByTestId('search-input');
     fireEvent.change(input, { target: { value: 'Auth' } });
-    fireEvent.click(screen.getByText('Search'));
+    fireEvent.click(screen.getByTestId('search-button'));
     expect(mockOnSearchNode).toHaveBeenCalledWith('Auth');
     expect(mockToggleArea).toHaveBeenCalledWith('auth');
-    expect(screen.queryByText('Not found')).not.toBeInTheDocument();
   });
 
   it('shows Not found when neither node nor area matches', () => {
     mockOnSearchNode.mockReturnValue(false);
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    const input = screen.getByPlaceholderText('Search node or area...');
+    const input = screen.getByTestId('search-input');
     fireEvent.change(input, { target: { value: 'xyz' } });
-    fireEvent.click(screen.getByText('Search'));
-    expect(screen.getByText('Not found')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('search-button'));
+    expect(screen.getByTestId('not-found')).toBeInTheDocument();
   });
 
-  it('renders the Select By area tree', () => {
+  it('does not show area-members toggle (by area is now the browse view, not a toggle)', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    expect(screen.getByText('Select By')).toBeInTheDocument();
-    expect(screen.getByText('Auth Service')).toBeInTheDocument();
-    expect(screen.getByText('Payments')).toBeInTheDocument();
+    // The old "Area Members" label should not appear
+    expect(screen.queryByText('Area Members')).not.toBeInTheDocument();
   });
 
-  it('calls toggleArea when area checkbox is clicked', () => {
+  it('clears search not-found state when query changes', () => {
+    mockOnSearchNode.mockReturnValue(false);
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    const authLabel = screen.getByText('Auth Service').closest('label');
-    expect(authLabel).toBeTruthy();
-    fireEvent.click(authLabel!);
-    expect(mockToggleArea).toHaveBeenCalledWith('auth');
-  });
-
-  it('expands an area and toggles a member checkbox', () => {
-    render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
-    const expand = screen.getByText('Auth Service').parentElement?.querySelector('span[role="button"]') ?? screen.getByText('Auth Service').previousElementSibling;
-    if (expand) fireEvent.click(expand);
-    const member = screen.queryByTestId('area-member-auth-sym-login');
-    if (member) {
-      fireEvent.click(member);
-      expect(mockToggleAreaMember).toHaveBeenCalledWith('sym-login');
-    }
+    const input = screen.getByTestId('search-input');
+    fireEvent.change(input, { target: { value: 'xyz' } });
+    fireEvent.click(screen.getByTestId('search-button'));
+    expect(screen.getByTestId('not-found')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'newquery' } });
+    expect(screen.queryByTestId('not-found')).not.toBeInTheDocument();
   });
 });

@@ -37,6 +37,29 @@ jest.mock('@/app/contexts/SelectionContext', () => ({
       expansions: new Map(),
     },
   }),
+  useSelectionState: () => ({
+    state: {
+      explicitNodeIds: new Set<string>(),
+      selectedAreaIds: new Set<string>(),
+      excludedNodeIds: new Set<string>(),
+      lockedNodeIds: new Set<string>(),
+      lockedAreaIds: new Set<string>(),
+      expansions: new Map(),
+      selectedNodeIds: new Set<string>(),
+    },
+    activeNodeIds: new Set<string>(),
+    hasSelection: false,
+    toggleNode: jest.fn(),
+    toggleNodes: jest.fn(),
+    toggleArea: jest.fn(),
+    toggleLock: jest.fn(),
+    lockAll: jest.fn(),
+    clearUnlocked: jest.fn(),
+    clearSelection: jest.fn(),
+    toggleExpansionGroup: jest.fn(),
+    toggleExpandedNode: jest.fn(),
+    setExpandedNodes: jest.fn(),
+  }),
 }));
 
 jest.mock('@/app/components/selection/SearchSelectSidebar', () => {
@@ -289,11 +312,9 @@ describe('Homepage', () => {
     render(<Home />);
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
 
-    await waitFor(() => expect(lastSelectionProviderProps?.nodes).toHaveLength(2));
+    await waitFor(() => expect(lastSelectionProviderProps?.value).toBeDefined());
 
-    expect(lastSelectionProviderProps?.edges).toHaveLength(1);
-    expect(lastSelectionProviderProps?.visibleNodeIds).toEqual(new Set(['symbol-a', 'symbol-b']));
-    expect(lastSelectionProviderProps?.areas).toEqual([]);
+    expect(lastSelectionProviderProps?.value?.state?.selectedNodeIds).toBeDefined();
     expect(screen.getByTestId('search-select-sidebar')).toBeInTheDocument();
     expect(screen.queryByTestId('manage-selection-sidebar')).not.toBeInTheDocument();
   });
