@@ -16,6 +16,10 @@ import { extractUnits, mapSpans } from './units';
  *    or N.index on the new side, and 'unchanged' otherwise.
  * 4. Unpaired old units are 'deleted', unpaired new units are 'added'.
  * 5. Each absorbed unit takes the label of its absorbedBy unit on the same side.
+ *
+ * @param pair - The parsed file pair with old/new trees and difft result.
+ * @returns Labels for each declaration and any unmapped spans.
+ * @throws Error When oldTree, newTree, or difft is missing.
  */
 export function labelModifiedFile(
   pair: ParsedFilePair,
@@ -133,6 +137,10 @@ export function labelModifiedFile(
 
 /**
  * Label every unit of an added file as 'added'.
+ *
+ * @param pair - The parsed file pair; must have newTree.
+ * @returns Labels for each declaration in the new file.
+ * @throws Error When newTree is missing.
  */
 export function labelAddedFile(
   pair: ParsedFilePair,
@@ -161,6 +169,10 @@ export function labelAddedFile(
 
 /**
  * Label every unit of a deleted file as 'deleted'.
+ *
+ * @param pair - The parsed file pair; must have oldTree.
+ * @returns Labels for each declaration in the old file.
+ * @throws Error When oldTree is missing.
  */
 export function labelDeletedFile(
   pair: ParsedFilePair,
