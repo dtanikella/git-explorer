@@ -8,6 +8,7 @@ import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
+import { fitToChanges } from '@/lib/diff/fit';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { getDescendantIds } from '@/lib/areas/containment';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
@@ -32,6 +33,8 @@ interface RepoGraphProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
+  /** Increment to trigger a camera fit to diff-changed nodes */
+  diffFitVersion?: number;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -637,6 +640,60 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       onSearchNode(handleSearchNode);
     }
   }, [onSearchNode, handleSearchNode]);
+
+  // Zoom-to-fit when diffFitVersion changes (diff tab)
+  useEffect(() => {
+    if (!diffFitVersion || !analysisData || !canvasRef.current || !zoomRef.current) return;
+
+    const nodes = analysisData.nodes;
+    const areas = areasRef.current;
+    const nodePositions = new Map<string, { x: number; y: number; radius: number }>();
+    for (const n of simNodesRef.current) {
+      if (n.x == null || n.y == null) continue;
+      const cfg = configRef.current;
+      const nStyle = cfg.style.node(n.data, n.degree);
+      nodePositions.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
+    }
+
+    const canvas = canvasRef.current;
+    const w = canvas.offsetWidth || 800;
+    const h = canvas.offsetHeight || 600;
+
+    // Fast-forward simulation if still running
+    if (simulationRef.current) {
+      const sim = simulationRef.current;
+      if (sim.alpha() > sim.alphaMin()) {
+        sim.stop();
+        while (sim.alpha() > sim.alphaMin()) {
+          sim.tick();
+        }
+        drawFrameRef.current?.();
+      }
+    }
+
+    const result = fitToChanges(
+      nodes as any,
+      areas,
+      nodePositions,
+      w,
+      h,
+    );
+
+    if (result) {
+      const [tx, ty, scale] = result;
+      const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+      d3.select(canvas as any)
+        .transition()
+        .duration(300)
+        .call((zoomRef.current as any).transform, transform);
+    } else {
+      // Fall back to existing fit-all
+      const svg = d3.select(canvas as any);
+      if (zoomRef.current) {
+        svg.call((zoomRef.current as any).transform, d3.zoomIdentity);
+      }
+    }
+  }, [diffFitVersion]);
 
   // Zoom-to-fit when active set changes
   useEffect(() => {

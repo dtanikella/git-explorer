@@ -96,6 +96,23 @@ export default function HomePage() {
       createDiffViewConfig(nodes as any, areasData),
     [areasData],
   );
+  // Fit camera to changes when diff result arrives or when switching to diff tab
+  const [diffFitVersion, setDiffFitVersion] = useState(0);
+
+  useEffect(() => {
+    if (diffState.result?.success && diffState.result.state === 'ok') {
+      setDiffFitVersion((v) => v + 1);
+    }
+  }, [diffState.result]);
+
+  // Also fit when switching to the diff tab
+  const prevActiveTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (activeTab === 'diff' && prevActiveTabRef.current !== 'diff') {
+      setDiffFitVersion((v) => v + 1);
+    }
+    prevActiveTabRef.current = activeTab;
+  }, [activeTab]);
 
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -266,6 +283,7 @@ export default function HomePage() {
                         analysisData={diffState.result.data}
                         loading={diffState.loading}
                         error={null}
+                        diffFitVersion={diffFitVersion}
                       />
                     );
                   })()}
