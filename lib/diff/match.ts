@@ -130,3 +130,58 @@ export function labelModifiedFile(
 
   return { labels, unmapped };
 }
+
+/**
+ * Label every unit of an added file as 'added'.
+ */
+export function labelAddedFile(
+  pair: ParsedFilePair,
+): LabelledDeclaration[] {
+  if (!pair.newTree) {
+    throw new Error('labelAddedFile requires a new tree');
+  }
+
+  const newUnits = extractUnits(pair.newTree, pair.path, 'new');
+  const labels: LabelledDeclaration[] = [];
+
+  for (const unit of newUnits) {
+    if (unit.absorbedBy !== null) {
+      // Absorbed units take the label of their absorber
+      const absorberLabel = labels.find(
+        (l) => l.unit.side === 'new' && l.unit.index === unit.absorbedBy,
+      );
+      labels.push({ unit, status: absorberLabel?.status ?? 'added' });
+    } else {
+      labels.push({ unit, status: 'added' });
+    }
+  }
+
+  return labels;
+}
+
+/**
+ * Label every unit of a deleted file as 'deleted'.
+ */
+export function labelDeletedFile(
+  pair: ParsedFilePair,
+): LabelledDeclaration[] {
+  if (!pair.oldTree) {
+    throw new Error('labelDeletedFile requires an old tree');
+  }
+
+  const oldUnits = extractUnits(pair.oldTree, pair.path, 'old');
+  const labels: LabelledDeclaration[] = [];
+
+  for (const unit of oldUnits) {
+    if (unit.absorbedBy !== null) {
+      const absorberLabel = labels.find(
+        (l) => l.unit.side === 'old' && l.unit.index === unit.absorbedBy,
+      );
+      labels.push({ unit, status: absorberLabel?.status ?? 'deleted' });
+    } else {
+      labels.push({ unit, status: 'deleted' });
+    }
+  }
+
+  return labels;
+}

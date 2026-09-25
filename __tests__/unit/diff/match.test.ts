@@ -2,7 +2,7 @@
 
 import { loadLanguage } from '@/lib/tree-sitter/language';
 import { createParser } from '@/lib/tree-sitter/parser';
-import { labelModifiedFile } from '@/lib/diff/match';
+import { labelModifiedFile, labelAddedFile, labelDeletedFile } from '@/lib/diff/match';
 import type { ParsedFilePair } from '@/lib/diff/file-trees';
 import type { DifftasticFileResult } from '@/lib/diff/difftastic';
 import { SyntaxType } from '@/lib/analysis/types';
@@ -224,5 +224,87 @@ describe('labelModifiedFile', () => {
     for (const [, count] of labelCounts) {
       expect(count).toBe(1);
     }
+  });
+});
+
+describe('labelAddedFile', () => {
+  function parse(source: string) {
+    const lang = loadLanguage('typescript');
+    const parser = createParser(lang, 'typescript');
+    return parser.parse(source);
+  }
+
+  it('labels every unit in an added file as added', () => {
+    const source = 'function foo() {}\nconst bar = 1;\nclass MyClass { method() {} }';
+    const result = parse(source);
+    const pair: ParsedFilePair = {
+      path: 'test.ts',
+      status: 'added',
+      newTree: result.tree,
+      newSource: source,
+      parseErrors: [{ side: 'new', hasError: result.hasErrors }],
+    };
+
+    const labels = labelAddedFile(pair);
+    expect(labels.length).toBeGreaterThan(0);
+    labels.forEach(l => expect(l.status).toBe('added'));
+  });
+
+  it('labels absorbed units too', () => {
+    const source = 'function outer() { const inner = 1; return inner; }';
+    const result = parse(source);
+    const pair: ParsedFilePair = {
+      path: 'test.ts',
+      status: 'added',
+      newTree: result.tree,
+      newSource: source,
+      parseErrors: [{ side: 'new', hasError: result.hasErrors }],
+    };
+
+    const labels = labelAddedFile(pair);
+    const innerLabel = labels.find(l => l.unit.name === 'inner');
+    expect(innerLabel).toBeDefined();
+    expect(innerLabel!.status).toBe('added');
+  });
+});
+
+describe('labelDeletedFile', () => {
+  function parse(source: string) {
+    const lang = loadLanguage('typescript');
+    const parser = createParser(lang, 'typescript');
+    return parser.parse(source);
+  }
+
+  it('labels every unit in a deleted file as deleted', () => {
+    const source = 'function foo() {}\nconst bar = 1;';
+    const result = parse(source);
+    const pair: ParsedFilePair = {
+      path: 'test.ts',
+      status: 'deleted',
+      oldTree: result.tree,
+      oldSource: source,
+      parseErrors: [{ side: 'old', hasError: result.hasErrors }],
+    };
+
+    const labels = labelDeletedFile(pair);
+    expect(labels.length).toBeGreaterThan(0);
+    labels.forEach(l => expect(l.status).toBe('deleted'));
+  });
+
+  it('labels absorbed units too', () => {
+    const source = 'function outer() { const inner = 1; return inner; }';
+    const result = parse(source);
+    const pair: ParsedFilePair = {
+      path: 'test.ts',
+      status: 'deleted',
+      oldTree: result.tree,
+      oldSource: source,
+      parseErrors: [{ side: 'old', hasError: result.hasErrors }],
+    };
+
+    const labels = labelDeletedFile(pair);
+    const innerLabel = labels.find(l => l.unit.name === 'inner');
+    expect(innerLabel).toBeDefined();
+    expect(innerLabel!.status).toBe('deleted');
   });
 });
