@@ -183,6 +183,16 @@ interface UnitInfo {
   end: Pos;
 }
 
+/**
+ * Assigns relationship metadata to diff units: determines absorption
+ * (a unit absorbed by a containing function), and subsequent placement
+ * in the final diff output.
+ *
+ * @param units - Raw diff units from the parser.
+ * @param path - The file path for attribution.
+ * @param side - Whether this is the old or new side of the diff.
+ * @returns Annotated diff units with relationship data.
+ */
 function assignRelationships(
   units: UnitInfo[],
   path: string,
@@ -361,10 +371,24 @@ export function mapSpans(
   return mapped;
 }
 
+/**
+ * Returns true when position `a` is less than or equal to position `b`.
+ *
+ * @param a - First position.
+ * @param b - Second position.
+ * @returns True when `a.line < b.line || (a.line === b.line && a.col <= b.col)`.
+ */
 function posLessOrEqual(a: Pos, b: Pos): boolean {
   return a.row < b.row || (a.row === b.row && a.column <= b.column);
 }
 
+/**
+ * Returns true when position `a` is strictly less than position `b`.
+ *
+ * @param a - First position.
+ * @param b - Second position.
+ * @returns True when `a.line < b.line || (a.line === b.line && a.col < b.col)`.
+ */
 function posLess(a: Pos, b: Pos): boolean {
   return a.row < b.row || (a.row === b.row && a.column < b.column);
 }

@@ -32,6 +32,16 @@ const SCIP_IMPORT = 2;
 // AST Context Classification
 // ============================================================================
 
+/**
+ * Classifies an SCIP reference into an {@link EdgeKind} by walking the
+ * tree-sitter AST at the reference position.
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line of the reference.
+ * @param col - 0-indexed column of the reference.
+ * @param symbolRoles - SCIP symbol role flags.
+ * @returns The classified edge kind (CALLS, INSTANTIATES, EXTENDS, etc.).
+ */
 function classifyEdgeKind(
   tree: TreeWrapper,
   line: number,
@@ -95,6 +105,13 @@ function classifyEdgeKind(
   return EdgeKind.CALLS;
 }
 
+/**
+ * Checks whether one AST node is an ancestor of (or the same as) another.
+ *
+ * @param ancestor - The potential ancestor node.
+ * @param descendant - The potential descendant node.
+ * @returns True when descendant is contained within ancestor's byte range.
+ */
 function isNodeOrAncestorOf(
   ancestor: { id: number; startIndex: number; endIndex: number },
   descendant: { id: number; startIndex: number; endIndex: number },
@@ -102,6 +119,15 @@ function isNodeOrAncestorOf(
   return descendant.startIndex >= ancestor.startIndex && descendant.endIndex <= ancestor.endIndex;
 }
 
+/**
+ * Checks whether a source position is inside an async context (inside an
+ * `await` expression).
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line number.
+ * @param col - 0-indexed column number.
+ * @returns True when the position is inside an `await_expression`.
+ */
 function isAsyncContext(tree: TreeWrapper, line: number, col: number): boolean {
   const tsNode = tree.rootNode.raw.descendantForPosition({ row: line, column: col });
   if (!tsNode) return false;
@@ -115,6 +141,15 @@ function isAsyncContext(tree: TreeWrapper, line: number, col: number): boolean {
   return false;
 }
 
+/**
+ * Checks whether a source position is inside an optional chaining
+ * (`?.`) member expression.
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line number.
+ * @param col - 0-indexed column number.
+ * @returns True when the position is inside a `?.` chain.
+ */
 function isOptionalChainContext(tree: TreeWrapper, line: number, col: number): boolean {
   const tsNode = tree.rootNode.raw.descendantForPosition({ row: line, column: col });
   if (!tsNode) return false;
@@ -142,6 +177,16 @@ function isOptionalChainContext(tree: TreeWrapper, line: number, col: number): b
 // Find Enclosing Node
 // ============================================================================
 
+/**
+ * Finds the nearest enclosing call_expression or new_expression node at
+ * a given source position.
+ *
+ * @param tree - The parsed file tree.
+ * @param line - 0-indexed line number.
+ * @param col - 0-indexed column number.
+ * @returns The inner-most enclosing call or new-expression node, or
+ *   null if none found.
+ */
 function findEnclosingNode(
   tree: TreeWrapper,
   line: number,

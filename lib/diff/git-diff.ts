@@ -11,6 +11,13 @@ export type ChangedFile = {
   difft?: DifftasticFileResult;  // filled for modified only
 };
 
+/**
+ * Resolves a git reference (branch, tag, or partial SHA) to its full SHA.
+ *
+ * @param repo - Absolute path to the repository.
+ * @param ref - The git reference to resolve.
+ * @returns The full commit SHA.
+ */
 function resolveRef(repo: string, ref: string): string {
   const sha = execFileSync('git', ['rev-parse', '--verify', `${ref}^{commit}`], {
     cwd: repo,
@@ -20,6 +27,14 @@ function resolveRef(repo: string, ref: string): string {
   return sha;
 }
 
+/**
+ * Shows the contents of a file at a specific commit.
+ *
+ * @param repo - Absolute path to the repository.
+ * @param sha - The commit SHA.
+ * @param path - The repo-relative file path.
+ * @returns The file contents as a string.
+ */
 function showBlob(repo: string, sha: string, path: string): string {
   const out = execFileSync('git', ['show', `${sha}:${path}`], {
     cwd: repo,
@@ -29,6 +44,12 @@ function showBlob(repo: string, sha: string, path: string): string {
   return out;
 }
 
+/**
+ * Extracts the TypeScript file extension from a path.
+ *
+ * @param path - The file path.
+ * @returns '.ts', '.tsx', or null if the path doesn't end with either.
+ */
 function getExt(path: string): '.ts' | '.tsx' | null {
   if (path.endsWith('.tsx')) return '.tsx';
   if (path.endsWith('.ts')) return '.ts';
@@ -110,6 +131,12 @@ export function listChangedTsFiles(
   );
 }
 
+/**
+ * Maps a one-letter git diff status to a human-readable label.
+ *
+ * @param status - The git status character ('A', 'D', 'M', 'T').
+ * @returns 'added', 'deleted', 'modified', or null for unknown statuses.
+ */
 function mapGitStatus(status: string): 'added' | 'deleted' | 'modified' | null {
   switch (status) {
     case 'A':
