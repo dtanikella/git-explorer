@@ -29,9 +29,6 @@ All scripts source `~/.nvm/nvm.sh` and switch to Node 20 automatically.
 **Requires difftastic >= 0.71.0** (binary named `difft`) on PATH for the diff view feature.
 Install with `brew install difftastic` or `cargo install difftastic`.
 
-**Requires difftastic >= 0.71.0** (binary named `difft`) on PATH for the diff view feature.
-Install with `brew install difftastic` or `cargo install difftastic`.
-
 ## Architecture
 
 Git Explorer is a Next.js app that analyzes a local git repository and renders interactive visualizations of file co-change patterns.

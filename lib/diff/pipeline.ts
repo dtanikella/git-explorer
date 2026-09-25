@@ -21,7 +21,19 @@ export interface DiffPipelineInput {
 
 /**
  * Run the full diff pipeline: steps 3 through 9.
- * Returns the enriched graph result or an error response.
+ *
+ * Orchestrates: listing changed TS files with difftastic (step 3), building
+ * tree-sitter parse trees (step 4), extracting diff units and mapping spans
+ * (step 5), labelling declarations as added/deleted/modified/unchanged
+ * (steps 6-7), snapshotting both commits into git worktrees for SCIP
+ * analysis (step 8), then joining labels onto graph nodes (step 9).
+ *
+ * @param input - Pipeline inputs: repoPath, base and compare commit refs,
+ *   and whether to exclude test files.
+ * @returns A DiffResponse: either success with the enriched graph result,
+ *   counts, and unmatched labels, or an error with the appropriate status
+ *   code (BAD_REQUEST, BAD_REF, DIFFT_MISSING, DIFFT_TOO_OLD, or
+ *   ANALYSIS_FAILED).
  */
 export async function runDiffPipeline(
   input: DiffPipelineInput,
