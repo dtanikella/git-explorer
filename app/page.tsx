@@ -22,6 +22,8 @@ import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
 import { AreaProvider } from '@/app/contexts/AreaContext';
 import type { Area } from '@/lib/areas/types';
+import CompareBar from './components/diff/CompareBar';
+import { useDiff } from './components/diff/useDiff';
 
 const VIEW_OPTIONS: Record<string, {
   label: string;
@@ -81,6 +83,9 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [areasData, setAreasData] = useState<Area[]>([]);
+
+  // Diff tab state
+  const diffState = useDiff(repoPath);
 
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -217,11 +222,17 @@ export default function HomePage() {
               </AreaProvider>
             ) : activeTab === 'diff' ? (
               <div className="flex-1 min-w-0 flex flex-col gap-2">
-                {/* Compare bar — step 14 */}
+                <CompareBar diffState={diffState} />
                 <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-md overflow-hidden">
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
-                    Choose a branch to compare.
-                  </div>
+                  {!diffState.compare ? (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                      Choose a branch to compare.
+                    </div>
+                  ) : diffState.result && !diffState.loading && diffState.result.success ? (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+                      Diff graph rendering (step 16).
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : activeTab === 'graph' ? (
