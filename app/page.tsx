@@ -23,6 +23,7 @@ import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/
 import { AreaProvider } from '@/app/contexts/AreaContext';
 import type { Area } from '@/lib/areas/types';
 import CompareBar from './components/diff/CompareBar';
+import DiffStatePanel from './components/diff/DiffStatePanel';
 import { useDiff } from './components/diff/useDiff';
 
 const VIEW_OPTIONS: Record<string, {
@@ -224,15 +225,36 @@ export default function HomePage() {
               <div className="flex-1 min-w-0 flex flex-col gap-2">
                 <CompareBar diffState={diffState} />
                 <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-md overflow-hidden">
-                  {!diffState.compare ? (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
-                      Choose a branch to compare.
-                    </div>
-                  ) : diffState.result && !diffState.loading && diffState.result.success ? (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Diff graph rendering (step 16).
-                    </div>
-                  ) : null}
+                  {(() => {
+                    if (!diffState.compare || (!diffState.loading && !diffState.result)) {
+                      return <DiffStatePanel state="empty" />;
+                    }
+                    if (diffState.loading && diffState.result) {
+                      // Keep previous result visible; DiffStatePanel returns null
+                      return <DiffStatePanel state="loading" hasPreviousResult={true} />;
+                    }
+                    if (diffState.loading) {
+                      return <DiffStatePanel state="loading" />;
+                    }
+                    if (!diffState.result?.success) {
+                      return (
+                        <DiffStatePanel
+                          state="error"
+                          errorCode={diffState.result?.code}
+                          errorMessage={diffState.error || diffState.result?.error}
+                        />
+                      );
+                    }
+                    if (diffState.result.state === 'no-changes') {
+                      return <DiffStatePanel state="no-changes" />;
+                    }
+                    // ok state — graph rendering placeholder for step 16
+                    return (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+                        Diff graph rendering (step 16).
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ) : activeTab === 'graph' ? (
