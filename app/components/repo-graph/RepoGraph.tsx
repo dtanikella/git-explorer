@@ -9,6 +9,7 @@ import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
 import { fitToChanges } from '@/lib/diff/fit';
+import { saturate } from '@/lib/diff/diff-view-config';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { getDescendantIds } from '@/lib/areas/containment';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
@@ -48,26 +49,6 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   source: string;
   target: string;
   data: AnalysisEdge;
-}
-
-/**
- * Desaturate a hex color toward its own luminance gray by the given factor (0–1).
- * At saturation 1 the color is unchanged; at 0 it becomes the gray of equal luminance.
- */
-function saturateColor(hex: string, saturation: number): string {
-  if (saturation >= 1) return hex;
-
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-
-  const gray = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
-
-  const nr = Math.round(gray + (r - gray) * saturation);
-  const ng = Math.round(gray + (g - gray) * saturation);
-  const nb = Math.round(gray + (b - gray) * saturation);
-
-  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
 }
 
 export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, diffFitVersion }: RepoGraphProps) {
@@ -427,7 +408,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
         // Apply saturation if specified: desaturate toward luminance gray
         const fillColor = (nStyle.saturation != null && nStyle.saturation < 1)
-          ? saturateColor(nStyle.color, nStyle.saturation)
+          ? saturate(nStyle.color, nStyle.saturation)
           : nStyle.color;
         c.fillStyle = fillColor;
         c.globalAlpha = finalAlpha;

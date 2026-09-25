@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 import type { Area, AreaRuntimeState } from './types';
 import { getAreaColor, deriveBorderColor } from './color';
+import { saturate } from '@/lib/diff/diff-view-config';
 
 const HULL_PADDING = 55;
 const PILL_LABEL_OFFSET = 14;
@@ -9,18 +10,6 @@ export type HullResult =
   | { type: 'circle'; cx: number; cy: number; r: number }
   | { type: 'polygon'; points: [number, number][] }
   | null;
-
-function saturateColor(hex: string, saturation: number): string {
-  if (saturation >= 1) return hex;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const gray = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
-  const nr = Math.round(gray + (r - gray) * saturation);
-  const ng = Math.round(gray + (g - gray) * saturation);
-  const nb = Math.round(gray + (b - gray) * saturation);
-  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
-}
 
 export function getTransitiveContains(
   area: Area,
@@ -143,7 +132,7 @@ export function drawAreaOverlays(
 
     const areaColor = fillColor;
     const drawColor = isDiffMode
-      ? (isTouched ? areaColor : saturateColor(areaColor, 0.5))
+      ? (isTouched ? areaColor : saturate(areaColor, 0.5))
       : areaColor;
     const fillAlpha = isDiffMode
       ? (isTouched ? 0.14 : 0.08)
