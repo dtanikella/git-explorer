@@ -70,7 +70,7 @@ function saturateColor(hex: string, saturation: number): string {
   return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
 }
 
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, diffFitVersion }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
