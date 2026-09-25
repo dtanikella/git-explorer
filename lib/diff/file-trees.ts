@@ -1,7 +1,8 @@
 import { loadLanguage } from '@/lib/tree-sitter/language';
 import { createParser } from '@/lib/tree-sitter/parser';
 import type { TreeWrapper } from '@/lib/tree-sitter/tree';
-import type { ChangedFile, DifftasticFileResult } from './git-diff';
+import type { ChangedFile } from './git-diff';
+import type { DifftasticFileResult } from './difftastic';
 
 export interface ParsedFilePair {
   path: string;
