@@ -162,6 +162,14 @@ function DroppableAreaRow({
   );
 }
 
+/**
+ * Interactive table for viewing and managing the area tree hierarchy.
+ *
+ * @remarks
+ * Displays areas with their members, visibility toggles, and color
+ * swatches. Supports drag-and-drop reordering and area membership
+ * management.
+ */
 export default function AreaTreeTable({
   areas,
   runtimeState,

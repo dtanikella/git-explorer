@@ -7,6 +7,16 @@ interface TabSidebarProps {
   onTabChange: (tab: TabId) => void;
 }
 
+/**
+ * Sidebar navigation for switching between the main views.
+ *
+ * @remarks
+ * Provides a vertical tab list for Graph, Stats, Areas, and Diff views.
+ * The active tab is visually highlighted.
+ *
+ * @param activeTab - The currently active tab ID.
+ * @param onTabChange - Callback when the user clicks a different tab.
+ */
 export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     {

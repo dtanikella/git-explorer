@@ -135,6 +135,21 @@ function extractReturnType(node: NodeWrapper): string | null {
 // Main Extraction
 // ============================================================================
 
+/**
+ * Extracts analysis nodes from a set of parsed TypeScript files using
+ * tree-sitter ASTs and SCIP occurrence data.
+ *
+ * @remarks
+ * For each file, walks the tree-sitter AST to find function, method,
+ * class, interface, type alias, and module declarations. Nodes are enriched
+ * with SCIP symbol data (references, parameter info) when available.
+ * Symbols without a corresponding SCIP document are still extracted as
+ * basic nodes from the AST.
+ *
+ * @param input - The parsed files, SCIP documents, and language config.
+ * @returns An object with `nodes` array and a symbol-to-node map.
+ * @see commit 3c938d7
+ */
 export function extractNodes(input: NodeExtractionInput): NodeExtractionOutput {
   const nodes: AnalysisNode[] = [];
   const nodeMap = new Map<string, AnalysisNode>();

@@ -204,6 +204,20 @@ export interface RubyNodeExtractionOutput {
   nodeMap: Map<string, AnalysisNode>;
 }
 
+/**
+ * Extracts analysis nodes from Ruby source files via tree-sitter AST
+ * traversal.
+ *
+ * @remarks
+ * Walks each file's AST for class, module, method, singleton-class, and
+ * assignment declarations. Tracks scope nesting (class/module/method) to
+ * produce qualified symbol names. Ruby extraction uses tree-sitter only
+ * (no SCIP).
+ *
+ * @param input - Parsed Ruby files and language configuration.
+ * @returns An object with `nodes` array and a symbol-to-node map.
+ * @see commit e20b947
+ */
 export function extractRubyNodes(input: RubyNodeExtractionInput): RubyNodeExtractionOutput {
   const nodes: AnalysisNode[] = [];
   const nodeMap = new Map<string, AnalysisNode>();

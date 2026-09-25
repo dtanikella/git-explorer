@@ -44,6 +44,17 @@ export interface SelectionContextValue {
 
 const SelectionContext = createContext<SelectionContextValue | null>(null);
 
+/**
+ * Returns the selection context for node and area highlighting.
+ *
+ * @remarks
+ * Must be called under {@link SelectionProvider}. Provides selected
+ * node/area IDs, expansion groups, and methods to select, expand, and
+ * clear selections.
+ *
+ * @returns The {@link SelectionContextValue} for the current provider.
+ * @throws Error When called outside {@link SelectionProvider}.
+ */
 export function useSelection(): SelectionContextValue {
   const ctx = useContext(SelectionContext);
   if (!ctx) throw new Error('useSelection must be used within a SelectionProvider');
@@ -190,6 +201,15 @@ interface SelectionProviderProps {
 
 const EMPTY_LOCKED: Set<string> = new Set();
 
+/**
+ * Context provider for node and area selection/highlighting state.
+ *
+ * @remarks
+ * Manages selection of nodes and areas, expansion groups
+ * (same-file references, callers, callees, area members), and the
+ * locked node set (for the diff view). Must wrap any component that
+ * uses {@link useSelection}.
+ */
 export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, lockedNodeIds = EMPTY_LOCKED, children }: SelectionProviderProps) {
   const [userSelectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const selectedNodeIds = useMemo(

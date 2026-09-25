@@ -22,6 +22,19 @@ function validateRepoPath(repoPath: unknown): string | null {
   return null;
 }
 
+/**
+ * `POST /api/areas`: Saves, loads, or validates area configuration.
+ *
+ * @remarks
+ * Responds 200 on success, 400 when the request body is malformed or
+ * area validation fails, and 500 on unexpected errors. Supports saving
+ * area JSON to disk, loading from disk, and validating area structures.
+ *
+ * @param request - JSON body with action (`save`, `load`, or `validate`)
+ *   and area data.
+ * @returns A JSON response with the operation result.
+ * @see commit bd44d59
+ */
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {

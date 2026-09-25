@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzeRepo } from '@/app/services/analysis/controller';
 import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
 
+/**
+ * `POST /api/repo-analysis`: Analyzes a repository and returns the
+ * analysis result graph.
+ *
+ * @remarks
+ * Responds 200 with the analysis result on success, 400 when the request
+ * body is malformed or the path is invalid, 400 when the language is
+ * unsupported, and 500 on unexpected errors.
+ *
+ * @param request - JSON body with `repoPath` (string, required) and
+ *   optional `hideTestFiles` (boolean).
+ * @returns A JSON response with `{ success, data }` on success, or
+ *   `{ success: false, error }` on failure.
+ * @see commit 4dff751
+ */
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {

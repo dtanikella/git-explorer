@@ -38,6 +38,20 @@ export interface AreaValidationResult {
   errors: string[];
 }
 
+/**
+ * Validates a parsed JSON object as an area file structure.
+ *
+ * @remarks
+ * Checks for the expected schema: `version` must be 1, `areas` must be an
+ * array, each area must have an `id` and `name`, and containment references
+ * must resolve within the file. Returns all validation errors found rather
+ * than failing on the first one.
+ *
+ * @param data - The parsed JSON value (usually from `JSON.parse`).
+ * @returns An {@link AreaValidationResult} with the validity flag and any
+ *   error messages.
+ * @see commit bd44d59
+ */
 export function validateAreaFile(data: unknown): AreaValidationResult {
   const errors: string[] = [];
 

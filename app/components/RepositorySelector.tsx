@@ -10,6 +10,19 @@ interface RepositorySelectorProps {
   onError?: (message: string) => void;
 }
 
+/**
+ * Repository path input component with native file picker support.
+ *
+ * @remarks
+ * Accepts a path via text input or opens a native folder picker dialog
+ * (macOS only). Validates the path client-side before submitting.
+ *
+ * @param onRepositorySelected - Callback when a valid repository path is selected.
+ * @param isLoading - Whether a selection is in progress.
+ * @param error - External error to display.
+ * @param currentPath - Currently selected path (pre-filled in the input).
+ * @param onError - Callback to notify parent of errors.
+ */
 export default function RepositorySelector({
   onRepositorySelected,
   isLoading = false,

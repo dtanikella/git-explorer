@@ -14,6 +14,21 @@ export interface RubyAnalysisOptions {
   hideTestFiles: boolean;
 }
 
+/**
+ * Runs the Ruby analysis pipeline: tree-sitter parsing, node extraction,
+ * edge extraction, and graph assembly.
+ *
+ * @remarks
+ * Ruby analysis has no SCIP stage — it relies entirely on tree-sitter AST
+ * traversal. Walks the file tree recursively, parses each Ruby file,
+ * extracts nodes and edges, and assembles the result.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @param options - Analysis options including test file filtering.
+ * @returns The assembled {@link AnalysisResult}.
+ * @see commit e20b947
+ * @see PR #37
+ */
 export async function analyzeRubyRepo(
   repoPath: string,
   options: RubyAnalysisOptions,

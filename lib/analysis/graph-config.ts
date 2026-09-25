@@ -207,6 +207,23 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
 };
 
 
+/**
+ * Builds a {@link NodeStyler} from a per-syntax-type override map and optional size function.
+ *
+ * @remarks
+ * Merges the default node style with type-specific overrides, then applies
+ * the size function (if provided) to set the radius dynamically from the
+ * node's degree. Used to construct view-specific stylers without repeating
+ * the default-merge logic.
+ *
+ * @param mapping - Partial style overrides keyed by {@link SyntaxType};
+ *   types not present in the map use {@link DEFAULT_NODE_STYLE} unchanged.
+ * @param sizeFn - Optional function mapping a node's degree (incoming + outgoing
+ *   reference count) to a radius in simulation units.
+ * @returns A {@link NodeStyler} that resolves style for any analysis node.
+ * @see {@link DEFAULT_NODE_STYLE}
+ * @see commit 956369f
+ */
 export function createNodeStyler(
   mapping: Partial<Record<SyntaxType, Partial<NodeStyle>>>,
   sizeFn?: (degree: number) => number,
@@ -223,11 +240,37 @@ export function createNodeStyler(
   };
 }
 
+/**
+ * Combines multiple predicate functions into one that passes only when all pass.
+ *
+ * @remarks
+ * Returns `() => true` when no predicates are given (the identity filter).
+ * Used internally by view config builders to compose {@link RepoGraphConfig.filters}.
+ *
+ * @param predicates - Filter functions in evaluation order; each receives an item
+ *   of type `T` and returns `true` to include it.
+ * @returns A single predicate that short-circuits on the first `false`.
+ * @see commit 2458d6b
+ */
 export function combineFilters<T>(...predicates: Array<(item: T) => boolean>): (item: T) => boolean {
   if (predicates.length === 0) return () => true;
   return (item: T) => predicates.every((p) => p(item));
 }
 
+/**
+ * Builds an {@link EdgeForcer} from a per-edge-kind override map.
+ *
+ * @remarks
+ * Edge kinds not present in the mapping receive {@link DEFAULT_EDGE_FORCES}.
+ * This is the standard way to customize per-edge-type physics without
+ * repeating the default-merge boilerplate.
+ *
+ * @param mapping - Partial force overrides keyed by {@link EdgeKind}; each
+ *   entry supplies distance and/or strength overrides over the defaults.
+ * @returns An {@link EdgeForcer} that resolves forces for any analysis edge.
+ * @see {@link DEFAULT_EDGE_FORCES}
+ * @see commit 89c3772
+ */
 export function createEdgeForcer(
   mapping: Partial<Record<EdgeKind, Partial<EdgeForces>>>,
 ): EdgeForcer {
@@ -251,10 +294,32 @@ export type { DeepPartial };
 
 // ── Scaling helpers ──
 
+/**
+ * A function that maps a raw count (e.g., reference count) to a normalized
+ * scale factor used for sizing.
+ *
+ * @param count - The raw count to scale.
+ * @returns A non-negative number; higher values produce larger visual units.
+ */
 export type ScaleFn = (count: number) => number;
 
 const DEFAULT_SCALE_FN: ScaleFn = (count: number) => Math.log2(count + 1);
 
+/**
+ * Maps a raw count into a clamped range using a configurable scale function.
+ *
+ * @remarks
+ * The default scale function is `log2(count + 1)`, normalized against the
+ * value at `count=50` and clamped to [0,1]. This prevents a few highly-referenced
+ * nodes from dominating the visual scale.
+ *
+ * @param count - The raw count (e.g., outbound reference count or inbound call count).
+ * @param min - Minimum output value; returned when `count <= 0`.
+ * @param max - Maximum output value; returned when `count >= 50` (at default scaling).
+ * @param scaleFn - Optional custom normalization function; defaults to log2.
+ * @returns A value in the range `[min, max]`.
+ * @see commit f0119a9
+ */
 export function scaledValue(
   count: number,
   min: number,
@@ -268,6 +333,18 @@ export function scaledValue(
   return min + normalized * (max - min);
 }
 
+/**
+ * Counts how many edges of kind {@link EdgeKind.CALLS} originate from a given node.
+ *
+ * @remarks
+ * Used by the Modules view config to size nodes by their callee count.
+ *
+ * @param node - The source node whose symbol is matched against edge `fromSymbol`.
+ * @param edges - All edges in the analysis; filtered in place (linear scan).
+ * @returns The number of CALLS edges whose `fromSymbol` matches `node.scipSymbol`.
+ * @see {@link createModulesViewConfig}
+ * @see commit 2458d6b
+ */
 export function countOutboundCalls(
   node: AnalysisNode,
   edges: AnalysisEdge[],
@@ -281,6 +358,18 @@ export function countOutboundCalls(
   return count;
 }
 
+/**
+ * Returns the number of cross-file references to a given node.
+ *
+ * @remarks
+ * This is simply a convenience accessor over `node.referencedAt.length`
+ * that makes the statistic explicit in config contexts. Used by the
+ * Modules view to set collide radius.
+ *
+ * @param node - The node whose `referencedAt` array is counted.
+ * @returns The length of `referencedAt`, which is the count of incoming cross-file references.
+ * @see commit 2458d6b
+ */
 export function countInboundCalls(node: AnalysisNode): number {
   return node.referencedAt.length;
 }
@@ -292,10 +381,37 @@ const MODULES_NODE_TYPES = new Set<SyntaxType>([
   SyntaxType.METHOD,
 ]);
 
+/**
+ * Builds a lookup map from SCIP symbol to {@link SyntaxType} for a set of nodes.
+ *
+ * @remarks
+ * Used by view config builders that need to classify a symbol's kind (e.g.,
+ * whether it is a processing or data type) without a linear scan each time.
+ *
+ * @param nodes - The analysis nodes to index; each node's `scipSymbol` must be unique.
+ * @returns A `Map` from symbol string to {@link SyntaxType}.
+ * @see commit 7136fdc
+ */
 export function buildSymbolKindMap(nodes: AnalysisNode[]): Map<string, SyntaxType> {
   return new Map(nodes.map((node) => [node.scipSymbol, node.syntaxType]));
 }
 
+/**
+ * Counts how many processing-type nodes reference each data-type node via
+ * {@link EdgeKind.USES_TYPE} edges.
+ *
+ * @remarks
+ * Used by the Data Flow view to size data-type nodes (interfaces and type
+ * aliases) proportionally to how many callers depend on them. An edge is
+ * counted only when its source is a processing type (function, method, class)
+ * and its target is a data type (interface, type alias).
+ *
+ * @param edges - All analysis edges; filtered in place (linear scan).
+ * @param nodes - All analysis nodes, used to build the symbol-to-kind index.
+ * @returns A map from SCIP symbol to usage count.
+ * @see {@link createDataFlowViewConfig}
+ * @see commit 7136fdc
+ */
 export function countDataNodeUsage(
   edges: AnalysisEdge[],
   nodes: AnalysisNode[],
@@ -319,6 +435,22 @@ export function countDataNodeUsage(
   return usageByTarget;
 }
 
+/**
+ * Builds a {@link RepoGraphConfig} tailored for the "Modules" view.
+ *
+ * @remarks
+ * Shows only function and method nodes connected by CALLS edges (excluding
+ * external calls). Nodes are sized by their outbound call count, and the
+ * collision radius reflects inbound reference count. This is the graph
+ * effectively produced by the INTERNAL_PROCESSING_CONFIG filtering logic
+ * but with a simplified edge filter (CALLS only) and node radius driven
+ * by outbound calls rather than inbound references.
+ *
+ * @param edges - All analysis edges; used to precompute per-symbol outbound call counts.
+ * @returns A complete {@link RepoGraphConfig} with filters, stylers, and forces.
+ * @see {@link DEFAULT_REPO_GRAPH_CONFIG}
+ * @see commit 956369f
+ */
 export function createModulesViewConfig(
   edges: AnalysisEdge[],
 ): RepoGraphConfig {
@@ -384,6 +516,22 @@ export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
   ux: 420,
 };
 
+/**
+ * Builds a {@link RepoGraphConfig} tailored for the "Data Flow" view.
+ *
+ * @remarks
+ * Shows both processing nodes (functions, methods, classes) and data nodes
+ * (interfaces, type aliases) connected by any non-IMPORTS edge. Data-type
+ * nodes are sized by their usage count from processing-type callers and
+ * rendered with labels. The config assigns radial layer strengths for
+ * area-tagged nodes (storage, api, ux) via the `layerRadii` force option.
+ *
+ * @param edges - All analysis edges; used to compute per-target usage counts.
+ * @param nodes - All analysis nodes; used to build the symbol-to-kind index.
+ * @returns A complete {@link RepoGraphConfig} with filters, stylers, and forces.
+ * @see {@link DEFAULT_REPO_GRAPH_CONFIG}
+ * @see commit 7136fdc
+ */
 export function createDataFlowViewConfig(
   edges: AnalysisEdge[],
   nodes: AnalysisNode[],
@@ -446,6 +594,24 @@ export function createDataFlowViewConfig(
   });
 }
 
+/**
+ * Merges one or more partial config overrides into a base
+ * {@link RepoGraphConfig}, replacing top-level fields shallowly and
+ * force/simulation fields deeply.
+ *
+ * @remarks
+ * Each override object is applied in order, so later overrides win for
+ * colliding keys. Leaf force values (pins, distances, etc.) are preserved
+ * unless the override explicitly supplies a replacement. This is the
+ * standard mechanism for view-specific configs to inherit defaults
+ * without repeating them.
+ *
+ * @param base - The base config; fields not mentioned in any override stay unchanged.
+ * @param overrides - Partial configs applied in order; each may supply any subset of
+ *   filters, style, forces, or simulation fields.
+ * @returns A new {@link RepoGraphConfig} with the merged values.
+ * @see commit a570b03
+ */
 export function mergeConfigs(
   base: RepoGraphConfig,
   ...overrides: DeepPartial<RepoGraphConfig>[]

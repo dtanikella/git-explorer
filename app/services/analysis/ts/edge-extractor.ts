@@ -192,6 +192,20 @@ function findEnclosingNode(
 // Main Extraction
 // ============================================================================
 
+/**
+ * Extracts analysis edges from TypeScript parsed files using tree-sitter
+ * ASTs and SCIP occurrence data.
+ *
+ * @remarks
+ * Identifies cross-references between nodes: calls, extends, implements,
+ * instantiates, imports, and uses-type relationships. Each edge carries
+ * the source and target symbols, the edge kind, and whether the reference
+ * crosses file boundaries.
+ *
+ * @param input - The parsed files, SCIP occurrences, and language config.
+ * @returns An array of {@link AnalysisEdge} objects representing all
+ *   discovered relationships.
+ */
 export function extractEdges(input: EdgeExtractionInput): AnalysisEdge[] {
   const edges: AnalysisEdge[] = [];
   const edgeDedup = new Set<string>();

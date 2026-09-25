@@ -43,6 +43,21 @@ export class QueryWrapper {
   }
 }
 
+/**
+ * Creates a new {@link QueryWrapper} from a tree-sitter query pattern.
+ *
+ * @remarks
+ * Compiles the pattern string into a tree-sitter `Query` object. If the
+ * pattern is syntactically invalid a {@link TreeSitterQueryError} is thrown.
+ *
+ * @param language - The tree-sitter {@link Language} instance to compile the
+ *   query against (language-specific grammar determines valid syntax).
+ * @param pattern - The tree-sitter S-expression query pattern string.
+ * @param languageName - Human-readable language name for error messages.
+ * @returns A new {@link QueryWrapper} wrapping the compiled query.
+ * @throws {@link TreeSitterQueryError} When the pattern cannot be parsed.
+ * @see commit 9b05b59
+ */
 export function createQuery(language: Language, pattern: string, languageName: string): QueryWrapper {
   let query: TreeSitterParser.Query;
   try {

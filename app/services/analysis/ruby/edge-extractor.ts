@@ -526,6 +526,19 @@ function addRef(
 // Main Extraction
 // ============================================================================
 
+/**
+ * Extracts edges from Ruby source files via tree-sitter AST traversal.
+ *
+ * @remarks
+ * Finds all method call sites and resolves them against the node map.
+ * Edges include calls, references to constants, and includes/extend
+ * relationships. Ruby edge extraction uses tree-sitter only (no SCIP).
+ *
+ * @param input - Parsed Ruby files, node map, and language configuration.
+ * @returns An array of {@link AnalysisEdge} objects for all discovered
+ *   relationships.
+ * @see commit e20b947
+ */
 export function extractRubyEdges(input: RubyEdgeExtractionInput): AnalysisEdge[] {
   const edges: AnalysisEdge[] = [];
   const edgeDedup = new Set<string>();

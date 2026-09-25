@@ -42,6 +42,20 @@ export class ParserWrapper {
   }
 }
 
+/**
+ * Creates a new {@link ParserWrapper} for the given language.
+ *
+ * @remarks
+ * This is a convenience factory that avoids importing the ParserWrapper
+ * class directly. The wrapper wraps a tree-sitter {@link Parser} and
+ * provides `parse` and `setTimeoutMicros` methods.
+ *
+ * @param language - The tree-sitter {@link Language} instance (obtained via
+ *   {@link loadLanguage}).
+ * @param languageName - Human-readable language name for error messages.
+ * @returns A new {@link ParserWrapper} instance.
+ * @see commit 0501797
+ */
 export function createParser(language: Language, languageName: string): ParserWrapper {
   return new ParserWrapper(language, languageName);
 }
