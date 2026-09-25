@@ -3,51 +3,136 @@ import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 
 // ── Resolved value types ──
 
+/**
+ * Visual style properties for a graph node.
+ *
+ * @remarks
+ * These are resolved values (not overrides) consumed by the canvas
+ * renderer. All properties are required — use partial overrides and
+ * merge with defaults for per-type customization.
+ */
 export interface NodeStyle {
+  /** fill color as CSS hex string */
   color: string;
+  /** node radius in simulation units */
   radius: number;
+  /** fill opacity 0-1 */
   opacity: number;
+  /** whether to render a text label next to the node */
   label: boolean;
 }
 
+/**
+ * Visual style properties for a graph edge.
+ */
 export interface EdgeStyle {
+  /** stroke color as CSS hex string */
   color: string;
+  /** stroke width in px */
   width: number;
+  /** stroke opacity 0-1 */
   opacity: number;
+  /** optional gradient start color (source side) */
   gradientSourceColor?: string;
+  /** optional gradient end color (target side) */
   gradientTargetColor?: string;
 }
 
+/**
+ * D3 force parameters for a single node.
+ */
 export interface NodeForces {
+  /** node charge (negative = repulsion) */
   charge: number;
+  /** collision radius padding */
   collideRadius: number;
+  /** fixed x position, or null for free movement */
   fx: number | null;
+  /** fixed y position, or null for free movement */
   fy: number | null;
 }
 
+/**
+ * D3 force parameters for a single edge.
+ */
 export interface EdgeForces {
+  /** target edge distance in simulation units */
   distance: number;
+  /** edge spring strength 0-1 */
   strength: number;
 }
 
+/**
+ * Top-level D3 simulation parameters.
+ */
 export interface SimulationParams {
+  /** strength of the centering force toward the canvas center */
   centerStrength: number;
+  /** extra padding around each node for collision detection */
   collisionPadding: number;
+  /** simulation energy decay rate; higher = faster settling */
   alphaDecay: number;
+  /** velocity decay per tick; higher = more damping */
   velocityDecay: number;
 }
 
 // ── Accessor function types ──
 
+/**
+ * Filters nodes from the analysis set.
+ * @param node - The analysis node to evaluate.
+ * @returns True to include the node in the graph.
+ */
 export type NodePredicate = (node: AnalysisNode) => boolean;
+
+/**
+ * Filters edges from the analysis set.
+ * @param edge - The analysis edge to evaluate.
+ * @returns True to include the edge in the graph.
+ */
 export type EdgePredicate = (edge: AnalysisEdge) => boolean;
+
+/**
+ * Resolves node style from an analysis node and its degree.
+ * @param node - The analysis node.
+ * @param degree - The node's connection degree (inbound + outbound references).
+ * @returns A fully resolved {@link NodeStyle}.
+ */
 export type NodeStyler = (node: AnalysisNode, degree: number) => NodeStyle;
+
+/**
+ * Resolves edge style from an analysis edge.
+ * @param edge - The analysis edge.
+ * @returns A fully resolved {@link EdgeStyle}.
+ */
 export type EdgeStyler = (edge: AnalysisEdge) => EdgeStyle;
+
+/**
+ * Resolves node force parameters from an analysis node.
+ * @param node - The analysis node.
+ * @returns A fully resolved {@link NodeForces}.
+ */
 export type NodeForcer = (node: AnalysisNode) => NodeForces;
+
+/**
+ * Resolves edge force parameters from an analysis edge.
+ * @param edge - The analysis edge.
+ * @returns A fully resolved {@link EdgeForces}.
+ */
 export type EdgeForcer = (edge: AnalysisEdge) => EdgeForces;
 
 // ── Config object ──
 
+/**
+ * Complete graph configuration: filters, styles, forces, and simulation.
+ *
+ * @remarks
+ * View-specific configs (Modules, Data Flow, Internal Processing) are
+ * created by merging overrides into {@link DEFAULT_REPO_GRAPH_CONFIG}
+ * via {@link mergeConfigs}.
+ *
+ * @see commit a570b03
+ */
 export interface RepoGraphConfig {
   filters: {
     node: NodePredicate;
@@ -74,6 +159,12 @@ export interface RepoGraphConfig {
 
 // ── Defaults ──
 
+/**
+ * Default node visual style: medium gray, no label.
+ *
+ * @remarks
+ * Overridden per-syntax-type in view-specific configs.
+ */
 export const DEFAULT_NODE_STYLE: NodeStyle = {
   color: '#6b7280',
   radius: 6,
@@ -81,12 +172,18 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   label: false,
 };
 
+/**
+ * Default edge visual style: gray stroke, no gradient.
+ */
 export const DEFAULT_EDGE_STYLE: EdgeStyle = {
   color: '#9ca3af',
   width: 1,
   opacity: 0.6,
 };
 
+/**
+ * Default node force parameters: moderate charge, small collision buffer.
+ */
 export const DEFAULT_NODE_FORCES: NodeForces = {
   charge: -400,
   collideRadius: 10,
@@ -94,6 +191,9 @@ export const DEFAULT_NODE_FORCES: NodeForces = {
   fy: null,
 };
 
+/**
+ * Default edge force parameters: moderate distance, moderate strength.
+ */
 export const DEFAULT_EDGE_FORCES: EdgeForces = {
   distance: 80,
   strength: 0.5,

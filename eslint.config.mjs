@@ -102,6 +102,10 @@ const eslintConfig = defineConfig([
 
       // === No type annotations in JSDoc (TSDoc style) ===
       "jsdoc/no-types": "warn",
+
+      // === Disable cosmetic/formatting rules that produce excessive noise ===
+      "jsdoc/tag-lines": "off",
+      "jsdoc/escape-inline-tags": "off",
     },
   },
   // Override default ignores of eslint-config-next.
