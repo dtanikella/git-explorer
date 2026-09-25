@@ -7,8 +7,6 @@ export interface NodeStyle {
   color: string;
   radius: number;
   opacity: number;
-  saturation?: number;   // 0 to 1, applied as color desaturation toward luminance gray; default 1
-  ghostRing?: boolean;   // draw dashed circle 3px outside radius
   label: boolean;
 }
 

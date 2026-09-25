@@ -58,6 +58,7 @@ let mockSelectionValue: SelectionContextValue = {
   toggleAreaMember: jest.fn(),
   activeNodeIds: new Set<string>(['sym-login', 'sym-logout']),
   hasSelection: true,
+  lockedNodeIds: new Set<string>(),
 };
 
 let mockAreaStoreValue: MockAreaStore = {
@@ -98,6 +99,7 @@ beforeEach(() => {
     toggleAreaMember: jest.fn(),
     activeNodeIds: new Set<string>(['sym-login', 'sym-logout']),
     hasSelection: true,
+    lockedNodeIds: new Set<string>(),
   };
   mockAreaStoreValue = {
     areas: mockAreas,
@@ -248,5 +250,13 @@ describe('ManageSelectionSidebar', () => {
     };
     const { container } = render(<ManageSelectionSidebar effectiveNodeIds={[]} repoPath="/tmp/test" />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it('collapses to a strip and expands again', () => {
+    render(<ManageSelectionSidebar effectiveNodeIds={['sym-login']} repoPath="/tmp/test" />);
+    fireEvent.click(screen.getByTestId('collapse-manage-selection'));
+    expect(screen.queryByTestId('save-selection')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('expand-manage-selection'));
+    expect(screen.getByTestId('save-selection')).toBeInTheDocument();
   });
 });

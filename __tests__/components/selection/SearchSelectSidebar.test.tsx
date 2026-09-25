@@ -98,6 +98,7 @@ beforeEach(() => {
     toggleAreaMember: mockToggleAreaMember,
     activeNodeIds: new Set(['sym:a']),
     hasSelection: true,
+    lockedNodeIds: new Set<string>(),
   };
 });
 
@@ -124,6 +125,13 @@ describe('SearchSelectSidebar', () => {
     render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
     fireEvent.click(screen.getByTestId('deselect-sym:a'));
     expect(mockToggleNode).toHaveBeenCalledWith('sym:a');
+  });
+
+  it('hides deselect and Clear all for locked nodes', () => {
+    mockContextValue = { ...mockContextValue, lockedNodeIds: new Set(['sym:a']) };
+    render(<SearchSelectSidebar nodes={mockNodes as any} onSearchNode={mockOnSearchNode} repoPath="/tmp/test" />);
+    expect(screen.queryByTestId('deselect-sym:a')).not.toBeInTheDocument();
+    expect(screen.queryByText('Clear all')).not.toBeInTheDocument();
   });
 
   it('renders expansion group labels', () => {

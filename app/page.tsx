@@ -25,7 +25,6 @@ import type { Area } from '@/lib/areas/types';
 import CompareBar from './components/diff/CompareBar';
 import DiffStatePanel from './components/diff/DiffStatePanel';
 import { useDiff } from './components/diff/useDiff';
-import { createDiffViewConfig } from '@/lib/diff/diff-view-config';
 
 const VIEW_OPTIONS: Record<string, {
   label: string;
@@ -88,32 +87,6 @@ export default function HomePage() {
 
   // Diff tab state
   const diffState = useDiff(repoPath);
-  // Diff view config factory: (edges, nodes) => config
-  // Cast to any because the diff view config works with any nodes carrying diffStatus
-  const diffViewConfig = useCallback(
-    (_edges: AnalysisEdge[], nodes: AnalysisNode[]) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      createDiffViewConfig(nodes as any, areasData),
-    [areasData],
-  );
-  // Fit camera to changes when diff result arrives or when switching to diff tab
-  const [diffFitVersion, setDiffFitVersion] = useState(0);
-
-  useEffect(() => {
-    if (diffState.result?.success && diffState.result.state === 'ok') {
-      setDiffFitVersion((v) => v + 1);
-    }
-  }, [diffState.result]);
-
-  // Also fit when switching to the diff tab
-  const prevActiveTabRef = useRef(activeTab);
-  useEffect(() => {
-    if (activeTab === 'diff' && prevActiveTabRef.current !== 'diff') {
-      setDiffFitVersion((v) => v + 1);
-    }
-    prevActiveTabRef.current = activeTab;
-  }, [activeTab]);
-
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
     if (!repoPath) return;
@@ -176,22 +149,36 @@ export default function HomePage() {
 
   // Compute which node IDs are visible in the current graph view.
   // Mirrors the filtering logic in RepoGraph so treemap knows which nodes are clickable.
-  const graphVisibleNodeIds = useMemo(() => {
-    if (!analysisData) return new Set<string>();
+  const computeVisibleNodeIds = useCallback((data: AnalysisResult | null) => {
+    if (!data) return new Set<string>();
     const rawConfig = VIEW_OPTIONS[selectedView].config;
     const cfg = typeof rawConfig === 'function'
-      ? rawConfig(analysisData.edges, analysisData.nodes)
+      ? rawConfig(data.edges, data.nodes)
       : (rawConfig ?? DEFAULT_REPO_GRAPH_CONFIG);
-    const candidateIds = new Set(analysisData.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol));
+    const candidateIds = new Set(data.nodes.filter(cfg.filters.node).map((n) => n.scipSymbol));
     const connectedIds = new Set<string>();
-    for (const e of analysisData.edges) {
+    for (const e of data.edges) {
       if (cfg.filters.edge(e) && candidateIds.has(e.fromSymbol) && candidateIds.has(e.toSymbol)) {
         connectedIds.add(e.fromSymbol);
         connectedIds.add(e.toSymbol);
       }
     }
     return connectedIds;
-  }, [analysisData, selectedView]);
+  }, [selectedView]);
+
+  const graphVisibleNodeIds = useMemo(() => computeVisibleNodeIds(analysisData), [computeVisibleNodeIds, analysisData]);
+
+  // Git diff: the changed nodes are permanently selected in the graph
+  const diffData = diffState.result?.success && diffState.result.state === 'ok' ? diffState.result.data : null;
+  const diffVisibleNodeIds = useMemo(() => computeVisibleNodeIds(diffData), [computeVisibleNodeIds, diffData]);
+  const diffLockedNodeIds = useMemo(
+    () => new Set(
+      (diffData?.nodes ?? [])
+        .filter((n) => n.diffStatus && n.diffStatus !== 'unchanged')
+        .map((n) => n.scipSymbol),
+    ),
+    [diffData],
+  );
 
   const handleRepositorySelect = useCallback((path: string) => {
     setRepoPath(path);
@@ -205,6 +192,64 @@ export default function HomePage() {
     setActiveTab('graph');
     setPendingSelectionId(scipSymbol);
   }, []);
+
+  // The RepoGraph workspace shared by the graph tab and the git diff tab.
+  // In diff mode `lockedNodeIds` are permanently selected on top of any user selection.
+  const renderGraphView = (opts: {
+    data: AnalysisResult | null;
+    visibleNodeIds: Set<string>;
+    isLoading: boolean;
+    err: string | null;
+    lockedNodeIds?: Set<string>;
+    bridgeSelection?: boolean;
+  }) => (
+    <SelectionProvider
+      nodes={opts.data?.nodes ?? []}
+      edges={opts.data?.edges ?? []}
+      visibleNodeIds={opts.visibleNodeIds}
+      lockedNodeIds={opts.lockedNodeIds}
+      areas={areasData}
+    >
+      <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
+        {opts.bridgeSelection && (
+          <SelectionBridge
+            toggleRef={selectionToggleRef}
+            pendingId={pendingSelectionId}
+            onPendingConsumed={() => setPendingSelectionId(null)}
+          />
+        )}
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
+          <SearchSelectSidebar
+            nodes={opts.data?.nodes ?? []}
+            onSearchNode={(query) => searchHandlerRef.current?.(query) ?? false}
+            repoPath={repoPath}
+          />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <GraphToolbar
+              hideTestFiles={hideTestFiles}
+              onHideTestFilesChange={setHideTestFiles}
+              selectedView={selectedView}
+              onViewChange={setSelectedView}
+              viewOptions={VIEW_OPTIONS}
+              disabled={!repoPath}
+            />
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <RepoGraph
+                repoPath={repoPath}
+                hideTestFiles={hideTestFiles}
+                config={VIEW_OPTIONS[selectedView].config}
+                onSearchNode={handleRegisterSearch}
+                analysisData={opts.data}
+                loading={opts.isLoading}
+                error={opts.err}
+              />
+            </div>
+          </div>
+          <ManageSelectionSidebarWrapper repoPath={repoPath} />
+        </div>
+      </AreaProvider>
+    </SelectionProvider>
+  );
 
   return (
     <main className="h-screen flex flex-col p-2 gap-2 overflow-hidden">
@@ -248,9 +293,15 @@ export default function HomePage() {
                 />
               </AreaProvider>
             ) : activeTab === 'diff' ? (
-              <div className="flex-1 min-w-0 flex flex-col gap-2">
+              <div className="h-full min-w-0 flex flex-col gap-2">
                 <CompareBar diffState={diffState} />
-                <div className="flex-1 min-h-0 bg-white border border-gray-200 rounded-md overflow-hidden">
+                <div
+                  className={
+                    diffData && !diffState.loading
+                      ? 'flex-1 min-h-0'
+                      : 'flex-1 min-h-0 bg-white border border-gray-200 rounded-md overflow-hidden'
+                  }
+                >
                   {(() => {
                     if (!diffState.compare || (!diffState.loading && !diffState.result)) {
                       return <DiffStatePanel state="empty" />;
@@ -274,65 +325,24 @@ export default function HomePage() {
                     if (diffState.result.state === 'no-changes') {
                       return <DiffStatePanel state="no-changes" />;
                     }
-                    // ok state — render repo graph with diff config
-                    return (
-                      <RepoGraph
-                        repoPath={repoPath}
-                        hideTestFiles={true}
-                        config={diffViewConfig}
-                        analysisData={diffState.result.data}
-                        loading={diffState.loading}
-                        error={null}
-                        diffFitVersion={diffFitVersion}
-                      />
-                    );
+                    return renderGraphView({
+                      data: diffData,
+                      visibleNodeIds: diffVisibleNodeIds,
+                      isLoading: false,
+                      err: null,
+                      lockedNodeIds: diffLockedNodeIds,
+                    });
                   })()}
                 </div>
               </div>
             ) : activeTab === 'graph' ? (
-              <SelectionProvider
-                nodes={analysisData?.nodes ?? []}
-                edges={analysisData?.edges ?? []}
-                visibleNodeIds={graphVisibleNodeIds}
-                areas={areasData}
-              >
-                <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
-                  <SelectionBridge
-                    toggleRef={selectionToggleRef}
-                    pendingId={pendingSelectionId}
-                    onPendingConsumed={() => setPendingSelectionId(null)}
-                  />
-                  <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
-                    <SearchSelectSidebar
-                      nodes={analysisData?.nodes ?? []}
-                      onSearchNode={(query) => searchHandlerRef.current?.(query) ?? false}
-                      repoPath={repoPath}
-                    />
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <GraphToolbar
-                        hideTestFiles={hideTestFiles}
-                        onHideTestFilesChange={setHideTestFiles}
-                        selectedView={selectedView}
-                        onViewChange={setSelectedView}
-                        viewOptions={VIEW_OPTIONS}
-                        disabled={!repoPath}
-                      />
-                      <div style={{ flex: 1, minHeight: 0 }}>
-                        <RepoGraph
-                          repoPath={repoPath}
-                          hideTestFiles={hideTestFiles}
-                          config={VIEW_OPTIONS[selectedView].config}
-                          onSearchNode={handleRegisterSearch}
-                          analysisData={analysisData}
-                          loading={loading}
-                          error={error}
-                        />
-                      </div>
-                    </div>
-                    <ManageSelectionSidebarWrapper repoPath={repoPath} />
-                  </div>
-                </AreaProvider>
-              </SelectionProvider>
+              renderGraphView({
+                data: analysisData,
+                visibleNodeIds: graphVisibleNodeIds,
+                isLoading: loading,
+                err: error,
+                bridgeSelection: true,
+              })
             ) : (
               analysisData ? (
                 <StatsTreemap

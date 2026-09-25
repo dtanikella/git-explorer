@@ -36,6 +36,8 @@ export interface SelectionContextValue {
   toggleAreaMember(nodeId: string): void;
   activeNodeIds: Set<string>;
   hasSelection: boolean;
+  /** Node ids that are permanently selected (e.g. git diff changes); they cannot be deselected or cleared. */
+  lockedNodeIds: Set<string>;
 }
 
 // --- Context ---
@@ -181,11 +183,19 @@ interface SelectionProviderProps {
   edges: AnalysisEdge[];
   visibleNodeIds: Set<string>;
   areas: Area[];
+  /** Node ids that are always selected and cannot be toggled off (e.g. the diff tab's changed nodes). */
+  lockedNodeIds?: Set<string>;
   children: ReactNode;
 }
 
-export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, children }: SelectionProviderProps) {
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+const EMPTY_LOCKED: Set<string> = new Set();
+
+export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, lockedNodeIds = EMPTY_LOCKED, children }: SelectionProviderProps) {
+  const [userSelectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const selectedNodeIds = useMemo(
+    () => (lockedNodeIds.size === 0 ? userSelectedNodeIds : new Set([...userSelectedNodeIds, ...lockedNodeIds])),
+    [userSelectedNodeIds, lockedNodeIds],
+  );
   const [selectedAreaIds, setSelectedAreaIds] = useState<Set<string>>(new Set());
   const [expansions, setExpansions] = useState<Map<string, ExpansionGroup>>(new Map());
 
@@ -220,6 +230,7 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, childre
   const hasSelection = selectedNodeIds.size > 0 || selectedAreaIds.size > 0;
 
   const toggleNode = useCallback((id: string) => {
+    if (lockedNodeIds.has(id)) return;
     setSelectedNodeIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -229,7 +240,7 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, childre
       }
       return next;
     });
-  }, []);
+  }, [lockedNodeIds]);
 
   const toggleArea = useCallback((id: string) => {
     setSelectedAreaIds((prev) => {
@@ -304,7 +315,8 @@ export function SelectionProvider({ nodes, edges, visibleNodeIds, areas, childre
     toggleAreaMember,
     activeNodeIds,
     hasSelection,
-  }), [selectedNodeIds, selectedAreaIds, currentExpansions, toggleNode, toggleArea, clearSelection, toggleExpansionGroup, toggleExpandedNode, toggleAreaMember, activeNodeIds, hasSelection]);
+    lockedNodeIds,
+  }), [selectedNodeIds, selectedAreaIds, currentExpansions, toggleNode, toggleArea, clearSelection, toggleExpansionGroup, toggleExpandedNode, toggleAreaMember, activeNodeIds, hasSelection, lockedNodeIds]);
 
   return (
     <SelectionContext.Provider value={value}>

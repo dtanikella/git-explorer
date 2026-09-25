@@ -8,8 +8,6 @@ import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
-import { fitToChanges } from '@/lib/diff/fit';
-import { saturate } from '@/lib/diff/diff-view-config';
 import { resolveAreaInfluence } from '@/lib/areas/property-resolver';
 import { getDescendantIds } from '@/lib/areas/containment';
 import { buildAreaAnchors, type AreaAnchorNode } from '@/lib/areas/anchors';
@@ -34,8 +32,6 @@ interface RepoGraphProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
-  /** Increment to trigger a camera fit to diff-changed nodes */
-  diffFitVersion?: number;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -51,7 +47,7 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, diffFitVersion }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -329,22 +325,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
-      // In diff mode, compute touched area ids from node diff statuses
-      const hasDiffStatus = simNodes.some((n) => (n.data as any).diffStatus !== undefined);
-      let touchedAreaIds: Set<string> | undefined;
-      if (hasDiffStatus) {
-        const changedNodeSymbols = new Set(
-          simNodes
-            .filter((n) => (n.data as any).diffStatus && (n.data as any).diffStatus !== 'unchanged')
-            .map((n) => n.id),
-        );
-        touchedAreaIds = new Set(
-          areasRef.current
-            .filter((a) => a.contains.some((s) => changedNodeSymbols.has(s)))
-            .map((a) => a.id),
-        );
-      }
-      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current, touchedAreaIds);
+      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current);
 
       // Draw edges
       for (const e of simEdges) {
@@ -406,11 +387,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
         c.beginPath();
         c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
-        // Apply saturation if specified: desaturate toward luminance gray
-        const fillColor = (nStyle.saturation != null && nStyle.saturation < 1)
-          ? saturate(nStyle.color, nStyle.saturation)
-          : nStyle.color;
-        c.fillStyle = fillColor;
+        c.fillStyle = nStyle.color;
         c.globalAlpha = finalAlpha;
         c.fill();
         c.globalAlpha = 1.0;
@@ -424,17 +401,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           c.textAlign = 'center';
           c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
           c.globalAlpha = 1.0;
-        }
-
-        // Ghost ring for deleted nodes
-        if (nStyle.ghostRing) {
-          c.beginPath();
-          c.arc(n.x, n.y, nStyle.radius + 3, 0, 2 * Math.PI);
-          c.strokeStyle = nStyle.color;
-          c.lineWidth = 1.5;
-          c.setLineDash([3, 3]);
-          c.stroke();
-          c.setLineDash([]);
         }
 
         if (selectedNodeIdsRef.current.has(n.id)) {
@@ -621,60 +587,6 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       onSearchNode(handleSearchNode);
     }
   }, [onSearchNode, handleSearchNode]);
-
-  // Zoom-to-fit when diffFitVersion changes (diff tab)
-  useEffect(() => {
-    if (!diffFitVersion || !analysisData || !canvasRef.current || !zoomRef.current) return;
-
-    const nodes = analysisData.nodes;
-    const areas = areasRef.current;
-    const nodePositions = new Map<string, { x: number; y: number; radius: number }>();
-    for (const n of simNodesRef.current) {
-      if (n.x == null || n.y == null) continue;
-      const cfg = configRef.current;
-      const nStyle = cfg.style.node(n.data, n.degree);
-      nodePositions.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
-    }
-
-    const canvas = canvasRef.current;
-    const w = canvas.offsetWidth || 800;
-    const h = canvas.offsetHeight || 600;
-
-    // Fast-forward simulation if still running
-    if (simulationRef.current) {
-      const sim = simulationRef.current;
-      if (sim.alpha() > sim.alphaMin()) {
-        sim.stop();
-        while (sim.alpha() > sim.alphaMin()) {
-          sim.tick();
-        }
-        drawFrameRef.current?.();
-      }
-    }
-
-    const result = fitToChanges(
-      nodes as any,
-      areas,
-      nodePositions,
-      w,
-      h,
-    );
-
-    if (result) {
-      const [tx, ty, scale] = result;
-      const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
-      d3.select(canvas as any)
-        .transition()
-        .duration(300)
-        .call((zoomRef.current as any).transform, transform);
-    } else {
-      // Fall back to existing fit-all
-      const svg = d3.select(canvas as any);
-      if (zoomRef.current) {
-        svg.call((zoomRef.current as any).transform, d3.zoomIdentity);
-      }
-    }
-  }, [diffFitVersion]);
 
   // Zoom-to-fit when active set changes
   useEffect(() => {
