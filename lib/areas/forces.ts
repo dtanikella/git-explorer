@@ -60,6 +60,23 @@ export function zoneCentroid(
   return { x: sumX / zones.length, y: sumY / zones.length };
 }
 
+/**
+ * Creates a D3 force that pulls member nodes toward their area anchors.
+ *
+ * @remarks
+ * For each node, computes a weighted centroid of the anchors of all areas
+ * the node belongs to, then applies a velocity nudge proportional to
+ * `strength * alpha`. Weight is determined by each area's `clusterStrength`.
+ * Nodes that belong to no area or whose area has no anchor are unaffected.
+ *
+ * @param nodes - All force nodes in the simulation.
+ * @param nodeToAreas - Maps each node ID to the list of areas it belongs to.
+ * @param anchorsById - Maps area ID to anchor position.
+ * @param strength - Scalar multiplier; the corresponding constant in
+ *   {@link RepoGraphConfig.forces} is `areaCluster`.
+ * @returns A force function suitable for `d3-force`.
+ * @see commit 44a54d7
+ */
 export function createClusterPullForce(
   nodes: ForceNode[],
   nodeToAreas: Map<string, Area[]>,
@@ -92,6 +109,23 @@ export function createClusterPullForce(
   };
 }
 
+/**
+ * Creates a D3 force that pulls area anchors toward each other when they
+ * share cross-area edges.
+ *
+ * @remarks
+ * Reads edge weights from the cross-area edge map (keyed as
+ * `"<areaIdA>|<areaIdB>"`). Each pair is nudged toward each other
+ * proportional to `weight * strength * alpha`. The effect is that
+ * areas with many cross-references cluster spatially.
+ *
+ * @param anchors - All area anchor nodes in the simulation.
+ * @param edgeWeights - Cross-area edge weights keyed by `"<areaIdA>|<areaIdB>"`.
+ * @param strength - Scalar multiplier; the corresponding constant in
+ *   {@link RepoGraphConfig.forces} is `areaAttract`.
+ * @returns A force function suitable for `d3-force`.
+ * @see commit 44a54d7
+ */
 export function createAreaAttractForce(
   anchors: AreaAnchorNode[],
   edgeWeights: Map<string, number>,
@@ -122,6 +156,24 @@ export function createAreaAttractForce(
   };
 }
 
+/**
+ * Creates a D3 force that pulls a child area's anchor toward its parent
+ * area's anchor.
+ *
+ * @remarks
+ * Child anchors receive a velocity nudge toward their parent's current
+ * position, proportional to `strength * alpha`. Anchors with no parent
+ * are unaffected.
+ *
+ * @param anchors - All area anchor nodes; the force looks up each anchor's
+ *   parent through `areasById`.
+ * @param areasById - Maps area ID to full {@link Area} record, which includes
+ *   the optional `parent` field.
+ * @param strength - Scalar multiplier; the corresponding constant in
+ *   {@link RepoGraphConfig.forces} is `areaParent`.
+ * @returns A force function suitable for `d3-force`.
+ * @see commit 44a54d7
+ */
 export function createParentPullForce(
   anchors: AreaAnchorNode[],
   areasById: Map<string, Area>,

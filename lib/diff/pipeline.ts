@@ -1,3 +1,13 @@
+/**
+ * The end-to-end diff pipeline: converts git diffs into labelled
+ * declaration-level change data.
+ *
+ * @remarks
+ * Feeds on parsed file pairs from the diff services and produces
+ * labelled declarations, counts, and a status for each file.
+ *
+ * @packageDocumentation
+ */
 import type { AnalysisResult } from '@/lib/analysis/types';
 import type {
   GitAnalysisResult,

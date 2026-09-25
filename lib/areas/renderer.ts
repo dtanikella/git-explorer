@@ -10,6 +10,22 @@ export type HullResult =
   | { type: 'polygon'; points: [number, number][] }
   | null;
 
+/**
+ * Collects all symbols contained by an area and its transitive children.
+ *
+ * @remarks
+ * BFS through the area tree (via `children` array), collecting each node's
+ * `contains` set. Cycles are prevented with a visited set. Used by
+ * {@link computeAreaHull} to know which nodes are members of an area for
+ * hull computation.
+ *
+ * @param area - The root area to start from.
+ * @param areasById - Maps area ID to full {@link Area}; needed to look up
+ *   child areas during traversal.
+ * @returns An array of all contained symbol strings (may include duplicates
+ *   if the same symbol appears in multiple child areas).
+ * @see commit 90f409e
+ */
 export function getTransitiveContains(
   area: Area,
   areasById: Map<string, Area>,
@@ -33,6 +49,22 @@ export function getTransitiveContains(
   return [...symbols];
 }
 
+/**
+ * Computes the convex hull or circle representation of an area's member
+ * nodes for rendering.
+ *
+ * @remarks
+ * Returns a circle for 1-2 members (centered between them, padded) and a
+ * convex hull polygon for 3+ members. Null when the area has no positioned
+ * members. The hull is derived from member node positions in canvas/simulation
+ * space.
+ *
+ * @param area - The area whose hull to compute.
+ * @param nodePositions - Maps symbol to current position/radius in simulation space.
+ * @param areasById - Passed to {@link getTransitiveContains} for descendant lookups.
+ * @returns A {@link HullResult} (circle, polygon, or null).
+ * @see commit 436e32f
+ */
 export function computeAreaHull(
   area: Area,
   nodePositions: Map<string, { x: number; y: number; radius: number }>,
@@ -70,6 +102,19 @@ export function computeAreaHull(
   return { type: 'polygon', points: expanded };
 }
 
+/**
+ * Expands a convex hull polygon outward from its centroid by a fixed padding.
+ *
+ * @remarks
+ * Each vertex is moved radially away from the centroid so the hull encloses
+ * its members with a visual margin. For fewer than 3 points the hull is
+ * returned unchanged (a degenerate polygon cannot be expanded meaningfully).
+ *
+ * @param hull - The original convex hull vertices in order.
+ * @param padding - Distance in px to push each vertex outward.
+ * @returns A new array of expanded vertices.
+ * @see commit 436e32f
+ */
 export function expandHull(
   hull: [number, number][],
   padding: number,
@@ -97,6 +142,22 @@ export function expandHull(
   });
 }
 
+/**
+ * Draws area hull overlays and pill labels onto a canvas context.
+ *
+ * @remarks
+ * Iterates over all areas, skips invisible ones, and delegates hull
+ * computation to {@link computeAreaHull}. Renders filled+stroked hull
+ * shapes and a pill-style label above each hull. When `highlightedAreaId`
+ * is set, the matching area gets increased opacity and line width.
+ *
+ * @param ctx - The 2D canvas context to draw on.
+ * @param areas - All areas in the simulation.
+ * @param runtimeState - Per-area visibility and runtime state.
+ * @param nodePositions - Current positions of all force nodes.
+ * @param highlightedAreaId - Optional area ID to visually distinguish.
+ * @see commit 436e32f
+ */
 export function drawAreaOverlays(
   ctx: CanvasRenderingContext2D,
   areas: Area[],

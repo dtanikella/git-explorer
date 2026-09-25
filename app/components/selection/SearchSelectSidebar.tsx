@@ -25,6 +25,18 @@ function truncatePath(filePath: string): string {
   return parts[parts.length - 1];
 }
 
+/**
+ * Searchable sidebar for finding and selecting nodes interactively.
+ *
+ * @remarks
+ * Provides a search input that filters nodes by name, displays matching
+ * results, and allows toggling node/area selection. Integrates with
+ * {@link useSelection} for all selection state.
+ *
+ * @param nodes - All analysis nodes available for search and selection.
+ * @param onSearchNode - Callback when a node is selected via search to
+ *   pan the graph to it.
+ */
 export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelectSidebarProps) {
   const {
     state,

@@ -17,6 +17,14 @@ interface GraphToolbarProps {
   disabled: boolean;
 }
 
+/**
+ * Toolbar for selecting graph view modes and controlling the D3
+ * simulation.
+ *
+ * @remarks
+ * Provides view mode selector (Modules, Data Flow, Internal Processing),
+ * search input, zoom controls, and an auto-layout trigger.
+ */
 export default function GraphToolbar({
   hideTestFiles,
   onHideTestFilesChange,

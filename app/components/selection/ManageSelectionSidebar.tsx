@@ -24,6 +24,18 @@ interface DraftArea {
   children: string[];
 }
 
+/**
+ * Sidebar panel for managing node-to-area assignments and creating
+ * new areas.
+ *
+ * @remarks
+ * Supports drag-free assignment of selected nodes to areas, creation
+ * of new areas from selected groups, and batch add/remove operations.
+ * Integrates with {@link useSelection} and {@link useAreaStore}.
+ *
+ * @param effectiveNodeIds - Currently selected or relevant node IDs.
+ * @param repoPath - Repository path for persistence operations.
+ */
 export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: ManageSelectionSidebarProps) {
   const { hasSelection } = useSelection();
   const { areas, runtimeState, setAreas, getAreasForNode } = useAreaStore();

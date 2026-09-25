@@ -35,6 +35,17 @@ export interface AreaDragContextValue {
 
 const AreaDragContext = createContext<AreaDragContextValue | null>(null);
 
+/**
+ * Returns the area drag-and-drop context.
+ *
+ * @remarks
+ * Must be called under {@link AreaDragProvider}. Provides active drag
+ * state, dragged items, and handlers for managing drag operations
+ * on area tree nodes.
+ *
+ * @returns The {@link AreaDragContextValue} with drag state and handlers.
+ * @throws Error When called outside {@link AreaDragProvider}.
+ */
 export function useAreaDrag(): AreaDragContextValue {
   const ctx = useContext(AreaDragContext);
   if (!ctx) throw new Error('useAreaDrag must be used within an AreaDragProvider');
@@ -46,6 +57,17 @@ interface AreaDragProviderProps {
   handlers: DragHandlers;
 }
 
+/**
+ * Drag-and-drop provider for the area tree view.
+ *
+ * @remarks
+ * Wraps the area tree with `@dnd-kit` DnD context, handling pointer
+ * sensors, drag overlays, and end events for reordering and
+ * restructuring areas.
+ *
+ * @param children - Child components that can initiate drags.
+ * @param handlers - Drag event callbacks (onDrop, onCancel).
+ */
 export function AreaDragProvider({ children, handlers }: AreaDragProviderProps) {
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
 

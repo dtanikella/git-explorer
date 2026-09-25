@@ -24,6 +24,17 @@ function isDescendantOrSelf(areas: Area[], areaId: string, candidateId: string):
 }
 
 
+/**
+ * Full-view UI for browsing, creating, renaming, deleting, and
+ * restructuring areas with drag-and-drop.
+ *
+ * @remarks
+ * Renders the area tree table with DnD support, a create-area flow,
+ * and node browser pane. Integrates with {@link useAreaStore} for
+ * area state and {@link useAreaDrag} for drag operations.
+ *
+ * @param nodes - All analysis nodes available for area assignment.
+ */
 export default function AreaManagerView({ nodes }: AreaManagerViewProps) {
   const { areas, runtimeState, setAreas, saveError, retrySave, setAreaColor } = useAreaStore();
   const [createMode, setCreateMode] = useState(false);

@@ -1,9 +1,31 @@
 import type { Area } from './types';
 
+/**
+ * Produces a deterministic map key for an unordered pair of area IDs.
+ *
+ * @remarks
+ * The smaller ID always comes first so that `areaPairKey(a, b) ===
+ * areaPairKey(b, a)`. Used as the key for cross-area edge weights.
+ *
+ * @param idA - First area ID.
+ * @param idB - Second area ID.
+ * @returns A string in the form `"<idA>|<idB>"` with IDs sorted.
+ */
 export function areaPairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+/**
+ * Builds a map of cross-area edge weights from a set of analysis edges.
+ *
+ * @remarks
+ * For each analysis edge whose source and target belong to different areas,
+ * increments the weight for that area pair. The result is used by
+ * {@link createAreaAttractForce} to pull related area anchors together.
+ *
+ * @param analysisEdges - All analysis edges, each carrying source/target area IDs.
+ * @returns A map from area pair key (see {@link areaPairKey}) to occurrence count.
+ */
 export function buildCrossAreaEdgeWeights(
   edges: Array<[string, string]>,
   nodeToAreas: Map<string, Area[]>,

@@ -16,6 +16,20 @@ export interface TsAnalysisOptions {
   hideTestFiles: boolean;
 }
 
+/**
+ * Runs the TypeScript analysis pipeline: SCIP indexing, tree-sitter
+ * extraction, and graph assembly.
+ *
+ * @remarks
+ * Orchestrates SCIP index retrieval/creation, tree-sitter-based node
+ * and edge extraction, and assembly of the final result. Test-file
+ * filtering is applied when `hideTestFiles` is true.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @param options - Options controlling test file filtering.
+ * @returns The assembled {@link AnalysisResult}.
+ * @see commit 6e57d72
+ */
 export async function analyzeTsRepo(
   repoPath: string,
   options: TsAnalysisOptions,

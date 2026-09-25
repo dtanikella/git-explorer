@@ -79,6 +79,16 @@ function DraggableNodeRow({
   );
 }
 
+/**
+ * Searchable/filterable browser pane for selecting nodes to assign to areas.
+ *
+ * @remarks
+ * Displays analysis nodes with search, type filter, and unassigned-only
+ * toggle. Selected nodes can be drag-assigned to areas in the area tree.
+ *
+ * @param nodes - All analysis nodes available for browsing.
+ * @param assignedNodeIds - Set of node IDs already assigned to areas.
+ */
 export default function NodeBrowserPane({
   nodes,
   assignedNodeIds = new Set(),

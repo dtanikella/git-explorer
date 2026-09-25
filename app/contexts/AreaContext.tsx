@@ -21,6 +21,18 @@ export interface AreaStoreValue {
 
 const AreaContext = createContext<AreaStoreValue | null>(null);
 
+/**
+ * Returns the area store context value.
+ *
+ * @remarks
+ * Must be called under {@link AreaProvider}. Provides the list of areas,
+ * runtime visibility state, node-to-area lookup, and mutation methods.
+ *
+ * @returns The {@link AreaStoreValue} for the current provider.
+ * @throws Error When called outside {@link AreaProvider}.
+ * @see PR #38
+ * @see PR #39
+ */
 export function useAreaStore(): AreaStoreValue {
   const ctx = useContext(AreaContext);
   if (!ctx) throw new Error('useAreaStore must be used within an AreaProvider');
@@ -45,6 +57,18 @@ interface AreaProviderProps {
   onAreasChange?: (areas: Area[]) => void;
 }
 
+/**
+ * Context provider that manages area state, persistence, and visibility.
+ *
+ * @remarks
+ * Provides area CRUD, visibility toggling, color assignment, and
+ * autosave with a serialized queue to prevent concurrent overwrites.
+ * Must wrap any component that uses {@link useAreaStore}.
+ *
+ * @see PR #38
+ * @see PR #39
+ * @see PR #40
+ */
 export function AreaProvider({ areas: initialAreas, repoPath, children, onAreasChange }: AreaProviderProps) {
   const [areas, setAreasState] = useState<Area[]>(initialAreas);
   const [runtimeState, setRuntimeState] = useState<Map<string, AreaRuntimeState>>(() =>

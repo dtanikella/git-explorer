@@ -14,6 +14,19 @@ export interface AssemblyInput {
   startTime: number;
 }
 
+/**
+ * Assembles extracted nodes and edges into a final {@link AnalysisResult}
+ * with computed metadata.
+ *
+ * @remarks
+ * Shared between the TypeScript and Ruby analysis pipelines. Computes
+ * duration from `startTime`, counts nodes and edges, and copies over
+ * the missing-type sets from the analysis types module.
+ *
+ * @param input - The nodes, edges, repo path, language, and start timestamp.
+ * @returns A complete {@link AnalysisResult} with all metadata.
+ * @see commit d83512a
+ */
 export function assembleResult(input: AssemblyInput): AnalysisResult {
   return {
     nodes: input.nodes,

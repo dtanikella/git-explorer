@@ -67,6 +67,16 @@ function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
   return null;
 }
 
+/**
+ * Main application page that orchestrates repository selection, analysis,
+ * and graph visualization.
+ *
+ * @remarks
+ * Top-level state holder for repo path, analysis data, active tab, and
+ * search/selections. Renders the appropriate view (graph, stats, areas,
+ * or diff) based on the active tab. Coordinate transforms occur at this
+ * level so child components share the same projection.
+ */
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [hideTestFiles, setHideTestFiles] = useState(true);

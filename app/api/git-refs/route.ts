@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execFileSync } from 'child_process';
 
+/**
+ * `GET /api/git-refs`: Lists branches, tags, and optionally validates a
+ * commit SHA for a git repository.
+ *
+ * @remarks
+ * Runs `git for-each-ref` for branches and tags, `git branch --show-current`
+ * for the current branch, and optionally `git rev-parse --verify` for SHA
+ * validation. Responds 200 with ref data, 400 when repoPath is missing,
+ * 404 when the path is not a git repository, and 500 on unexpected errors.
+ *
+ * @param request - Query params: `repoPath` (required), `sha` (optional).
+ * @returns A JSON response with branches, tags, and optional SHA validation.
+ */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const repoPath = searchParams.get('repoPath');

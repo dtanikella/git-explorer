@@ -26,6 +26,21 @@ async function getCurrentHead(repoPath: string): Promise<string> {
   return (await git.revparse(['HEAD'])).trim();
 }
 
+/**
+ * Reads a previously cached SCIP index for the repository, returning null
+ * when the cache is absent, invalid, or stale (HEAD mismatch).
+ *
+ * @remarks
+ * Checks that both `cache-meta.json` and `index.scip` exist under
+ * `.git-explorer/` and that the saved HEAD SHA matches the current HEAD.
+ * If any check fails, returns null (the caller falls through to indexing).
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @returns A {@link CacheResult} with the index path and metadata, or null
+ *   when the cache is missing or stale.
+ * @throws {@link ScipCacheError} Propagated from file system errors.
+ * @see commit 7074a17
+ */
 export async function getCachedIndex(repoPath: string): Promise<CacheResult | null> {
   const { indexPath, metaPath } = getCachePaths(repoPath);
 
@@ -61,6 +76,21 @@ export async function getCachedIndex(repoPath: string): Promise<CacheResult | nu
   };
 }
 
+/**
+ * Copies a freshly-built SCIP index into the cache directory and writes
+ * metadata (HEAD SHA, timestamp) so future reads can validate freshness.
+ *
+ * @remarks
+ * Creates `.git-explorer/` if it does not exist. When `indexPath` already
+ * points inside the cache directory (same resolved path), the copy is
+ * skipped to avoid self-copying. Always writes/updates `cache-meta.json`.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @param indexPath - Path to the SCIP index file to cache (usually a temp file).
+ * @throws {@link ScipCacheError} When the HEAD SHA cannot be resolved, file
+ *   operations fail, or the index file is missing after copy.
+ * @see commit 7074a17
+ */
 export async function saveCachedIndex(repoPath: string, indexPath: string): Promise<void> {
   const { cacheDir, indexPath: cachedIndexPath, metaPath } = getCachePaths(repoPath);
 
@@ -100,6 +130,17 @@ export async function saveCachedIndex(repoPath: string, indexPath: string): Prom
   }
 }
 
+/**
+ * Quick check: returns true when the cached index exists and matches HEAD.
+ *
+ * @remarks
+ * Convenience wrapper around {@link getCachedIndex}. Does not distinguish
+ * between "no cache" and "stale cache" — both return false.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @returns True when a valid cached index exists for the current HEAD.
+ * @see commit 7074a17
+ */
 export async function isCacheValid(repoPath: string): Promise<boolean> {
   const result = await getCachedIndex(repoPath);
   return result !== null;

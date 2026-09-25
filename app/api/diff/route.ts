@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runDiffPipeline } from '@/lib/diff/pipeline';
 
+/**
+ * `POST /api/diff`: Runs the diff pipeline for a repository commit.
+ *
+ * @remarks
+ * Accepts a repo path and optional commit SHA (HEAD if omitted). Executes
+ * the full diff pipeline and returns file-level diff results. Responds 200
+ * on success, 400 on bad request, and 500 on unexpected errors.
+ *
+ * @param request - JSON body with `repoPath` (string, required) and optional
+ *   `commitSha` (string).
+ * @returns A JSON response with the diff pipeline result.
+ * @see {@link runDiffPipeline}
+ */
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {

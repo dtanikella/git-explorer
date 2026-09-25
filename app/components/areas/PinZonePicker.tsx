@@ -17,6 +17,20 @@ const ZONE_LABELS = [
 
 // Compact 3x3 toggle grid for pinning an area to one or more regions of the
 // repo-graph canvas. Controlled: `value` holds selected row-major cell indices (0-8).
+/**
+ * Interactive 3x3 grid zone selector for pinning an area to canvas
+ * zones.
+ *
+ * @remarks
+ * Renders a grid of cells; clicking toggles zone membership. Used within
+ * the area manager to set which canvas zones an area's nodes cluster
+ * toward.
+ *
+ * @param areaId - The area being configured.
+ * @param value - Array of selected zone indices (0-8).
+ * @param onChange - Callback with the updated zone selection.
+ * @param size - Cell size in pixels (default 36).
+ */
 export default function PinZonePicker({ areaId, value, onChange, size = 36 }: PinZonePickerProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const selected = new Set(value);

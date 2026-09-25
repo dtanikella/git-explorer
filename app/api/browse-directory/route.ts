@@ -4,6 +4,16 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+/**
+ * `GET /api/browse-directory`: Opens a native folder picker dialog and
+ * returns the selected directory path.
+ *
+ * @remarks
+ * Uses AppleScript's `choose folder` dialog (macOS only). Responds 200
+ * with the selected path on success, or 400 when no folder was selected.
+ *
+ * @returns A JSON response with `{ path }` on selection, or an error.
+ */
 export async function GET() {
   try {
     const { stdout } = await execAsync(

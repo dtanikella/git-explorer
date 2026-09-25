@@ -47,6 +47,23 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   data: AnalysisEdge;
 }
 
+/**
+ * Canvas-based D3 force-directed graph with area overlays and zoom/pan.
+ *
+ * @remarks
+ * Renders the analysis node/edge graph using a canvas element with D3
+ * force simulation. Supports zoom, pan, hover tooltips, area hull
+ * overlays, and node selection. The diff view mode selects nodes
+ * permanently rather than interactively.
+ *
+ * @param repoPath - Repository path for click-to-explore navigation.
+ * @param hideTestFiles - Whether test files are filtered from the view.
+ * @param config - Graph configuration (filters, style, forces, simulation).
+ * @param onSearchNode - Callback when a node is selected via search.
+ * @param analysisData - The full analysis result (nodes and edges).
+ * @param loading - Whether analysis is in progress.
+ * @param error - Analysis error message, if any.
+ */
 export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);

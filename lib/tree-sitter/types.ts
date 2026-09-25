@@ -7,6 +7,13 @@
 // Error Classes
 // ============================================================================
 
+/**
+ * Thrown when a tree-sitter parse operation fails.
+ *
+ * @remarks
+ * Carries a snippet of the source text that caused the parse failure
+ * and the language name for diagnostic context.
+ */
 export class TreeSitterParseError extends Error {
   readonly name = 'TreeSitterParseError';
 
@@ -20,6 +27,13 @@ export class TreeSitterParseError extends Error {
   }
 }
 
+/**
+ * Thrown when a tree-sitter language module cannot be loaded.
+ *
+ * @remarks
+ * Carries the language name and the optional grammar module path
+ * for diagnostic context.
+ */
 export class TreeSitterLanguageError extends Error {
   readonly name = 'TreeSitterLanguageError';
 
@@ -33,6 +47,12 @@ export class TreeSitterLanguageError extends Error {
   }
 }
 
+/**
+ * Thrown when a tree-sitter query pattern is invalid.
+ *
+ * @remarks
+ * Carries the pattern text and language name for diagnostic context.
+ */
 export class TreeSitterQueryError extends Error {
   readonly name = 'TreeSitterQueryError';
 
@@ -50,6 +70,13 @@ export class TreeSitterQueryError extends Error {
 // Interfaces
 // ============================================================================
 
+/**
+ * The result of parsing a source file with tree-sitter.
+ *
+ * @remarks
+ * Wraps the parsed tree, a flag for parse errors, and the language
+ * identifier used for parsing.
+ */
 export interface ParseResult {
   tree: import('./tree').TreeWrapper;
   hasErrors: boolean;

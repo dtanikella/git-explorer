@@ -73,12 +73,24 @@ export class NodeWrapper {
   }
 
   // Navigation — field-based
+/**
+   * Returns the first child node with a given field name, or null.
+   *
+   * @param fieldName - The field name to look up.
+   * @returns The matching child node, or null.
+   */
   childForFieldName(fieldName: string): NodeWrapper | null {
     const child = this._node.childForFieldName(fieldName);
     return child ? new NodeWrapper(child) : null;
   }
 
   // Search
+/**
+   * Returns all descendant nodes matching the given type(s).
+   *
+   * @param type - A single type string or array of type strings.
+   * @returns An array of matching descendant nodes.
+   */
   descendantsOfType(type: string | string[]): NodeWrapper[] {
     const types = Array.isArray(type) ? type : [type];
     const results: NodeWrapper[] = [];

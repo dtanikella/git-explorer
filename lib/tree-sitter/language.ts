@@ -21,6 +21,20 @@ const LANGUAGE_REGISTRY: Record<string, LanguageMapping> = {
 
 const languageCache = new Map<string, Language>();
 
+/**
+ * Loads a tree-sitter language by name, caching the native binding for reuse.
+ *
+ * @remarks
+ * Supported languages are registered in a bundled map of language IDs to
+ * tree-sitter grammar npm packages. The grammar module is loaded on first
+ * access using a project-root-anchored require and cached in a module-level
+ * map. Subsequent calls return the cached instance.
+ *
+ * @param name - The language identifier (e.g., "typescript", "ruby", "tsx").
+ * @returns The loaded tree-sitter {@link Language} instance.
+ * @throws {@link TreeSitterLanguageError} When the language is unsupported
+ *   or the grammar module fails to load.
+ */
 export function loadLanguage(name: string): Language {
   const cached = languageCache.get(name);
   if (cached) {
@@ -59,6 +73,13 @@ export function loadLanguage(name: string): Language {
   return grammar;
 }
 
+/**
+ * Clears all cached language instances, forcing a fresh load on next access.
+ *
+ * @remarks
+ * Primarily useful in tests and when the caller knows a grammar module has
+ * been updated at runtime.
+ */
 export function clearLanguageCache(): void {
   languageCache.clear();
 }

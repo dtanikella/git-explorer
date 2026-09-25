@@ -1,3 +1,13 @@
+/**
+ * Canonical list of area type labels.
+ *
+ * @remarks
+ * Each area must have exactly one type from this list. Types are used
+ * for visual classification (color coding, grouping) and are not
+ * persisted as a separate enum to keep the JSON schema simple.
+ *
+ * @see commit bd44d59
+ */
 export const AREA_TYPES = [
   'business_domain',
   'utils',
@@ -7,8 +17,26 @@ export const AREA_TYPES = [
   'entrypoint',
 ] as const;
 
+/**
+ * Discriminated union of all valid area types.
+ *
+ * @remarks
+ * Derived from the AREA_TILES constant array.
+ */
 export type AreaType = (typeof AREA_TYPES)[number];
 
+/**
+ * An area node in the hierarchy.
+ *
+ * @remarks
+ * Each area has a type, a list of contained node symbols (by SCIP symbol),
+ * an optional parent for nesting, and children references. Areas hold
+ * force-configuration parameters (clusterStrength, pinnedZones) that
+ * affect simulation behavior.
+ *
+ * @see commit bd44d59
+ * @see PR #38, #39, #40
+ */
 export interface Area {
   id: string;
   created_at: string;
@@ -23,21 +51,55 @@ export interface Area {
   color?: string;
 }
 
+/**
+ * The on-disk JSON structure for area persistence.
+ *
+ * @remarks
+ * Wraps the areas array with a schema version number for forward
+ * compatibility.
+ */
 export interface AreaFile {
   version: 1;
   areas: Area[];
 }
 
+/**
+ * Per-area runtime state that is not persisted to disk.
+ *
+ * @remarks
+ * Includes visibility toggles and resolved display color.
+ */
 export interface AreaRuntimeState {
   visible: boolean;
   color: string;
 }
 
+/**
+ * Result of validating an area file JSON payload.
+ *
+ * @remarks
+ * Validation errors are accumulated and returned as an array rather
+ * than failing on the first error.
+ */
 export interface AreaValidationResult {
   valid: boolean;
   errors: string[];
 }
 
+/**
+ * Validates a parsed JSON object as an area file structure.
+ *
+ * @remarks
+ * Checks for the expected schema: `version` must be 1, `areas` must be an
+ * array, each area must have an `id` and `name`, and containment references
+ * must resolve within the file. Returns all validation errors found rather
+ * than failing on the first one.
+ *
+ * @param data - The parsed JSON value (usually from `JSON.parse`).
+ * @returns An {@link AreaValidationResult} with the validity flag and any
+ *   error messages.
+ * @see commit bd44d59
+ */
 export function validateAreaFile(data: unknown): AreaValidationResult {
   const errors: string[] = [];
 

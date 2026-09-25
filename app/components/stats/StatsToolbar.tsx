@@ -10,6 +10,10 @@ interface StatsToolbarProps {
 
 const TOP_N_OPTIONS = [10, 20, 50];
 
+/**
+ * Toolbar for the stats/treemap view with sorting, filtering, and
+ * display controls.
+ */
 export default function StatsToolbar({
   topN,
   onTopNChange,

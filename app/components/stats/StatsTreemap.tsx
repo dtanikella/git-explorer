@@ -23,6 +23,21 @@ interface TreemapDatum {
   inboundCount: number;
 }
 
+/**
+ * D3-based treemap visualization of analysis nodes by reference count.
+ *
+ * @remarks
+ * Renders a squarified treemap using d3-hierarchy, colored by reference
+ * density (red scale). Nodes with zero references are excluded. Supports
+ * click-to-select navigation.
+ *
+ * @param nodes - Analysis nodes to render.
+ * @param topN - Maximum number of nodes to display.
+ * @param hideTestFiles - Whether to exclude test file nodes.
+ * @param onNodeSelect - Callback when a treemap cell is clicked.
+ * @param graphVisibleNodeIds - Node IDs visible in the graph (passed for
+ *   potential cross-highlighting).
+ */
 export default function StatsTreemap({ nodes, topN, hideTestFiles, onNodeSelect, graphVisibleNodeIds }: StatsTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });

@@ -14,6 +14,16 @@ function truncatePath(filePath: string): string {
   return parts[parts.length - 1];
 }
 
+/**
+ * Renders the area tree with selection state and expansion controls.
+ *
+ * @remarks
+ * Displays areas hierarchically with expand/collapse, visibility toggle,
+ * and member selection. Integrates with {@link useSelection} for selection
+ * state and {@link useAreaStore} for area data.
+ *
+ * @param nodes - Analysis nodes for area membership display.
+ */
 export default function AreaTree({ nodes }: AreaTreeProps) {
   const { state, toggleArea, toggleAreaMember } = useSelection();
   const { selectedAreaIds, expansions } = state;

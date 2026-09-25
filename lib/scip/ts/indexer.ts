@@ -41,6 +41,26 @@ function runScipIndex(
   });
 }
 
+/**
+ * Indexes a TypeScript repository by running the `scip-typescript` CLI
+ * as a subprocess, with optional caching and timeout.
+ *
+ * @remarks
+ * Checks the cache first (unless `forceReindex` is true). If no valid
+ * cached index exists, resolves the `scip-typescript` binary and spawns
+ * it to produce an index file at `.git-explorer/index.scip`. The caller
+ * is responsible for saving the result to the long-term cache via
+ * {@link saveCachedIndex}.
+ *
+ * @param repoPath - Absolute path to the git repository root.
+ * @param options - Optional indexing options (force reindex, custom timeout).
+ * @returns An {@link IndexResult} with the output path and cache hit status.
+ * @throws When the `scip-typescript` binary cannot be found or the subprocess
+ *   exits with a non-zero code.
+ * @see {@link getCachedIndex}
+ * @see {@link saveCachedIndex}
+ * @see commit 96945e0
+ */
 export async function indexTypeScriptRepo(
   repoPath: string,
   options?: IndexOptions,

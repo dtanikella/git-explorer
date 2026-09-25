@@ -204,6 +204,20 @@ export interface RubyNodeExtractionOutput {
   nodeMap: Map<string, AnalysisNode>;
 }
 
+/**
+ * Extracts analysis nodes from Ruby source files via tree-sitter AST
+ * traversal.
+ *
+ * @remarks
+ * Walks each file's AST for class, module, method, singleton-class, and
+ * assignment declarations. Tracks scope nesting (class/module/method) to
+ * produce qualified symbol names. Ruby extraction uses tree-sitter only
+ * (no SCIP).
+ *
+ * @param input - Parsed Ruby files and language configuration.
+ * @returns An object with `nodes` array and a symbol-to-node map.
+ * @see commit e20b947
+ */
 export function extractRubyNodes(input: RubyNodeExtractionInput): RubyNodeExtractionOutput {
   const nodes: AnalysisNode[] = [];
   const nodeMap = new Map<string, AnalysisNode>();
@@ -219,6 +233,16 @@ export function extractRubyNodes(input: RubyNodeExtractionInput): RubyNodeExtrac
   return { nodes, nodeMap };
 }
 
+/**
+ * Recursively walks Ruby AST declarations, building analysis nodes.
+ *
+ * @param node - The current tree-sitter AST node.
+ * @param filePath - The file path for node metadata.
+ * @param scopeStack - Current scope nesting stack.
+ * @param inSingletonClass - Parallel stack tracking singleton class context.
+ * @param nodes - Output node array, mutated in place.
+ * @param nodeMap - Output node map, mutated in place.
+ */
 function walkRubyDeclarations(
   node: NodeWrapper,
   filePath: string,
@@ -280,6 +304,17 @@ function walkRubyDeclarations(
   }
 }
 
+/**
+ * Processes a single Ruby declaration node, creating an analysis node.
+ *
+ * @param declNode - The declaration AST node (class, module, method).
+ * @param filePath - The file path for node metadata.
+ * @param syntaxType - The syntax type for the declaration.
+ * @param scopeStack - Current scope nesting (mutated for class/module defs).
+ * @param inSingletonClass - Singleton tracking stack (mutated).
+ * @param nodes - Output node array, mutated in place.
+ * @param nodeMap - Output node map, mutated in place.
+ */
 function processDeclaration(
   declNode: NodeWrapper,
   filePath: string,
@@ -348,6 +383,16 @@ function processDeclaration(
   }
 }
 
+/**
+ * Processes a method definition node within a Ruby class/module context.
+ *
+ * @param methodNode - The method definition AST node.
+ * @param filePath - The file path for node metadata.
+ * @param scopePath - The current qualified scope path.
+ * @param isSingleton - Whether in a singleton class context.
+ * @param nodes - Output node array, mutated in place.
+ * @param nodeMap - Output node map, mutated in place.
+ */
 function processMethodNode(
   methodNode: NodeWrapper,
   filePath: string,
