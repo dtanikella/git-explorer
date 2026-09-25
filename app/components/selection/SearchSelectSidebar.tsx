@@ -34,7 +34,9 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
     toggleExpansionGroup,
     toggleExpandedNode,
     toggleAreaMember,
+    lockedNodeIds,
   } = useSelection();
+  const hasLocked = lockedNodeIds.size > 0;
   const { selectedNodeIds, selectedAreaIds, expansions } = state;
   const { areas, runtimeState, nodeToAreas } = useAreaStore();
 
@@ -104,6 +106,89 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
     if (e.key === 'Enter') handleSearch();
   };
 
+  // Selected nodes organized by file system: directory → file → node
+  const selectedTree = useMemo(() => {
+    interface DirNode { dirs: Map<string, DirNode>; files: Map<string, AnalysisNode[]> }
+    const root: DirNode = { dirs: new Map(), files: new Map() };
+    for (const node of selectedNodes) {
+      const parts = node.filePath.split('/').filter(Boolean);
+      const fileName = parts.pop() ?? node.filePath;
+      let dir = root;
+      for (const part of parts) {
+        if (!dir.dirs.has(part)) dir.dirs.set(part, { dirs: new Map(), files: new Map() });
+        dir = dir.dirs.get(part)!;
+      }
+      if (!dir.files.has(fileName)) dir.files.set(fileName, []);
+      dir.files.get(fileName)!.push(node);
+    }
+    return root;
+  }, [selectedNodes]);
+
+  const renderNodeRow = (node: AnalysisNode) => (
+
+              <div
+                key={node.scipSymbol}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '4px 0',
+                  borderBottom: '1px solid #f3f4f6',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{node.name}</span>
+                  <span
+                    style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={node.filePath}
+                  >
+                    {truncatePath(node.filePath)}
+                  </span>
+                  {renderTagsForNode(node.scipSymbol)}
+                </div>
+                {lockedNodeIds.has(node.scipSymbol) ? (
+                  <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }} title="Locked by git diff">locked</span>
+                ) : (
+                  <button
+                    data-testid={`deselect-${node.scipSymbol}`}
+                    onClick={() => toggleNode(node.scipSymbol)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#9ca3af',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      lineHeight: 1,
+                      padding: '0 2px',
+                      flexShrink: 0,
+                    }}
+                    title="Deselect"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+  );
+
+  const renderDir = (dir: typeof selectedTree, depth: number): React.ReactNode => (
+    <>
+      {[...dir.dirs.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, child]) => (
+        <div key={`dir:${depth}:${name}`} style={{ marginLeft: depth === 0 ? 0 : 10 }}>
+          <div style={{ fontSize: 11, color: '#374151', fontWeight: 600, padding: '2px 0' }}>{name}/</div>
+          {renderDir(child, depth + 1)}
+        </div>
+      ))}
+      {[...dir.files.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([fileName, fileNodes]) => (
+        <div key={`file:${depth}:${fileName}`} style={{ marginLeft: depth === 0 ? 0 : 10 }}>
+          <div style={{ fontSize: 11, color: '#6b7280', padding: '2px 0' }}>{fileName}</div>
+          <div style={{ marginLeft: 10 }}>
+            {fileNodes.map((node) => renderNodeRow(node))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+
   const renderTagsForNode = (nodeId: string) => {
     const nodeAreas = nodeToAreas.get(nodeId) ?? [];
     return nodeAreas.map((area) => {
@@ -152,19 +237,21 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
         }}
       >
         <span style={{ fontWeight: 600 }}>Search & Select</span>
-        <button
-          onClick={clearSelection}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#6b7280',
-            cursor: 'pointer',
-            fontSize: 11,
-            textDecoration: 'underline',
-          }}
-        >
-          Clear all
-        </button>
+        {!hasLocked && (
+          <button
+            onClick={clearSelection}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#6b7280',
+              cursor: 'pointer',
+              fontSize: 11,
+              textDecoration: 'underline',
+            }}
+          >
+            Clear all
+          </button>
+        )}
       </div>
 
       {/* Scrollable content */}
@@ -209,46 +296,9 @@ export default function SearchSelectSidebar({ nodes, onSearchNode }: SearchSelec
         {selectedNodes.length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 500 }}>Selected nodes</div>
-            {selectedNodes.map((node) => (
-              <div
-                key={node.scipSymbol}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '4px 0',
-                  borderBottom: '1px solid #f3f4f6',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{node.name}</span>
-                  <span
-                    style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    title={node.filePath}
-                  >
-                    {truncatePath(node.filePath)}
-                  </span>
-                  {renderTagsForNode(node.scipSymbol)}
-                </div>
-                <button
-                  data-testid={`deselect-${node.scipSymbol}`}
-                  onClick={() => toggleNode(node.scipSymbol)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#9ca3af',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    lineHeight: 1,
-                    padding: '0 2px',
-                    flexShrink: 0,
-                  }}
-                  title="Deselect"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+            <div style={{ maxHeight: 500, overflowY: 'auto' }} data-testid="selected-nodes-scroll">
+              {renderDir(selectedTree, 0)}
+            </div>
           </div>
         )}
 

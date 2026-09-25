@@ -28,6 +28,7 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
   const { hasSelection } = useSelection();
   const { areas, runtimeState, setAreas, getAreasForNode } = useAreaStore();
 
+  const [collapsed, setCollapsed] = useState(false);
   const [pendingAdds, setPendingAdds] = useState<Set<string>>(new Set());
   const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
   const [pendingCreate, setPendingCreate] = useState<DraftArea | null>(null);
@@ -269,6 +270,36 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
 
   if (!hasSelection) return null;
 
+  if (collapsed) {
+    return (
+      <div
+        data-testid="manage-selection-sidebar"
+        style={{
+          width: 32,
+          borderLeft: '1px solid #e5e7eb',
+          background: '#f9fafb',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '8px 0',
+          fontSize: 12,
+        }}
+      >
+        <button
+          data-testid="expand-manage-selection"
+          onClick={() => setCollapsed(false)}
+          title="Expand Manage Selection"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14, lineHeight: 1 }}
+        >
+          «
+        </button>
+        <span style={{ writingMode: 'vertical-rl', marginTop: 8, fontWeight: 600, color: '#6b7280' }}>
+          Manage Selection
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="manage-selection-sidebar"
@@ -293,7 +324,7 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
         }}
       >
         <span style={{ fontWeight: 600 }}>Manage Selection</span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button
             data-testid="save-selection"
             onClick={handleSave}
@@ -326,6 +357,14 @@ export default function ManageSelectionSidebar({ effectiveNodeIds, repoPath }: M
             }}
           >
             Clear
+          </button>
+          <button
+            data-testid="collapse-manage-selection"
+            onClick={() => setCollapsed(true)}
+            title="Collapse Manage Selection"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14, lineHeight: 1 }}
+          >
+            »
           </button>
         </div>
       </div>

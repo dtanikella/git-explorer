@@ -1,5 +1,5 @@
 import type { ParsedFilePair } from './file-trees';
-import type { DiffUnit, LabelledDeclaration, MappedSpan } from './types';
+import type { LabelledDeclaration, MappedSpan } from './types';
 import { extractUnits, mapSpans } from './units';
 
 /**

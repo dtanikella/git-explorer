@@ -67,7 +67,13 @@ export async function GET(request: NextRequest) {
       // detached HEAD
     }
 
-    const data: any = {
+    const data: {
+      branches: string[];
+      tags: string[];
+      defaultBranch: string | null;
+      currentBranch: string | null;
+      sha?: { input: string; valid: boolean; resolved: string | null };
+    } = {
       branches,
       tags,
       defaultBranch,
@@ -89,9 +95,10 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { message?: string };
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to list refs' },
+      { success: false, error: error.message || 'Failed to list refs' },
       { status: 500 },
     );
   }

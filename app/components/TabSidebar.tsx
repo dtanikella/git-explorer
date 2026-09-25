@@ -1,6 +1,6 @@
 'use client';
 
-export type TabId = 'graph' | 'stats' | 'areas';
+export type TabId = 'graph' | 'stats' | 'areas' | 'diff';
 
 interface TabSidebarProps {
   activeTab: TabId;
@@ -42,6 +42,20 @@ export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) 
           <circle cx="8" cy="8" r="5" />
           <circle cx="13" cy="8" r="5" />
           <circle cx="10.5" cy="12" r="5" />
+        </svg>
+      ),
+    },
+    {
+      id: 'diff',
+      label: 'Diff',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <rect x="3.6" y="3.6" width="12.8" height="12.8" rx="2" transform="rotate(45 10 10)"/>
+          <circle cx="10" cy="6.6" r="1.1" fill="currentColor"/>
+          <circle cx="10" cy="13.4" r="1.1" fill="currentColor"/>
+          <circle cx="13.2" cy="9.4" r="1.1" fill="currentColor"/>
+          <line x1="10" y1="7.4" x2="10" y2="12.6"/>
+          <path d="M10 8.4 L12.6 9.4"/>
         </svg>
       ),
     },

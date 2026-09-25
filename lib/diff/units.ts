@@ -313,9 +313,8 @@ export function mapSpans(
   const oldLines = oldSource?.split('\n') ?? [];
   const newLines = newSource?.split('\n') ?? [];
 
-  for (const aligned of difft.aligned_lines) {
-    const [oldRow, newRow] = aligned;
-    // Skip rows with no alignment
+  for (const _aligned of difft.aligned_lines) {
+    // aligned_lines provides row pairing used by labelModifiedFile
   }
 
   for (const chunk of difft.chunks) {
