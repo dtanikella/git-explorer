@@ -241,6 +241,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
           <SearchSelectSidebar
             nodes={opts.data?.nodes ?? []}
+            edges={opts.data?.edges ?? []}
             onSearchNode={(query) => searchHandlerRef.current?.(query) ?? false}
             repoPath={repoPath}
           />

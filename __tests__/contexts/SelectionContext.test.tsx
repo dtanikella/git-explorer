@@ -366,6 +366,109 @@ describe('SelectionContext — new state model', () => {
       expect(ctx!.state.explicitNodeIds.size).toBe(0);
       expect(ctx!.hasSelection).toBe(false);
     });
+
+    it('resetSelection with no seed clears everything', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNodes(['sym:a', 'sym:b'], true); });
+      act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
+      act(() => { ctx!.resetSelection(); });
+      expect(ctx!.state.selectedNodeIds.size).toBe(0);
+      expect(ctx!.state.lockedNodeIds.size).toBe(0);
+    });
+
+    it('resetSelection restores the seed as selected and locked', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; }, [], new Set(['sym:a', 'sym:b']));
+      // User unlocks a seed, adds another node, then clears everything
+      act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
+      act(() => { ctx!.toggleNode('sym:c'); });
+      act(() => { ctx!.clearSelection(); });
+      expect(ctx!.state.lockedNodeIds.size).toBe(0);
+
+      act(() => { ctx!.resetSelection(); });
+      expect([...ctx!.state.selectedNodeIds].sort()).toEqual(['sym:a', 'sym:b']);
+      expect([...ctx!.state.lockedNodeIds].sort()).toEqual(['sym:a', 'sym:b']);
+      expect(ctx!.state.selectedNodeIds.has('sym:c')).toBe(false);
+    });
+  });
+
+  describe('per-row expansions', () => {
+    it('toggleFocus scopes to a row, and toggling it again returns to all selected', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      expect(ctx!.state.focusKey).toBeNull();
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      expect(ctx!.state.focusKey).toBe('n:sym:c');
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      expect(ctx!.state.focusKey).toBeNull();
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      act(() => { ctx!.toggleFocus(null); });
+      expect(ctx!.state.focusKey).toBeNull();
+    });
+
+    it('expands the focused row whether or not it is selected, and counts toward the effective selection', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      expect(ctx!.state.rowExpansions.get('n:sym:c')?.has('callers')).toBe(true);
+      expect(ctx!.state.selectedNodeIds.size).toBe(0);
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(true);
+    });
+
+    it('turning the last relation off removes the row from rowExpansions', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      expect(ctx!.state.rowExpansions.size).toBe(0);
+    });
+
+    it('does nothing when no row is focused', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      expect(ctx!.state.rowExpansions.size).toBe(0);
+    });
+
+    it('per-row and whole-selection toggles never duplicate a node', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleNode('sym:c'); });
+      act(() => { ctx!.toggleExpansionGroup('callers'); });
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      const callers = ctx!.state.expansions.get('callers')!;
+      expect(callers.active).toHaveLength(1);
+      expect([...ctx!.activeNodeIds].sort()).toEqual(['sym:a', 'sym:c']);
+    });
+
+    it('exclusions apply across both views', () => {
+      let ctx: SelectionContextValue | null = null;
+      renderWithProvider((c) => { ctx = c; });
+      act(() => { ctx!.toggleFocus('n:sym:c'); });
+      act(() => { ctx!.toggleFocusedExpansion('callers'); });
+      act(() => { ctx!.toggleExpandedNode('callers', 'sym:a'); });
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(false);
+      act(() => { ctx!.setExpandedNodes('callers', ['sym:a'], true); });
+      expect(ctx!.activeNodeIds.has('sym:a')).toBe(true);
+    });
+
+    it.each(['clearSelection', 'clearUnlocked', 'resetSelection'] as const)(
+      '%s removes every per-row expansion and returns focus to all selected',
+      (action) => {
+        let ctx: SelectionContextValue | null = null;
+        renderWithProvider((c) => { ctx = c; });
+        act(() => { ctx!.toggleFocus('n:sym:c'); });
+        act(() => { ctx!.toggleFocusedExpansion('callers'); });
+        act(() => { ctx![action](); });
+        expect(ctx!.state.rowExpansions.size).toBe(0);
+        expect(ctx!.state.focusKey).toBeNull();
+        expect(ctx!.activeNodeIds.size).toBe(0);
+      },
+    );
   });
 
   describe('expansions (no area-members)', () => {

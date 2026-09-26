@@ -43,7 +43,7 @@ export default function SelectionToolbar({
   filterMode,
   onFilterModeChange,
 }: SelectionToolbarProps) {
-  const { state, clearSelection, clearUnlocked, lockAll, hasSelection } = useSelection();
+  const { state, clearSelection, resetSelection, clearUnlocked, lockAll, hasSelection } = useSelection();
   const { lockedNodeIds, lockedAreaIds, selectedNodeIds } = state;
   const hasLocks = lockedNodeIds.size > 0 || lockedAreaIds.size > 0;
 
@@ -67,52 +67,34 @@ export default function SelectionToolbar({
       >
         <span style={{ fontWeight: 600, fontSize: 12 }}>Search & Select</span>
         <div style={{ display: 'flex', gap: 4 }}>
-          {hasLocks && (
-            <button
-              onClick={clearUnlocked}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#6b7280',
-                cursor: 'pointer',
-                fontSize: 11,
-                textDecoration: 'underline',
-              }}
-              title="Clear unlocked selections"
-            >
-              Clear unlocked
-            </button>
-          )}
-          {!hasLocks ? (
-            <button
-              onClick={clearSelection}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#6b7280',
-                cursor: 'pointer',
-                fontSize: 11,
-                textDecoration: 'underline',
-              }}
-            >
-              Clear all
-            </button>
-          ) : (
-            <button
-              onClick={clearSelection}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#dc2626',
-                cursor: 'pointer',
-                fontSize: 11,
-                textDecoration: 'underline',
-              }}
-              title="Clear all including locks"
-            >
-              Reset
-            </button>
-          )}
+          <button
+            onClick={resetSelection}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#6b7280',
+              cursor: 'pointer',
+              fontSize: 11,
+              textDecoration: 'underline',
+            }}
+            title="Restore the initial selection and locks"
+          >
+            Reset
+          </button>
+          <button
+            onClick={hasLocks ? clearUnlocked : clearSelection}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#6b7280',
+              cursor: 'pointer',
+              fontSize: 11,
+              textDecoration: 'underline',
+            }}
+            title={hasLocks ? 'Clear unlocked selections' : 'Clear all selections'}
+          >
+            {hasLocks ? 'Clear unlocked' : 'Clear all'}
+          </button>
         </div>
       </div>
 

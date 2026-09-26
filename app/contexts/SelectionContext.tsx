@@ -5,8 +5,8 @@ import type { ReactNode } from 'react';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import type { Area } from '@/lib/areas/types';
 import { getDescendantIds } from '@/lib/areas/containment';
-import { computeExpansionCandidates, computeActiveNodeIds } from '@/lib/selection/candidates';
-import type { ExpansionGroup, ExpansionType } from '@/lib/selection/candidates';
+import { computeExpansionGroups, computeActiveNodeIds, collectRelationIds } from '@/lib/selection/candidates';
+import type { ExpansionGroup, ExpansionType, SourceKey } from '@/lib/selection/candidates';
 
 // --- State Types ---
 
@@ -25,8 +25,12 @@ export interface SelectionState {
   lockedNodeIds: Set<string>;
   /** Areas the user locked. */
   lockedAreaIds: Set<string>;
-  /** Expansion groups (same-file, callers, callees only). */
+  /** Expansion groups (same-file, callers, callees only), covering whole-selection and per-row expansions. */
   expansions: Map<string, ExpansionGroup>;
+  /** Relations switched on per row, keyed by the row's source. */
+  rowExpansions: Map<SourceKey, Set<ExpansionType>>;
+  /** The row the expansion group is scoped to, or null for "All selected". */
+  focusKey: SourceKey | null;
   /** Derived: explicitNodeIds ∪ (members of checked areas \ excludedNodeIds). */
   selectedNodeIds: Set<string>;
 }
@@ -45,7 +49,14 @@ export interface SelectionContextValue {
   lockAll(): void;
   clearUnlocked(): void;
   clearSelection(): void;
+  /** Restores the tab's initial state: nothing selected, plus the seed (e.g. diff changes) selected and locked. */
+  resetSelection(): void;
+  /** Toggles a relation for the whole selection. */
   toggleExpansionGroup(type: ExpansionType): void;
+  /** Scopes the expansion group to a row, or back to "All selected" when the row is already focused or `null`. */
+  toggleFocus(key: SourceKey | null): void;
+  /** Toggles a relation for the focused row alone. */
+  toggleFocusedExpansion(type: ExpansionType): void;
   toggleExpandedNode(type: ExpansionType, nodeId: string): void;
   setExpandedNodes(type: ExpansionType, nodeIds: string[], include: boolean): void;
 }
@@ -187,7 +198,10 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     () => seedNodeIds ? new Set(seedNodeIds) : new Set(),
   );
   const [lockedAreaIds, setLockedAreaIds] = useState<Set<string>>(new Set());
-  const [expansions, setExpansions] = useState<Map<string, ExpansionGroup>>(new Map());
+  const [wholeEnabled, setWholeEnabled] = useState<Set<ExpansionType>>(new Set());
+  const [disabledByType, setDisabledByType] = useState<Map<ExpansionType, Set<string>>>(new Map());
+  const [rowExpansions, setRowExpansions] = useState<Map<SourceKey, Set<ExpansionType>>>(new Map());
+  const [focusKey, setFocusKey] = useState<SourceKey | null>(null);
 
   // --- Diff seeding: sync seedNodeIds changes ---
   const prevSeedRef = useRef<Set<string> | undefined>(undefined);
@@ -251,28 +265,22 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     [explicitNodeIds, selectedAreaIds, excludedNodeIds, areas],
   );
 
-  // --- Computed expansions ---
-  const computedExpansions = useMemo(
-    () => computeExpansionCandidates(selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas, expansions),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas],
+  // --- Expansions (whole-selection and per-row) ---
+  const currentExpansions = useMemo(
+    () => computeExpansionGroups({
+      selectedNodeIds,
+      selectedAreaIds,
+      nodes,
+      edges,
+      visibleNodeIds,
+      areas,
+      wholeEnabled,
+      rowExpansions,
+      disabledIds: disabledByType,
+      focusKey,
+    }),
+    [selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas, wholeEnabled, rowExpansions, disabledByType, focusKey],
   );
-
-  // Merge computed expansions with user-preserved enabled/disabledId state
-  const currentExpansions = useMemo(() => {
-    const merged = new Map<string, ExpansionGroup>();
-    for (const [key, computed] of computedExpansions) {
-      const prev = expansions.get(key);
-      merged.set(key, {
-        ...computed,
-        enabled: prev ? prev.enabled : computed.enabled,
-        disabledIds: prev
-          ? new Set([...prev.disabledIds].filter((id: string) => computed.candidates.some((c) => c.nodeId === id)))
-          : computed.disabledIds,
-      });
-    }
-    return merged;
-  }, [computedExpansions, expansions]);
 
   // --- Derived: activeNodeIds ---
   const activeNodeIds = useMemo(
@@ -291,6 +299,8 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
 
   const lockedNodeIdsRef = useRef(lockedNodeIds);
   lockedNodeIdsRef.current = lockedNodeIds;
+  const seedNodeIdsRef = useRef(seedNodeIds);
+  seedNodeIdsRef.current = seedNodeIds;
 
   const explicitNodeIdsRef = useRef(explicitNodeIds);
   explicitNodeIdsRef.current = explicitNodeIds;
@@ -456,6 +466,14 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     }
   }, []);
 
+  // Clearing removes every per-row expansion and returns focus to "All selected"
+  const clearExpansions = useCallback(() => {
+    setWholeEnabled(new Set());
+    setDisabledByType(new Map());
+    setRowExpansions(new Map());
+    setFocusKey(null);
+  }, []);
+
   const lockAll = useCallback(() => {
     setLockedNodeIds((prev) => {
       const next = new Set(prev);
@@ -479,8 +497,8 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     });
     setSelectedAreaIds(new Set());
     setExcludedNodeIds(new Set());
-    setExpansions(new Map());
-  }, []);
+    clearExpansions();
+  }, [clearExpansions]);
 
   const clearSelection = useCallback(() => {
     setExplicitNodeIds(new Set());
@@ -488,52 +506,70 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     setExcludedNodeIds(new Set());
     setLockedNodeIds(new Set());
     setLockedAreaIds(new Set());
-    setExpansions(new Map());
-  }, []);
+    clearExpansions();
+  }, [clearExpansions]);
+
+  // Reuses the seed already held in memory; nothing is recomputed from the diff.
+  const resetSelection = useCallback(() => {
+    const seed = seedNodeIdsRef.current;
+    setExplicitNodeIds(seed ? new Set(seed) : new Set());
+    setSelectedAreaIds(new Set());
+    setExcludedNodeIds(new Set());
+    setLockedNodeIds(seed ? new Set(seed) : new Set());
+    setLockedAreaIds(new Set());
+    clearExpansions();
+  }, [clearExpansions]);
 
   const toggleExpansionGroup = useCallback((type: ExpansionType) => {
-    setExpansions((prev) => {
+    setWholeEnabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }, []);
+
+  const toggleFocus = useCallback((key: SourceKey | null) => {
+    setFocusKey((prev) => (key === null || prev === key ? null : key));
+  }, []);
+
+  const focusKeyRef = useRef(focusKey);
+  focusKeyRef.current = focusKey;
+
+  const toggleFocusedExpansion = useCallback((type: ExpansionType) => {
+    const key = focusKeyRef.current;
+    if (!key) return;
+    setRowExpansions((prev) => {
       const next = new Map(prev);
-      const group = next.get(type);
-      if (group) {
-        next.set(type, { ...group, enabled: !group.enabled, disabledIds: new Set() });
-      } else {
-        next.set(type, { type, enabled: true, candidates: [], disabledIds: new Set() } as ExpansionGroup);
-      }
+      const types = new Set(prev.get(key));
+      if (types.has(type)) types.delete(type);
+      else types.add(type);
+      if (types.size > 0) next.set(key, types);
+      else next.delete(key);
       return next;
     });
   }, []);
 
   const toggleExpandedNode = useCallback((type: ExpansionType, nodeId: string) => {
-    setExpansions((prev) => {
+    setDisabledByType((prev) => {
       const next = new Map(prev);
-      const group = next.get(type);
-      if (!group) return prev;
-      const nextDisabled = new Set(group.disabledIds);
-      if (nextDisabled.has(nodeId)) {
-        nextDisabled.delete(nodeId);
-      } else {
-        nextDisabled.add(nodeId);
-      }
-      next.set(type, { ...group, disabledIds: nextDisabled });
+      const disabled = new Set(prev.get(type));
+      if (disabled.has(nodeId)) disabled.delete(nodeId);
+      else disabled.add(nodeId);
+      next.set(type, disabled);
       return next;
     });
   }, []);
 
   const setExpandedNodes = useCallback((type: ExpansionType, nodeIds: string[], include: boolean) => {
-    setExpansions((prev) => {
+    setDisabledByType((prev) => {
       const next = new Map(prev);
-      const group = next.get(type);
-      if (!group) return prev;
-      const nextDisabled = new Set(group.disabledIds);
+      const disabled = new Set(prev.get(type));
       for (const id of nodeIds) {
-        if (include) {
-          nextDisabled.delete(id);
-        } else {
-          nextDisabled.add(id);
-        }
+        if (include) disabled.delete(id);
+        else disabled.add(id);
       }
-      next.set(type, { ...group, disabledIds: nextDisabled });
+      next.set(type, disabled);
       return next;
     });
   }, []);
@@ -545,6 +581,8 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     lockedNodeIds,
     lockedAreaIds,
     expansions: currentExpansions,
+    rowExpansions,
+    focusKey,
     selectedNodeIds,
   };
 
@@ -559,7 +597,10 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     lockAll,
     clearUnlocked,
     clearSelection,
+    resetSelection,
     toggleExpansionGroup,
+    toggleFocus,
+    toggleFocusedExpansion,
     toggleExpandedNode,
     setExpandedNodes,
   };
@@ -625,8 +666,9 @@ export function SelectionProvider({
 }
 
 /**
- * Computes the number of expanded (non-disabled) candidate nodes in an
- * expansion group. Returns 0 if the group doesn't exist or is disabled.
+ * Computes the number of expanded (non-excluded) nodes in an expansion
+ * group, across the whole-selection toggle and per-row expansions. Returns 0
+ * if the group doesn't exist or nothing is on.
  *
  * @param expansions - The expansions map from selection state.
  * @param type - The expansion type.
@@ -636,6 +678,6 @@ export function getExpandedCandidateCount(
   type: ExpansionType,
 ): number {
   const group = expansions.get(type);
-  if (!group || !group.enabled) return 0;
-  return group.candidates.filter((c) => !group.disabledIds.has(c.nodeId)).length;
+  if (!group) return 0;
+  return collectRelationIds(group.active, group.disabledIds).length;
 }

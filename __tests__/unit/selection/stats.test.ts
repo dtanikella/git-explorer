@@ -109,4 +109,26 @@ describe('computeAreaEdgeStats', () => {
     const parentEntry = result.find((r) => r.areaId === 'parent')!;
     expect(parentEntry.leavingCount).toBe(1);
   });
+
+  it('counts leaving edges from unselected members too', () => {
+    const areas = [makeArea('area-a', 'Area A', ['sym:a', 'sym:b'])];
+    const edges = [
+      makeEdge(EdgeKind.CALLS, 'sym:a', 'sym:x'),
+      makeEdge(EdgeKind.CALLS, 'sym:b', 'sym:x'), // sym:b is not selected
+    ];
+
+    const result = computeAreaEdgeStats(new Set(['sym:a']), edges, areas);
+    expect(result[0].leavingCount).toBe(2);
+    expect(result[0].selectedCount).toBe(1);
+  });
+
+  it('breaks ties by area name', () => {
+    const areas = [
+      makeArea('z', 'Zeta', ['sym:z']),
+      makeArea('a', 'Alpha', ['sym:a']),
+    ];
+
+    const result = computeAreaEdgeStats(new Set(['sym:z', 'sym:a']), [], areas);
+    expect(result.map((r) => r.areaName)).toEqual(['Alpha', 'Zeta']);
+  });
 });

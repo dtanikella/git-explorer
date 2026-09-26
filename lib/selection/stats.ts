@@ -2,9 +2,11 @@
  * Selection statistics — computes edge-leaving histograms for areas.
  *
  * @remarks
- * For each area in scope, counts edges that originate from a member
- * node (including descendant members) and terminate at a node outside
- * the area. Results are sorted by leaving count descending.
+ * For each area that contains a selected node, counts every edge that
+ * originates from a member node (including descendant members, selected or
+ * not) and terminates at a node outside the area, so the figure describes the
+ * area rather than the selection. Results are sorted by leaving count
+ * descending, then by name.
  */
 
 import type { AnalysisEdge } from '@/lib/analysis/types';
@@ -14,28 +16,21 @@ import { getDescendantIds } from '@/lib/areas/containment';
 export interface AreaEdgeStat {
   areaId: string;
   areaName: string;
+  /** Edges from any member of the area to a node outside it. */
   leavingCount: number;
+  /** Members of the area (including descendants) that are currently selected. */
+  selectedCount: number;
 }
 
 /**
- * Computes edge-leaving statistics for each area that contains at
- * least one selected node.
+ * Maps each area id to the ids of all its member nodes, including the
+ * members of its descendant areas.
  *
- * @param selectedNodeIds - The set of currently selected node symbols.
- * @param edges - All analysis edges.
  * @param areas - All area definitions.
- * @returns Array of {@link AreaEdgeStat} sorted by leavingCount descending.
+ * @returns A map from area id to its rolled-up member node ids.
  */
-export function computeAreaEdgeStats(
-  selectedNodeIds: Set<string>,
-  edges: AnalysisEdge[],
-  areas: Area[],
-): AreaEdgeStat[] {
-  if (selectedNodeIds.size === 0) return [];
-
+export function getAreaMemberIds(areas: Area[]): Map<string, Set<string>> {
   const areasById = new Map(areas.map((a) => [a.id, a]));
-
-  // Build a map from area id to all member node ids (including descendants)
   const areaMemberIds = new Map<string, Set<string>>();
   for (const area of areas) {
     const ids = new Set(area.contains);
@@ -47,47 +42,56 @@ export function computeAreaEdgeStats(
     }
     areaMemberIds.set(area.id, ids);
   }
+  return areaMemberIds;
+}
 
-  // Determine which areas contain at least one selected node
-  const relevantAreaIds = new Set<string>();
-  for (const area of areas) {
-    const members = areaMemberIds.get(area.id);
-    if (!members) continue;
+/**
+ * Computes edge-leaving statistics for each area that contains at
+ * least one selected node.
+ *
+ * @param selectedNodeIds - The set of currently selected node symbols.
+ * @param edges - All analysis edges.
+ * @param areas - All area definitions.
+ * @returns Array of {@link AreaEdgeStat} sorted by leavingCount descending, then name.
+ */
+export function computeAreaEdgeStats(
+  selectedNodeIds: Set<string>,
+  edges: AnalysisEdge[],
+  areas: Area[],
+): AreaEdgeStat[] {
+  if (selectedNodeIds.size === 0) return [];
+
+  const areasById = new Map(areas.map((a) => [a.id, a]));
+  const areaMemberIds = getAreaMemberIds(areas);
+
+  const stats = new Map<string, AreaEdgeStat>();
+  for (const [areaId, members] of areaMemberIds) {
+    let selectedCount = 0;
     for (const id of selectedNodeIds) {
-      if (members.has(id)) {
-        relevantAreaIds.add(area.id);
-        break;
-      }
+      if (members.has(id)) selectedCount++;
     }
-  }
-
-  if (relevantAreaIds.size === 0) return [];
-
-  const stats = new Map<string, number>();
-  for (const areaId of relevantAreaIds) {
-    stats.set(areaId, 0);
-  }
-
-  for (const edge of edges) {
-    const fromNodeId = edge.fromSymbol;
-    const toNodeId = edge.toSymbol;
-    if (!selectedNodeIds.has(fromNodeId)) continue;
-
-    for (const areaId of relevantAreaIds) {
-      const members = areaMemberIds.get(areaId);
-      if (!members || !members.has(fromNodeId)) continue;
-      // Edge leaves this area if the target is NOT a member
-      if (!members.has(toNodeId)) {
-        stats.set(areaId, (stats.get(areaId) ?? 0) + 1);
-      }
-    }
-  }
-
-  return [...stats.entries()]
-    .map(([areaId, leavingCount]) => ({
+    if (selectedCount === 0) continue;
+    stats.set(areaId, {
       areaId,
       areaName: areasById.get(areaId)?.name ?? areaId,
-      leavingCount,
-    }))
-    .sort((a, b) => b.leavingCount - a.leavingCount);
+      leavingCount: 0,
+      selectedCount,
+    });
+  }
+
+  if (stats.size === 0) return [];
+
+  for (const edge of edges) {
+    for (const [areaId, stat] of stats) {
+      const members = areaMemberIds.get(areaId)!;
+      // Edge leaves this area if it starts inside and the target is NOT a member
+      if (members.has(edge.fromSymbol) && !members.has(edge.toSymbol)) {
+        stat.leavingCount++;
+      }
+    }
+  }
+
+  return [...stats.values()].sort(
+    (a, b) => b.leavingCount - a.leavingCount || a.areaName.localeCompare(b.areaName),
+  );
 }

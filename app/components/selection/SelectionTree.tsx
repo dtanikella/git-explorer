@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
 import type { TreeNode } from '@/lib/selection/trees';
+import { useCopyFeedback } from './useCopyFeedback';
+import { TreeIconButton, LockIcon, UnlockIcon, CopyIcon, CheckIcon, FilterIcon } from './TreeIconButton';
+import { nodeSourceKey, areaSourceKey, pathSourceKey } from '@/lib/selection/candidates';
+import type { SourceKey } from '@/lib/selection/candidates';
 
 interface SelectionTreeProps {
   /** The root tree node to render. */
@@ -26,10 +30,11 @@ interface SelectionTreeProps {
  * {@link useAreaStore} for area display data.
  */
 export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: SelectionTreeProps) {
-  const { state, toggleNode, toggleNodes, toggleLock, hasSelection } = useSelection();
+  const { state, toggleNode, toggleNodes, toggleLock, toggleFocus } = useSelection();
   const { runtimeState } = useAreaStore();
 
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+  const { copiedKey: copiedId, copy } = useCopyFeedback();
 
   /**
    * Computes the tri-state of a node: 'checked', 'indeterminate', or 'unchecked'.
@@ -144,10 +149,30 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
         .filter((v, i, a) => a.indexOf(v) === i)
         .sort()
         .join('\n');
-      navigator.clipboard?.writeText(text);
+      copy(node.id, text);
     },
-    [collectAllMembers],
+    [collectAllMembers, copy],
   );
+
+  /** Funnel that scopes the expansion group to a row; visible while the row is focused or has an expansion on. */
+  const renderFilterButton = (key: SourceKey | null) => {
+    if (!key) return null;
+    const isFocused = state.focusKey === key;
+    const isOn = isFocused || (state.rowExpansions?.get(key)?.size ?? 0) > 0;
+    return (
+      <TreeIconButton
+        label={isFocused ? 'Back to all selected' : 'Set same file, callers, callees for just this row'}
+        tone={isOn ? 'filter' : 'default'}
+        reveal={isOn ? 'always' : 'hover'}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFocus(key);
+        }}
+      >
+        <FilterIcon />
+      </TreeIconButton>
+    );
+  };
 
   const renderMemberNode = (node: AnalysisNode, depth: number) => {
     const isSelected = state.selectedNodeIds.has(node.scipSymbol);
@@ -156,6 +181,8 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
     return (
       <div
         key={node.scipSymbol}
+        data-testid={`tree-row-${node.scipSymbol}`}
+        className="group"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -186,21 +213,15 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
         >
           {node.name}
         </span>
+        {renderFilterButton(nodeSourceKey(node.scipSymbol))}
         {isLocked && (
-          <button
+          <TreeIconButton
+            label="Unlock"
+            tone="active"
             onClick={() => toggleLock({ kind: 'node', id: node.scipSymbol })}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: 10,
-              color: '#9ca3af',
-              cursor: 'pointer',
-              padding: '0 2px',
-            }}
-            title="Unlock"
           >
-            🔒
-          </button>
+            <LockIcon />
+          </TreeIconButton>
         )}
       </div>
     );
@@ -211,13 +232,15 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
     const isLocked = isNodeLocked(node);
     const isExpanded = expanded.has(node.id);
     const hasChildren = node.children && node.children.length > 0;
-    const hasMembers = node.members && node.members.length > 0;
-    const isExpandable = !!hasChildren || !!hasMembers;
+    const hasMembers = collectAllMembers(node).length > 0;
+    const isExpandable = !!hasChildren || !!(node.members && node.members.length > 0);
     const areaColor = node.areaId ? runtimeState.get(node.areaId)?.color : undefined;
 
     return (
       <div key={node.id}>
         <div
+          data-testid={`tree-row-${node.id}`}
+          className="group"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -285,42 +308,31 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
             )}
           </span>
 
+          {/* Per-row expansion filter */}
+          {renderFilterButton(
+            node.areaId ? areaSourceKey(node.areaId) : node.path ? pathSourceKey(node.path) : null,
+          )}
+
           {/* Padlock */}
           {hasMembers && (
-            <button
+            <TreeIconButton
+              label={isLocked ? 'Unlock all' : 'Lock all'}
+              tone={isLocked ? 'active' : 'default'}
               onClick={(e) => handleLock(node, e)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: 10,
-                color: '#9ca3af',
-                cursor: 'pointer',
-                padding: '0 2px',
-                flexShrink: 0,
-              }}
-              title={isLocked ? 'Unlock all' : 'Lock all'}
             >
-              {isLocked ? '🔒' : '🔓'}
-            </button>
+              {isLocked ? <LockIcon /> : <UnlockIcon />}
+            </TreeIconButton>
           )}
 
           {/* Copy */}
           {hasMembers && (
-            <button
+            <TreeIconButton
+              label={copiedId === node.id ? 'Copied!' : 'Copy as path#symbol'}
+              tone={copiedId === node.id ? 'success' : 'default'}
               onClick={(e) => handleCopy(node, e)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: 10,
-                color: '#9ca3af',
-                cursor: 'pointer',
-                padding: '0 2px',
-                flexShrink: 0,
-              }}
-              title="Copy as path#symbol"
             >
-              📋
-            </button>
+              {copiedId === node.id ? <CheckIcon /> : <CopyIcon />}
+            </TreeIconButton>
           )}
         </div>
 

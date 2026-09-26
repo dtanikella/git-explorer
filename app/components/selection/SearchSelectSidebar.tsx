@@ -146,8 +146,8 @@ export default function SearchSelectSidebar({ nodes, edges, onSearchNode, repoPa
         onFilterModeChange={setFilterMode}
       />
 
-      {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+      {/* Scrollable content (top half) */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 12px' }}>
         {/* Tree view */}
         {browseMode === 'area' && areaTree && (
           <div style={{ marginBottom: 12 }}>
@@ -171,19 +171,15 @@ export default function SearchSelectSidebar({ nodes, edges, onSearchNode, repoPa
         )}
 
         {/* Expansion groups */}
-        {activeNodeIds.size > 0 && (
+        {(activeNodeIds.size > 0 || state.focusKey !== null || (state.rowExpansions?.size ?? 0) > 0) && (
           <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
             <ExpansionGroups nodes={nodes} />
           </div>
         )}
-
-        {/* Stats panel */}
-        {activeNodeIds.size > 0 && (
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
-            <SelectionStats edges={edges} />
-          </div>
-        )}
       </div>
+
+      {/* Stats panel (bottom half) */}
+      <SelectionStats nodes={nodes} edges={edges} />
     </div>
   );
 }

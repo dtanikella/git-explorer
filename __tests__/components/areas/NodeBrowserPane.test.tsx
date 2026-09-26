@@ -56,11 +56,44 @@ const mockNodes: AnalysisNode[] = [
 ];
 
 describe('NodeBrowserPane', () => {
-  it('renders all nodes grouped by file path', () => {
+  it('organizes nodes by directory and file', () => {
     render(<NodeBrowserPane nodes={mockNodes} />);
-    expect(screen.getByText('src/auth/login.ts')).toBeInTheDocument();
-    expect(screen.getByText('src/auth/logout.ts')).toBeInTheDocument();
-    expect(screen.getByText('src/payments/charge.ts')).toBeInTheDocument();
+    expect(screen.getByText('src')).toBeInTheDocument();
+    expect(screen.getByText('auth')).toBeInTheDocument();
+    expect(screen.getByText('login.ts')).toBeInTheDocument();
+    expect(screen.getByText('logout.ts')).toBeInTheDocument();
+    expect(screen.getByText('payments')).toBeInTheDocument();
+    expect(screen.getByText('charge.ts')).toBeInTheDocument();
+  });
+
+  it('collapses a directory row to hide what is under it', () => {
+    render(<NodeBrowserPane nodes={mockNodes} />);
+    fireEvent.click(screen.getByTestId('dir-row-dir:src/auth'));
+    expect(screen.queryByText('login.ts')).not.toBeInTheDocument();
+    expect(screen.getByText('charge.ts')).toBeInTheDocument();
+  });
+
+  it('type chips filter to the chosen types and hide everything else', () => {
+    const typed = [
+      { ...mockNodes[0], scipSymbol: 'sym-a', name: 'a', filePath: 'src/a.ts', syntaxType: 'FUNCTION' },
+      { ...mockNodes[0], scipSymbol: 'sym-b', name: 'b', filePath: 'src/b.ts', syntaxType: 'CLASS' },
+      { ...mockNodes[0], scipSymbol: 'sym-v', name: 'v', filePath: 'src/b.ts', syntaxType: 'VARIABLE' },
+    ] as unknown as AnalysisNode[];
+    render(<NodeBrowserPane nodes={typed} />);
+    expect(screen.getByTestId('node-item-sym-v')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('node-type-chip-CLASS'));
+    expect(screen.getByTestId('node-item-sym-b')).toBeInTheDocument();
+    expect(screen.queryByTestId('node-item-sym-v')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('node-item-sym-a')).not.toBeInTheDocument();
+    expect(screen.queryByText('a.ts')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('node-type-chip-VARIABLE'));
+    expect(screen.getByTestId('node-item-sym-v')).toBeInTheDocument();
+    expect(screen.queryByTestId('node-item-sym-a')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('node-type-clear'));
+    expect(screen.getByTestId('node-item-sym-a')).toBeInTheDocument();
   });
 
   it('filter nodes by search query', () => {
