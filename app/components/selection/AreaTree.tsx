@@ -3,7 +3,9 @@
 import { useState, useMemo } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
+import { getDescendantIds } from '@/lib/areas/containment';
 import type { AnalysisNode } from '@/lib/analysis/types';
+import type { Area } from '@/lib/areas/types';
 
 interface AreaTreeProps {
   nodes: AnalysisNode[];
@@ -15,18 +17,20 @@ function truncatePath(filePath: string): string {
 }
 
 /**
- * Renders the area tree with selection state and expansion controls.
+ * Renders the area tree with tri-state checkboxes and member selection.
  *
  * @remarks
- * Displays areas hierarchically with expand/collapse, visibility toggle,
- * and member selection. Integrates with {@link useSelection} for selection
- * state and {@link useAreaStore} for area data.
+ * Displays areas hierarchically with expand/collapse, tri-state
+ * selection (checked / indeterminate / unchecked), and per-member
+ * checkboxes. Area membership is part of the derived selection:
+ * checking an area selects all its members; unchecking an individual
+ * member puts it in excludedNodeIds.
  *
  * @param nodes - Analysis nodes for area membership display.
  */
 export default function AreaTree({ nodes }: AreaTreeProps) {
-  const { state, toggleArea, toggleAreaMember } = useSelection();
-  const { selectedAreaIds, expansions } = state;
+  const { state, toggleArea, toggleNode } = useSelection();
+  const { selectedAreaIds, excludedNodeIds } = state;
   const { areas, runtimeState } = useAreaStore();
 
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
@@ -38,7 +42,7 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
   }, [nodes]);
 
   const areasById = useMemo(() => {
-    const map = new Map<string, typeof areas[number]>();
+    const map = new Map<string, Area>();
     for (const a of areas) map.set(a.id, a);
     return map;
   }, [areas]);
@@ -48,7 +52,42 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
     [areas],
   );
 
-  const areaMembersGroup = expansions.get('area-members');
+  /**
+   * Gets all descendant member node IDs for an area (its own contains
+   * plus all descendants' contains).
+   */
+  const getAllDescendantMemberIds = (areaId: string): Set<string> => {
+    const area = areasById.get(areaId);
+    if (!area) return new Set();
+    const ids = new Set(area.contains);
+    for (const descId of getDescendantIds(areas, areaId)) {
+      const desc = areasById.get(descId);
+      if (desc) {
+        for (const nid of desc.contains) ids.add(nid);
+      }
+    }
+    return ids;
+  };
+
+  /**
+   * Determines the tri-state of an area checkbox:
+   * - 'checked' when every member is selected
+   * - 'indeterminate' when some but not all members are selected
+   * - 'unchecked' when no members are selected
+   */
+  const getAreaCheckState = (areaId: string): 'checked' | 'indeterminate' | 'unchecked' => {
+    const memberIds = getAllDescendantMemberIds(areaId);
+    if (memberIds.size === 0) return 'unchecked';
+
+    let selectedCount = 0;
+    for (const id of memberIds) {
+      if (state.selectedNodeIds.has(id)) selectedCount++;
+    }
+
+    if (selectedCount === memberIds.size) return 'checked';
+    if (selectedCount > 0) return 'indeterminate';
+    return 'unchecked';
+  };
 
   const toggleExpanded = (areaId: string) => {
     setExpandedAreas((prev) => {
@@ -59,17 +98,18 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
     });
   };
 
-  const renderArea = (area: typeof areas[number], depth: number) => {
+  const renderArea = (area: Area, depth: number) => {
     const color = runtimeState.get(area.id)?.color ?? '#6b7280';
-    const isSelected = selectedAreaIds.has(area.id);
     const isExpanded = expandedAreas.has(area.id);
     const childAreas = area.children
       .map((id) => areasById.get(id))
-      .filter(Boolean) as typeof areas[number][];
-    const memberNodeIds = area.contains;
+      .filter(Boolean) as Area[];
+    const memberNodeIds = getAllDescendantMemberIds(area.id);
     const hasChildren = childAreas.length > 0;
-    const hasMembers = memberNodeIds.length > 0;
-    const isExpandable = hasChildren || hasMembers;
+    const hasMembers = memberNodeIds.size > 0;
+    const isExpandable = hasChildren;
+    const checkState = getAreaCheckState(area.id);
+    const isChecked = checkState === 'checked';
 
     return (
       <div key={area.id} style={{ marginLeft: depth > 0 ? 12 : 0 }}>
@@ -105,7 +145,8 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
           >
             <input
               type="checkbox"
-              checked={isSelected}
+              checked={isChecked}
+              ref={(el) => { if (el) el.indeterminate = checkState === 'indeterminate'; }}
               readOnly
               style={{ margin: 0, cursor: 'pointer', flexShrink: 0 }}
             />
@@ -123,17 +164,21 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
             >
               {area.name}
             </span>
-            <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }}>({memberNodeIds.length})</span>
+            <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }}>
+              ({hasMembers ? memberNodeIds.size : 0})
+            </span>
           </label>
         </div>
 
         {isExpanded && (
           <div style={{ paddingLeft: 16 }}>
             {childAreas.sort((a, b) => a.name.localeCompare(b.name)).map((child) => renderArea(child, depth + 1))}
-            {memberNodeIds.map((nodeId) => {
+            {/* Direct member nodes of this area (not descendant areas' members) */}
+            {area.contains.map((nodeId) => {
               const node = nodesBySymbol.get(nodeId);
               if (!node) return null;
-              const isDisabled = areaMembersGroup?.disabledIds.has(nodeId) ?? false;
+              const isSelected = state.selectedNodeIds.has(nodeId);
+              const isExcluded = excludedNodeIds.has(nodeId);
               return (
                 <label
                   key={nodeId}
@@ -144,17 +189,17 @@ export default function AreaTree({ nodes }: AreaTreeProps) {
                     gap: 6,
                     padding: '2px 0',
                     cursor: 'pointer',
-                    opacity: isDisabled ? 0.5 : 1,
+                    opacity: isExcluded ? 0.5 : 1,
                     fontSize: 11,
                   }}
                   onClick={(e) => {
                     e.preventDefault();
-                    toggleAreaMember(nodeId);
+                    toggleNode(nodeId);
                   }}
                 >
                   <input
                     type="checkbox"
-                    checked={!isDisabled}
+                    checked={isSelected}
                     readOnly
                     style={{ margin: 0, cursor: 'pointer' }}
                   />

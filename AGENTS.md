@@ -31,15 +31,33 @@ Install with `brew install difftastic` or `cargo install difftastic`.
 
 ## Architecture
 
-Git Explorer is a Next.js app that analyzes a local git repository and renders interactive visualizations of file co-change patterns.
+Git Explorer is a Next.js app that analyzes a local git repository and renders interactive visualizations of code symbols, areas, and relationships.
 
 **Request flow:**
 
-1. `app/page.tsx` — main orchestrator. Holds state (`repoPath`, `graphData`, `dateRange`). Sends `POST /api/git-analysis` on user action or date range change.
+1. `app/page.tsx` — main orchestrator. Holds state (`repoPath`, `activeTab`, selection). Calls `useSelectionState()` once per tab (graph and diff) for per-tab selection persistence.
 2. `app/api/git-analysis/route.ts` — validates the path (must exist, must have `.git`), normalizes the time range preset, calls `analyzeRepository()`.
 3. `app/services/git-controller.ts` — builds a `TimeRangeConfig`, calls `getCommits()` and `getCoChangeGraph()`, returns a `CoChangeGraph`.
 4. `lib/git/analyzer.ts` — runs `git log --name-only --since=<date>` via simple-git, builds nodes (files) and links (co-commit pairs).
 5. `lib/git/tree-builder.ts` — converts the flat file list into a nested `TreeNode` hierarchy for circle packing.
+
+**Selection system** (`app/contexts/SelectionContext.tsx` + `app/components/selection/`):
+
+- `useSelectionState(config)` — a hook that creates selection state + actions for one tab (Graph or Diff). Called once per tab in `page.tsx` so state survives tab switches.
+- `SelectionProvider` — thin wrapper that takes a `value` prop (from `useSelectionState`) and provides it via context.
+- `SelectionState` has: `explicitNodeIds`, `selectedAreaIds`, `excludedNodeIds`, `lockedNodeIds`, `lockedAreaIds`, `rowExpansions`, `focusKey`, `expansions`. `selectedNodeIds` is derived: explicit + (area members \ excluded). `expansions` (same-file, callers, callees) is derived by `computeExpansionGroups` from the whole-selection toggles plus per-row expansions, which are keyed by source (`n:` node, `a:` area, `h:` folder or file path); `focusKey` scopes the bottom group to one row.
+- Every node, area, folder and file row has a funnel that focuses it; the expansion group then applies to that row alone. Reset and Clear remove all per-row expansions.
+- `SearchSelectSidebar` — shared sidebar composes `SelectionToolbar`, `SelectionTree`, `ExpansionGroups`, `SelectionStats`.
+- Supports tri-state area checkboxes, per-node exclusion inside checked areas, padlocks, shift-range selection, and copy-as-path#symbol.
+- Diff tab seeds locks from changed nodes via `seedNodeIds`.
+- `lib/selection/` — pure functions for candidate computation, tree building, stats, and format.
+
+**Areas** (`lib/areas/types.ts`, `lib/areas/containment.ts`):`
+
+- `Area` has `id`, `name`, `type`, `contains[]`, `parent`, `children[]`, `color`.
+- `getDescendantIds()` / `getAncestorIds()` for hierarchy traversal.
+- Area membership rolls up: checking an area selects all descendant members.
+- Nodes can belong to several unrelated areas.
 
 **Key types** (`lib/git/types.ts`):
 

@@ -4,14 +4,10 @@
     {
       "id": "ux-cbcb",
       "created_at": "2026-09-23T01:42:41.494Z",
-      "updated_at": "2026-09-23T02:42:45.505Z",
+      "updated_at": "2026-09-25T17:05:04.408Z",
       "name": "UX",
       "type": "business_domain",
-      "contains": [
-        "scip-typescript npm git-explorer 0.1.0 app/`layout.tsx`/RootLayout().",
-        "scip-typescript npm git-explorer 0.1.0 app/`page.tsx`/SelectionBridge().",
-        "scip-typescript npm git-explorer 0.1.0 app/`page.tsx`/HomePage()."
-      ],
+      "contains": [],
       "parent": null,
       "children": [
         "treemap-a26f",
@@ -21,7 +17,10 @@
         "areamanager-61c0",
         "tabsidebar-9f45",
         "searchselectsidebar-960e",
-        "manageselection-b86e"
+        "manageselection-b86e",
+        "git-diff-5bb2",
+        "home-page-1d40",
+        "graph-helpers-4305"
       ],
       "clusterStrength": 0.6,
       "color": "#98bbed",
@@ -75,7 +74,7 @@
     {
       "id": "tree-sitter-d112",
       "created_at": "2026-09-23T01:43:34.084Z",
-      "updated_at": "2026-09-23T02:27:08.491Z",
+      "updated_at": "2026-09-25T15:49:37.245Z",
       "name": "Tree Sitter",
       "type": "business_domain",
       "contains": [
@@ -114,7 +113,33 @@
         "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`tree.ts`/TreeCursor#",
         "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`query.ts`/Language#",
         "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`parser.ts`/Language#",
-        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`language.ts`/Language#"
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`language.ts`/Language#",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>id`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>type`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>text`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>isNamed`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>startPosition`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>endPosition`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>startIndex`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>endIndex`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>isError`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>hasError`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>isMissing`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>parent`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>children`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>namedChildren`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>firstChild`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>lastChild`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>firstNamedChild`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>lastNamedChild`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>childCount`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>namedChildCount`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>nextSibling`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>previousSibling`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>nextNamedSibling`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>previousNamedSibling`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`node.ts`/NodeWrapper#`<get>raw`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/tree-sitter/`tree.ts`/TreeWrapper#`<get>raw`()."
       ],
       "parent": "ast-walking-3b00",
       "children": [],
@@ -132,7 +157,7 @@
     {
       "id": "analysis-baaa",
       "created_at": "2026-09-23T01:43:57.372Z",
-      "updated_at": "2026-09-23T02:55:18.932Z",
+      "updated_at": "2026-09-25T17:13:30.170Z",
       "name": "Language Parsing",
       "type": "business_domain",
       "contains": [
@@ -164,7 +189,7 @@
     {
       "id": "areas-717c",
       "created_at": "2026-09-23T01:44:41.269Z",
-      "updated_at": "2026-09-23T15:20:33.710Z",
+      "updated_at": "2026-09-25T17:04:30.740Z",
       "name": "Areas",
       "type": "business_domain",
       "contains": [
@@ -227,17 +252,15 @@
         "scip-typescript npm git-explorer 0.1.0 lib/areas/`renderer.ts`/HullResult#",
         "scip-typescript npm git-explorer 0.1.0 lib/areas/`types.ts`/AreaType#"
       ],
-      "parent": null,
+      "parent": "graph-helpers-4305",
       "children": [],
       "clusterStrength": 0.6,
-      "pinnedZones": [
-        3
-      ]
+      "pinnedZones": []
     },
     {
       "id": "server-630e",
       "created_at": "2026-09-23T01:44:53.813Z",
-      "updated_at": "2026-09-23T02:45:36.523Z",
+      "updated_at": "2026-09-25T16:29:37.234Z",
       "name": "Server",
       "type": "business_domain",
       "contains": [
@@ -245,13 +268,14 @@
         "scip-typescript npm git-explorer 0.1.0 app/api/areas/`route.ts`/validateRepoPath().",
         "scip-typescript npm git-explorer 0.1.0 app/api/areas/`route.ts`/POST().",
         "scip-typescript npm git-explorer 0.1.0 app/api/browse-directory/`route.ts`/GET().",
-        "scip-typescript npm git-explorer 0.1.0 app/api/repo-analysis/`route.ts`/POST()."
+        "scip-typescript npm git-explorer 0.1.0 app/api/repo-analysis/`route.ts`/POST().",
+        "scip-typescript npm git-explorer 0.1.0 app/api/diff/`route.ts`/POST().",
+        "scip-typescript npm git-explorer 0.1.0 app/api/git-refs/`route.ts`/GET()."
       ],
       "parent": null,
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        3,
         4,
         6
       ]
@@ -411,7 +435,7 @@
     {
       "id": "treemap-a26f",
       "created_at": "2026-09-23T01:47:55.081Z",
-      "updated_at": "2026-09-23T03:05:11.874Z",
+      "updated_at": "2026-09-25T17:17:37.139Z",
       "name": "TreeMap",
       "type": "business_domain",
       "contains": [
@@ -426,14 +450,15 @@
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        1
+        2,
+        5
       ],
       "color": "#3b82f6"
     },
     {
       "id": "repositoryselector-de6e",
       "created_at": "2026-09-23T01:48:22.347Z",
-      "updated_at": "2026-09-23T03:05:09.057Z",
+      "updated_at": "2026-09-25T17:17:35.957Z",
       "name": "RepositorySelector",
       "type": "business_domain",
       "contains": [
@@ -447,14 +472,15 @@
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        1
+        2,
+        5
       ],
       "color": "#bccee8"
     },
     {
       "id": "state-6b24",
       "created_at": "2026-09-23T01:48:32.966Z",
-      "updated_at": "2026-09-23T02:59:23.368Z",
+      "updated_at": "2026-09-25T17:19:25.991Z",
       "name": "STATE",
       "type": "business_domain",
       "contains": [
@@ -468,20 +494,137 @@
         "scip-typescript npm git-explorer 0.1.0 app/contexts/`AreaContext.tsx`/AreaProvider().",
         "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionProviderProps#",
         "scip-typescript npm git-explorer 0.1.0 app/contexts/`AreaContext.tsx`/AreaStoreValue#",
-        "scip-typescript npm git-explorer 0.1.0 app/contexts/`AreaContext.tsx`/AreaProviderProps#"
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`AreaContext.tsx`/AreaProviderProps#",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`AreaContext.tsx`/AreaContext.",
+        "app/contexts/AreaContext.tsx#local 2",
+        "app/contexts/AreaContext.tsx#local 5",
+        "app/contexts/AreaContext.tsx#local 36",
+        "app/contexts/AreaContext.tsx#local 39",
+        "app/contexts/AreaContext.tsx#local 42",
+        "app/contexts/AreaContext.tsx#local 45",
+        "app/contexts/AreaContext.tsx#local 57",
+        "app/contexts/AreaContext.tsx#local 62",
+        "app/contexts/AreaContext.tsx#local 68",
+        "app/contexts/AreaContext.tsx#local 71",
+        "app/contexts/AreaContext.tsx#local 78",
+        "app/contexts/AreaContext.tsx#local 84",
+        "app/contexts/AreaContext.tsx#local 87",
+        "app/contexts/AreaContext.tsx#local 90",
+        "app/contexts/AreaContext.tsx#local 96",
+        "app/contexts/AreaContext.tsx#local 103",
+        "app/contexts/AreaContext.tsx#local 113",
+        "app/contexts/AreaContext.tsx#local 116",
+        "app/contexts/AreaContext.tsx#local 119",
+        "app/contexts/AreaContext.tsx#local 129",
+        "app/contexts/AreaContext.tsx#local 132",
+        "app/contexts/AreaContext.tsx#local 135",
+        "app/contexts/AreaContext.tsx#local 142",
+        "app/contexts/AreaContext.tsx#local 148",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionContext.",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionStateConfig#",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/computeSelectedNodeIds().",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/isNodeInAreas().",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/getMemberIdsForAreas().",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/useSelectionState().",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/getExpandedCandidateCount().",
+        "app/contexts/SelectionContext.tsx#local 9",
+        "app/contexts/SelectionContext.tsx#local 12",
+        "app/contexts/SelectionContext.tsx#local 15",
+        "app/contexts/SelectionContext.tsx#local 22",
+        "app/contexts/SelectionContext.tsx#local 28",
+        "app/contexts/SelectionContext.tsx#local 37",
+        "app/contexts/SelectionContext.tsx#local 46",
+        "app/contexts/SelectionContext.tsx#local 56",
+        "app/contexts/SelectionContext.tsx#local 62",
+        "app/contexts/SelectionContext.tsx#local 65",
+        "app/contexts/SelectionContext.tsx#local 68",
+        "app/contexts/SelectionContext.tsx#local 78",
+        "app/contexts/SelectionContext.tsx#local 87",
+        "app/contexts/SelectionContext.tsx#local 138",
+        "app/contexts/SelectionContext.tsx#local 145",
+        "app/contexts/SelectionContext.tsx#local 155",
+        "app/contexts/SelectionContext.tsx#local 161",
+        "app/contexts/SelectionContext.tsx#local 164",
+        "app/contexts/SelectionContext.tsx#local 170",
+        "app/contexts/SelectionContext.tsx#local 180",
+        "app/contexts/SelectionContext.tsx#local 190",
+        "app/contexts/SelectionContext.tsx#local 200",
+        "app/contexts/SelectionContext.tsx#local 210",
+        "app/contexts/SelectionContext.tsx#local 216",
+        "app/contexts/SelectionContext.tsx#local 219",
+        "app/contexts/SelectionContext.tsx#local 222",
+        "app/contexts/SelectionContext.tsx#local 225",
+        "app/contexts/SelectionContext.tsx#local 234",
+        "app/contexts/SelectionContext.tsx#local 245",
+        "app/contexts/SelectionContext.tsx#local 248",
+        "app/contexts/SelectionContext.tsx#local 251",
+        "app/contexts/SelectionContext.tsx#local 254",
+        "app/contexts/SelectionContext.tsx#local 257",
+        "app/contexts/SelectionContext.tsx#local 260",
+        "app/contexts/SelectionContext.tsx#local 263",
+        "app/contexts/SelectionContext.tsx#local 266",
+        "app/contexts/SelectionContext.tsx#local 272",
+        "app/contexts/SelectionContext.tsx#local 275",
+        "app/contexts/SelectionContext.tsx#local 278",
+        "app/contexts/SelectionContext.tsx#local 281",
+        "app/contexts/SelectionContext.tsx#local 288",
+        "app/contexts/SelectionContext.tsx#local 299",
+        "app/contexts/SelectionContext.tsx#local 306",
+        "app/contexts/SelectionContext.tsx#local 309",
+        "app/contexts/SelectionContext.tsx#local 320",
+        "app/contexts/SelectionContext.tsx#local 330",
+        "app/contexts/SelectionContext.tsx#local 340",
+        "app/contexts/SelectionContext.tsx#local 350",
+        "app/contexts/SelectionContext.tsx#local 360",
+        "app/contexts/SelectionContext.tsx#local 363",
+        "app/contexts/SelectionContext.tsx#local 370",
+        "app/contexts/SelectionContext.tsx#local 380",
+        "app/contexts/SelectionContext.tsx#local 389",
+        "app/contexts/SelectionContext.tsx#local 396",
+        "app/contexts/SelectionContext.tsx#local 402",
+        "app/contexts/SelectionContext.tsx#local 419",
+        "app/contexts/SelectionContext.tsx#local 426",
+        "app/contexts/SelectionContext.tsx#local 436",
+        "app/contexts/SelectionContext.tsx#local 439",
+        "app/contexts/SelectionContext.tsx#local 446",
+        "app/contexts/SelectionContext.tsx#local 452",
+        "app/contexts/SelectionContext.tsx#local 459",
+        "app/contexts/SelectionContext.tsx#local 465",
+        "app/contexts/SelectionContext.tsx#local 472",
+        "app/contexts/SelectionContext.tsx#local 478",
+        "app/contexts/SelectionContext.tsx#local 481",
+        "app/contexts/SelectionContext.tsx#local 491",
+        "app/contexts/SelectionContext.tsx#local 494",
+        "app/contexts/SelectionContext.tsx#local 497",
+        "app/contexts/SelectionContext.tsx#local 508",
+        "app/contexts/SelectionContext.tsx#local 511",
+        "app/contexts/SelectionContext.tsx#local 514",
+        "app/contexts/SelectionContext.tsx#local 517",
+        "app/contexts/SelectionContext.tsx#local 529",
+        "app/contexts/SelectionContext.tsx#local 532",
+        "app/contexts/SelectionContext.tsx#local 535",
+        "app/contexts/SelectionContext.tsx#local 541",
+        "app/contexts/SelectionContext.tsx#local 552",
+        "app/contexts/SelectionContext.tsx#local 555",
+        "app/contexts/SelectionContext.tsx#local 558",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/CALLER_CALLEE_EDGE_KINDS.",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/EMPTY_LOCKED.",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionContextValue#",
+        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionState#"
       ],
       "parent": "ux-cbcb",
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        8
+        1,
+        4
       ],
       "color": "#4a5666"
     },
     {
       "id": "repograph-b04b",
       "created_at": "2026-09-23T01:48:47.912Z",
-      "updated_at": "2026-09-23T02:59:21.452Z",
+      "updated_at": "2026-09-25T17:19:09.507Z",
       "name": "RepoGraph",
       "type": "business_domain",
       "contains": [
@@ -528,7 +671,7 @@
     {
       "id": "areamanager-61c0",
       "created_at": "2026-09-23T02:02:48.451Z",
-      "updated_at": "2026-09-23T02:51:54.895Z",
+      "updated_at": "2026-09-25T17:19:22.940Z",
       "name": "AreaManager",
       "type": "business_domain",
       "contains": [
@@ -562,13 +705,14 @@
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        6
+        1,
+        4
       ]
     },
     {
       "id": "tabsidebar-9f45",
       "created_at": "2026-09-23T02:03:51.362Z",
-      "updated_at": "2026-09-23T03:08:41.525Z",
+      "updated_at": "2026-09-25T17:17:39.889Z",
       "name": "WindowPane",
       "type": "business_domain",
       "contains": [
@@ -585,14 +729,15 @@
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        2
+        2,
+        5
       ],
       "color": "#bccee8"
     },
     {
       "id": "searchselectsidebar-960e",
       "created_at": "2026-09-23T02:07:02.578Z",
-      "updated_at": "2026-09-23T03:08:39.743Z",
+      "updated_at": "2026-09-25T17:19:15.891Z",
       "name": "SearchSelectSidebar",
       "type": "business_domain",
       "contains": [
@@ -605,47 +750,66 @@
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SearchSelectSidebar.tsx`/SearchSelectSidebarProps#",
         "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/ExpansionGroup#",
         "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/ExpansionCandidate#",
-        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionContextValue#",
-        "scip-typescript npm git-explorer 0.1.0 app/contexts/`SelectionContext.tsx`/SelectionState#",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`AreaTree.tsx`/AreaTree().",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`AreaTree.tsx`/AreaTreeProps#",
         "app/components/selection/AreaTree.tsx#local 78",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`AreaTree.tsx`/truncatePath().",
-        "app/components/selection/AreaTree.tsx#local 66"
+        "app/components/selection/AreaTree.tsx#local 66",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionToolbar.tsx`/SelectionToolbar().",
+        "app/components/selection/SelectionToolbar.tsx#local 36",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ExpansionGroups.tsx`/ExpansionGroups().",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ExpansionGroups.tsx`/truncatePath().",
+        "app/components/selection/ExpansionGroups.tsx#local 38",
+        "app/components/selection/ExpansionGroups.tsx#local 50",
+        "app/components/selection/ExpansionGroups.tsx#local 147",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionStats.tsx`/SelectionStats().",
+        "app/components/selection/SelectionStats.tsx#local 31",
+        "app/components/selection/AreaTree.tsx#local 63",
+        "app/components/selection/AreaTree.tsx#local 83",
+        "app/components/selection/AreaTree.tsx#local 97",
+        "app/components/selection/AreaTree.tsx#local 109",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionToolbar.tsx`/SelectionToolbarProps#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ExpansionGroups.tsx`/ExpansionGroupsProps#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionStats.tsx`/SelectionStatsProps#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionToolbar.tsx`/BrowseMode#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SelectionToolbar.tsx`/FilterMode#",
+        "app/components/selection/SelectionTree.tsx#local 26",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SearchSelectSidebar.tsx`/FilterMode#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/selection/`SearchSelectSidebar.tsx`/BrowseMode#"
       ],
       "parent": "ux-cbcb",
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        5
+        7
       ],
       "color": "#2060ba"
     },
     {
       "id": "manageselection-b86e",
       "created_at": "2026-09-23T02:07:17.611Z",
-      "updated_at": "2026-09-23T03:05:51.790Z",
+      "updated_at": "2026-09-25T17:19:19.306Z",
       "name": "ManageSelection",
       "type": "business_domain",
       "contains": [
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ManageSelectionSidebar.tsx`/ManageSelectionSidebar().",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ManageSelectionSidebar.tsx`/SaveStatus#",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ManageSelectionSidebar.tsx`/ManageSelectionSidebarProps#",
-        "scip-typescript npm git-explorer 0.1.0 app/`page.tsx`/ManageSelectionSidebarWrapper().",
         "scip-typescript npm git-explorer 0.1.0 app/components/selection/`ManageSelectionSidebar.tsx`/DraftArea#"
       ],
       "parent": "ux-cbcb",
       "children": [],
       "clusterStrength": 0.6,
       "pinnedZones": [
-        0
+        1,
+        4
       ],
       "color": "#2060ba"
     },
     {
       "id": "analysis-af53",
       "created_at": "2026-09-23T02:31:03.996Z",
-      "updated_at": "2026-09-23T02:54:47.865Z",
+      "updated_at": "2026-09-25T15:49:57.812Z",
       "name": "Analysis",
       "type": "business_domain",
       "contains": [
@@ -655,7 +819,11 @@
         "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/AnalysisMetadata#",
         "scip-typescript npm git-explorer 0.1.0 app/services/analysis/shared/`graph-assembler.ts`/AssemblyInput#",
         "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/ReferenceLocation#",
-        "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/ParamInfo#"
+        "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/ParamInfo#",
+        "scip-typescript npm git-explorer 0.1.0 app/services/analysis/`test-file-detector.ts`/isTestFile().",
+        "scip-typescript npm git-explorer 0.1.0 app/services/analysis/shared/`symbol-utils.ts`/qualifySymbol().",
+        "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/SyntaxType#",
+        "scip-typescript npm git-explorer 0.1.0 lib/analysis/`types.ts`/EdgeKind#"
       ],
       "parent": null,
       "children": [
@@ -663,6 +831,162 @@
       ],
       "clusterStrength": 0.6,
       "pinnedZones": [
+        4
+      ]
+    },
+    {
+      "id": "git-diff-2d78",
+      "created_at": "2026-09-25T07:23:44.010Z",
+      "updated_at": "2026-09-25T15:18:02.505Z",
+      "name": "Git Diff",
+      "type": "business_domain",
+      "contains": [
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffUnit#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffStatus#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/Pos#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/MappedSpan#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/LabelledDeclaration#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/GitAnalysisNode#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/GitAnalysisResult#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffCounts#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/GitRefsResponse#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffErrorCode#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffResponse#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`pipeline.ts`/runDiffPipeline().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/ChangedFile#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`join.ts`/joinDiffToAnalysis().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`match.ts`/labelAddedFile().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`match.ts`/labelDeletedFile().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`match.ts`/labelModifiedFile().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`file-trees.ts`/ParsedFilePair#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`file-trees.ts`/buildFileTrees().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/resolveRef().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/showBlob().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/getExt().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/listChangedTsFiles().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`git-diff.ts`/mapGitStatus().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`join.ts`/countDiff().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`join.ts`/makeNodeKey().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`join.ts`/makeUnitKey().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`pipeline.ts`/DiffPipelineInput#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftasticFileResult#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/extractUnits().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/mapSpans().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftUnavailableError#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`snapshot.ts`/analyzeCommit().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/classifyMethodDefinition().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/getIdentifierName().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/getRangeNode().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/isFunctionLike().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/getVariableRangeNode().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/UnitInfo#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/assignRelationships().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/byteColToUtf16().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/posLessOrEqual().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/posLess().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`units.ts`/findInnermostUnit().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/runDifftastic().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/checkDifftasticAvailable().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/getRequirement().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftasticSide#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftasticChunkSpan#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftRequirement#",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/compareVersions().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`difftastic.ts`/DifftUnavailableError#`<constructor>`().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`snapshot.ts`/seedCache().",
+        "scip-typescript npm git-explorer 0.1.0 lib/diff/`types.ts`/DiffRequest#"
+      ],
+      "parent": null,
+      "children": [],
+      "clusterStrength": 0.6,
+      "color": "#F1502F",
+      "pinnedZones": [
+        5
+      ]
+    },
+    {
+      "id": "git-diff-5bb2",
+      "created_at": "2026-09-25T07:28:07.334Z",
+      "updated_at": "2026-09-25T17:17:33.989Z",
+      "name": "Diff",
+      "type": "business_domain",
+      "contains": [
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`useDiff.ts`/useDiff().",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`useDiff.ts`/UseDiffReturn#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`useDiff.ts`/DiffState#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`CompareBar.tsx`/CompareBarProps#",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`CompareBar.tsx`/CompareBar().",
+        "app/components/diff/CompareBar.tsx#local 58",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`DiffStatePanel.tsx`/DiffStatePanel().",
+        "scip-typescript npm git-explorer 0.1.0 app/components/diff/`DiffStatePanel.tsx`/DiffStatePanelProps#"
+      ],
+      "parent": "ux-cbcb",
+      "children": [],
+      "clusterStrength": 0.6,
+      "color": "#BA585D",
+      "pinnedZones": [
+        8
+      ]
+    },
+    {
+      "id": "selection-82dc",
+      "created_at": "2026-09-25T15:17:12.252Z",
+      "updated_at": "2026-09-25T17:04:36.892Z",
+      "name": "Selection",
+      "type": "business_domain",
+      "contains": [
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`candidates.ts`/computeExpansionCandidates().",
+        "lib/selection/candidates.ts#local 60",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`candidates.ts`/computeActiveNodeIds().",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`format.ts`/formatCopyText().",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`stats.ts`/computeAreaEdgeStats().",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`candidates.ts`/ExpansionCandidate#",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`candidates.ts`/ExpansionGroup#",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`stats.ts`/AreaEdgeStat#",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`trees.ts`/TreeNode#",
+        "scip-typescript npm git-explorer 0.1.0 lib/selection/`candidates.ts`/ExpansionType#"
+      ],
+      "parent": "graph-helpers-4305",
+      "children": [],
+      "clusterStrength": 0.6,
+      "pinnedZones": []
+    },
+    {
+      "id": "graph-helpers-4305",
+      "created_at": "2026-09-25T16:29:11.049Z",
+      "updated_at": "2026-09-25T17:13:32.337Z",
+      "name": "Graph Helpers",
+      "type": "business_domain",
+      "contains": [],
+      "parent": "ux-cbcb",
+      "children": [
+        "areas-717c",
+        "selection-82dc"
+      ],
+      "clusterStrength": 0.6,
+      "pinnedZones": [
+        0,
+        3,
+        6
+      ]
+    },
+    {
+      "id": "home-page-1d40",
+      "created_at": "2026-09-25T16:36:40.485Z",
+      "updated_at": "2026-09-25T17:19:21.074Z",
+      "name": "Home Page",
+      "type": "business_domain",
+      "contains": [
+        "scip-typescript npm git-explorer 0.1.0 app/`layout.tsx`/RootLayout().",
+        "scip-typescript npm git-explorer 0.1.0 app/`page.tsx`/SelectionBridge().",
+        "app/page.tsx#local 226",
+        "scip-typescript npm git-explorer 0.1.0 app/`page.tsx`/ManageSelectionSidebarWrapper()."
+      ],
+      "parent": "ux-cbcb",
+      "children": [],
+      "clusterStrength": 0.6,
+      "pinnedZones": [
+        1,
         4
       ]
     }
