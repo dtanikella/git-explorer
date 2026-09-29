@@ -58,6 +58,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 4. **Open the stats tab**: see a treemap of symbols sized by inbound references.
 5. **Search**: type a symbol name and hit **Search** to zoom to it.
 
+## Graph Tuning Bench
+
+A standalone harness for dialing in a graph view against a frozen snapshot, then emitting the tuning back into `lib/analysis/graph-config.ts`. Open it from the **Tuning bench** link in the graph toolbar (`/graph-playground/index.html`, served from `public/` via a symlink), or open `graph-playground/index.html` straight from disk — no build step, no backend (d3 loads from a CDN).
+
+Regenerate the snapshot (`graph-playground/data.js`) from a repo with `npx tsx scripts/dump-analysis.ts [repoPath] [outFile]`. The snapshot contract and the config-emit format are documented in the bench's **notes** panel.
+
 ## Available scripts
 
 | Script | Description |
@@ -113,6 +119,8 @@ git-explorer/
 │   │   └── graph-config.ts              # RepoGraph config objects
 │   ├── scip/                            # SCIP index reading/indexing
 │   └── tree-sitter/                     # Thin tree-sitter wrappers
+├── graph-playground/                    # Graph Tuning Bench (index.html + generated data.js snapshot)
+├── scripts/dump-analysis.ts             # Regenerates the bench snapshot
 ├── __tests__/                           # Jest test suites
 └── docs/superpowers/                    # Design specs and implementation plans
 ```

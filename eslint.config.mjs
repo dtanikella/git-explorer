@@ -119,6 +119,8 @@ const eslintConfig = defineConfig([
     "node_modules/**",
     "coverage/**",
     "scripts/**",
+    // Graph Tuning Bench: a standalone HTML page plus its generated snapshot
+    "graph-playground/**",
     "__tests__/fixtures/**",
     "*.log",
     ".env*",

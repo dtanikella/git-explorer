@@ -1,0 +1,1367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Graph Tuning Bench</title>
+<!--
+  Graph Tuning Bench v1 — Concept A (priority stack)
+
+  A standalone harness for dialing in how a graph view behaves, then emitting the tuning back into
+  lib/analysis/graph-config.ts. Open this file directly (file://) — no build step, no backend.
+  d3 v7 loads from a CDN; the graph comes from the frozen snapshot in ./data.js.
+
+  The three v1 decisions (edge-kind source of truth, config-emit format, snapshot contract) are
+  recorded in the "notes" panel inside the bench (top-right of the canvas) and in the NOTES
+  template near the bottom of this file.
+
+  Regenerate the snapshot:  npx tsx scripts/dump-analysis.ts
+-->
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --line2:#3a4150;
+    --text:#e6e9ef; --muted:#9aa3b2; --dim:#6b7382;
+    --accent:#4f8cff; --accent-bg:#12203a;
+    --ok:#3ecf8e; --ok-bg:#0f2620;
+    --warn:#e0a34a; --warn-bg:#2a2113;
+    --lock:#7c8797;
+    --rail:340px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif;}
+  a{color:var(--accent);}
+  button{font:inherit;color:inherit;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+
+  /* ── two-region frame ─────────────────────────────── */
+  .app{position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);height:100vh;overflow:hidden;}
+  .stage{position:relative;min-width:0;min-height:0;overflow:hidden;background:
+    radial-gradient(circle, #1a1e27 1px, transparent 1px) 0 0/26px 26px, var(--panel);}
+  .stage[data-canvas="light"]{background:#fff;}
+  canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;}
+  canvas#cv.grabbing{cursor:grabbing;}
+  .hud{position:absolute;top:12px;left:14px;color:var(--muted);font:11px ui-monospace,monospace;pointer-events:none;line-height:1.6;}
+  .hud .sim{color:var(--dim);}
+  .hud .sim.hot{color:var(--warn);}
+  .stage[data-canvas="light"] .hud{color:#4b5563;}
+  .ghost{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--dim);font-size:12px;text-align:center;padding:40px;pointer-events:none;}
+  .legend{position:absolute;bottom:12px;left:14px;right:14px;display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:11px;pointer-events:none;}
+  .stage[data-canvas="light"] .legend{color:#4b5563;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .stage-tools{position:absolute;top:10px;right:12px;display:flex;gap:6px;}
+  .tbtn{font-size:10.5px;border:1px solid var(--line2);border-radius:6px;padding:4px 10px;color:var(--muted);background:var(--panel);cursor:pointer;}
+  .tbtn:hover{color:var(--text);border-color:var(--accent);}
+  .tbtn[aria-pressed="true"]{color:var(--text);border-color:var(--accent);background:var(--accent-bg);}
+  #tip{position:absolute;z-index:5;display:none;pointer-events:none;background:#1f2937;color:#f9fafb;padding:6px 10px;
+    border-radius:4px;font-size:12px;max-width:340px;box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  #tip .t2{color:#9ca3af;font:10.5px ui-monospace,monospace;margin-top:2px;word-break:break-all;}
+
+  /* ── rail ─────────────────────────────────────────── */
+  .rail{min-height:0;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;}
+  .rail-top{padding:10px 10px 0;flex:0 0 auto;}
+  .rail-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 10px 4px;}
+  .rail-scroll::-webkit-scrollbar{width:8px;} .rail-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px;}
+
+  /* preset switcher (top bar) */
+  .preset{margin-bottom:9px;}
+  .preset .plabel{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:flex;align-items:center;}
+  .preset .plabel .tag{margin-left:auto;text-transform:none;letter-spacing:0;color:var(--muted);}
+  .switch{display:flex;align-items:center;gap:6px;}
+  .cyc{width:22px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border:1px solid var(--line2);border-radius:6px;background:var(--panel2);color:var(--muted);font-size:13px;padding:0;}
+  .cyc:hover{color:var(--text);border-color:var(--accent);}
+  .selwrap{flex:1;position:relative;height:26px;}
+  .selwrap select{width:100%;height:26px;appearance:none;-webkit-appearance:none;padding:0 22px 0 9px;cursor:pointer;
+    border:1px solid var(--accent);border-radius:6px;background:var(--accent-bg);color:var(--text);font:600 11.5px ui-sans-serif,system-ui,sans-serif;}
+  .selwrap .car{position:absolute;right:9px;top:0;height:26px;display:flex;align-items:center;color:var(--muted);font-size:9px;pointer-events:none;}
+  .newp{width:26px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border:1px dashed var(--line2);border-radius:6px;background:var(--panel);color:var(--accent);font-size:14px;padding:0;}
+  .newp:hover{border-color:var(--accent);}
+  .presethint{font-size:9px;color:var(--dim);margin-top:4px;display:flex;gap:8px;align-items:center;min-height:13px;}
+  .presethint .lnk{color:var(--accent);cursor:pointer;background:none;border:0;padding:0;font-size:9px;}
+
+  /* color-banded surfaces */
+  .band{border-radius:9px;padding:9px 10px;margin-bottom:9px;}
+  .b1{background:var(--accent-bg);} .b2{background:var(--ok-bg);} .b3{background:var(--warn-bg);}
+  .hd{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;margin-bottom:7px;}
+  .p1t{color:#9cc0ff;} .p2t{color:#8fe3c0;} .p3t{color:#f0c987;}
+  .num{font-size:10px;font-weight:600;border-radius:20px;padding:1px 7px;background:var(--panel2);color:var(--muted);}
+  .cost{margin-left:auto;font-size:9px;font-weight:600;border-radius:20px;padding:1px 7px;background:var(--panel2);transition:box-shadow .2s;}
+  .cost.build{color:#9cc0ff;border:1px solid #294066;}
+  .cost.draw{color:#8fe3c0;border:1px solid #1f5140;}
+  .cost.heat{color:#f0c987;border:1px solid #5c4620;}
+  .cost.pulse{animation:pulse .7s ease-out;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 currentColor;}100%{box-shadow:0 0 0 7px transparent;}}
+  .sub{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;}
+  .sub:first-child{margin-top:0;}
+
+  /* live controls: checkbox rows */
+  .r{position:relative;display:flex;align-items:center;gap:7px;font-size:11.5px;padding:2.5px 0;color:var(--text);cursor:pointer;user-select:none;}
+  .r input{position:absolute;opacity:0;width:0;height:0;}
+  .cb{width:12px;height:12px;border:1px solid var(--line2);border-radius:3px;flex:0 0 auto;background:transparent;}
+  .r input:checked + .cb{background:var(--accent);border-color:var(--accent);}
+  .b2 .r input:checked + .cb{background:var(--ok);border-color:var(--ok);}
+  .r input:focus-visible + .cb{outline:2px solid #fff;outline-offset:1px;}
+  .r.dis{cursor:not-allowed;opacity:.5;}
+  .cnt{margin-left:auto;font:9.5px ui-monospace,monospace;color:var(--dim);white-space:nowrap;}
+  .fold{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 0;color:var(--text);cursor:pointer;user-select:none;}
+  .fold .chev{color:var(--muted);font-size:11px;width:11px;text-align:center;}
+  .fold .s{margin-left:auto;font:9.5px ui-monospace,monospace;color:var(--dim);}
+  .foldbody{margin:0 0 3px 17px;border-left:1px solid var(--line2);padding-left:8px;}
+  .foldact{font-size:9.5px;color:var(--muted);margin:1px 0 2px;display:flex;gap:8px;}
+  .foldact button{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font-size:9.5px;}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden;}
+  .seg button{background:var(--panel2);border:0;border-right:1px solid var(--line2);padding:2px 8px;font-size:10px;color:var(--dim);cursor:pointer;}
+  .seg button:last-child{border-right:0;}
+  .seg button.on{color:var(--text);background:#2b3a55;}
+  .b2 .seg button.on{background:#1f4a3b;} .b3 .seg button.on{background:#4a3a1a;}
+  .rowline{display:flex;align-items:center;gap:7px;font-size:11.5px;padding:2.5px 0;}
+  .rowline .nm{flex:1;}
+
+  /* code-vs-live seam: locked rows */
+  .lock{display:block;font:9.5px ui-monospace,monospace;color:var(--lock);
+    border-top:1px dashed var(--line2);margin-top:7px;padding-top:6px;}
+  .lock .lh{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;}
+  .lock .lk{font-size:10px;}
+  .lock .edit{margin-left:auto;font-family:ui-sans-serif,system-ui,sans-serif;font-size:9px;color:var(--accent);}
+  .lock ul{margin:4px 0 0;padding:0 0 0 16px;line-height:1.55;}
+  .lock li{margin:0;}
+  .lock .more{color:var(--dim);}
+
+  /* area overlay tree */
+  .tree{max-height:128px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
+  .tree::-webkit-scrollbar{width:6px;} .tree::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+  .arow{display:flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 0;min-height:21px;}
+  .arow .chev{width:11px;text-align:center;color:var(--muted);font-size:10px;cursor:pointer;flex:0 0 auto;}
+  .eye{width:16px;flex:0 0 auto;color:var(--dim);font-size:12px;text-align:center;cursor:pointer;background:none;border:0;padding:0;line-height:1;}
+  .eye.on{color:var(--text);} .eye.mixed{color:var(--ok);}
+  .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto;}
+  .arow .nm{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .arow.off .nm{color:var(--dim);}
+  .arow .cnt{margin-left:auto;}
+  .solo{display:none;font-size:9px;color:var(--accent);cursor:pointer;background:none;border:0;padding:0 0 0 4px;}
+  .arow:hover .solo,.arow .solo.active{display:inline;}
+  .arow:hover .cnt{margin-left:0;}
+  .arow .solo.active{color:var(--ok);}
+  .forces{font:9.5px ui-monospace,monospace;color:var(--muted);line-height:1.55;margin-top:2px;}
+
+  /* P3: tabs, sliders */
+  .tabs{display:flex;gap:3px;margin-bottom:7px;}
+  .tab{flex:1;text-align:center;font-size:9.5px;font-weight:600;padding:5px 1px;border-radius:6px;cursor:pointer;
+    border:1px solid var(--line);color:var(--dim);background:var(--panel2);}
+  .tab.act{border-color:#5c4620;color:#f0c987;background:#1e222b;}
+  .grphd{display:flex;align-items:center;font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;}
+  .grphd:first-of-type{margin-top:0;}
+  .rst{margin-left:auto;font-size:9px;color:var(--accent);text-transform:none;letter-spacing:0;cursor:pointer;background:none;border:0;padding:0;}
+  .sl{display:grid;grid-template-columns:66px 1fr 44px;gap:7px;align-items:center;padding:2px 0;}
+  .sl .lb{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sl .vv{font:9.5px ui-monospace,monospace;color:var(--muted);text-align:right;}
+  .sl .bd{font:8.5px ui-monospace,monospace;color:var(--dim);grid-column:2;margin-top:-3px;}
+  .sl.col input[type=color]{width:100%;height:20px;padding:0;border:1px solid var(--line2);border-radius:4px;background:transparent;cursor:pointer;}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:var(--line2);border-radius:3px;outline:none;width:100%;margin:5px 0;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--warn);cursor:pointer;border:0;}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--warn);cursor:pointer;border:0;}
+  input[type=range]:focus-visible{outline:2px solid #fff;outline-offset:3px;}
+
+  /* footer: config emit */
+  .foot{flex:0 0 auto;background:var(--panel2);border-top:1px solid var(--line);padding:8px 10px;display:flex;align-items:center;gap:8px;position:relative;}
+  .foot .code{flex:1;min-width:0;font:10px ui-monospace,monospace;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+  .foot .code:hover{color:var(--text);}
+  .foot .half{position:absolute;left:10px;top:-8px;font-size:8.5px;color:var(--dim);background:var(--panel2);padding:0 5px;border-radius:5px;border:1px solid var(--line);}
+  .acts{display:flex;gap:6px;flex:0 0 auto;}
+  .btn{font-size:10.5px;border:1px solid var(--line2);border-radius:6px;padding:4px 10px;color:var(--muted);background:var(--panel);cursor:pointer;}
+  .btn:hover{color:var(--text);border-color:var(--accent);}
+  .btn.pri{color:var(--text);border-color:var(--accent);background:var(--accent-bg);}
+
+  /* floating panels (emit, notes) */
+  .panel{position:absolute;z-index:20;display:none;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.55);}
+  .panel.open{display:flex;flex-direction:column;}
+  .panel header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px;}
+  .panel header .x{margin-left:auto;cursor:pointer;color:var(--muted);background:none;border:0;font-size:14px;}
+  #emitPanel{right:8px;bottom:52px;width:min(780px,calc(100vw - 16px));max-height:min(70vh,640px);}
+  #emitPanel pre{margin:0;padding:12px;overflow:auto;font:11px/1.5 ui-monospace,monospace;color:#cdd5e2;flex:1;white-space:pre;tab-size:2;}
+  #notesPanel{top:44px;right:calc(var(--rail) + 12px);width:min(620px,calc(100vw - var(--rail) - 24px));max-height:calc(100vh - 64px);}
+  #notesPanel .body{overflow:auto;padding:4px 14px 14px;font-size:12px;color:var(--muted);}
+  #notesPanel h4{margin:14px 0 4px;font-size:12px;color:var(--text);}
+  #notesPanel p,#notesPanel ul{margin:4px 0;}
+  #notesPanel code,#notesPanel pre{font:11px ui-monospace,monospace;color:#cdd5e2;}
+  #notesPanel pre{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;margin:6px 0;}
+  #fatal{position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:40px;text-align:center;background:var(--bg);color:var(--text);}
+  #fatal code{font:12px ui-monospace,monospace;color:var(--warn);}
+  @media (max-width:760px){ .app{grid-template-columns:1fr;grid-template-rows:55vh 1fr;height:auto;min-height:100vh;} .rail{border-left:none;border-top:1px solid var(--line);} #notesPanel{right:8px;} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="stage" id="stage" data-canvas="light">
+    <canvas id="cv" aria-label="Graph canvas"></canvas>
+    <div class="hud" id="hud"></div>
+    <div class="ghost" id="ghost"></div>
+    <div class="legend" id="legend"></div>
+    <div class="stage-tools">
+      <button class="tbtn" id="fitBtn" title="zoom to fit the working set">fit</button>
+      <button class="tbtn" id="notesBtn" aria-pressed="false" title="decisions, snapshot contract, emit format">notes</button>
+    </div>
+    <div id="tip"></div>
+  </div>
+
+  <aside class="rail" aria-label="Tuning rail">
+    <div class="rail-top">
+      <div class="preset" id="preset"></div>
+    </div>
+    <div class="rail-scroll">
+      <section class="band b1" id="p1" aria-label="P1 available data"></section>
+      <section class="band b2" id="p2" aria-label="P2 display"></section>
+      <section class="band b3" id="p3" aria-label="P3 tune"></section>
+    </div>
+    <footer class="foot" id="foot"></footer>
+  </aside>
+
+  <div class="panel" id="emitPanel" role="dialog" aria-label="Config emit"></div>
+  <div class="panel" id="notesPanel" role="dialog" aria-label="Bench notes"></div>
+  <div id="fatal"></div>
+</div>
+
+<template id="NOTES">
+  <p>The bench tunes <b>one preset at a time</b> against a frozen snapshot. Every control is either <b>live</b> (yours to change) or a <b>locked row</b> that reflects policy owned by code — never a dead control. Bands are ordered by priority = frequency = recompute cost: <b>P1 rebuild</b> (re-filters the working set, re-runs the layout) → <b>P2 redraw</b> (no physics) → <b>P3 reheat</b> (nudges the running simulation).</p>
+
+  <h4>Decision 1 · edge-kind source of truth</h4>
+  <p>There is exactly one edge-kind on-set per preset (<code>live.edgeKinds</code>). It drives both the working-set filter and what is drawn, so nothing is "declared real" yet never rendered. Every node type and edge kind present in the snapshot is an independent multi-select toggle in P1 (INSTANTIATES included). The on-set is <b>seeded from the selected preset's real view config</b>, not from a bench-local constant:</p>
+  <ul>
+    <li><b>Internal Processing</b> — nodes FUNCTION·METHOD·CLASS (∧ cross-file reference); edges every kind, internal only (<code>!isExternal</code>).</li>
+    <li><b>Modules</b> — nodes FUNCTION·METHOD; edges CALLS, internal only.</li>
+    <li><b>Data Flow</b> — nodes FUNCTION·METHOD·CLASS·INTERFACE·TYPE_ALIAS; edges every kind except IMPORTS, internal only.</li>
+  </ul>
+  <p>Toggling further types/kinds is the experiment: pull one in, read the count, see its blast radius, then fold the winning set back into code. External edges are a bench-only preview (they draw hollow stubs); <code>RepoGraph.tsx</code> drops any edge whose target is not a candidate node.</p>
+
+  <h4>Decision 2 · config-emit format &amp; code-half boundary</h4>
+  <p>The footer emits <b>half</b> of a view config: the live half. The other half is code — the policy in <code>lib/analysis/graph-config.ts</code> (filter predicates, role→color, the edge-force model, the tunable groups) plus the bounds in this file's <code>PARAM_DEFS</code>. Two forms of the same value, both from the footer:</p>
+  <ul>
+    <li><b>tuning</b> — <code>{ preset, base, filters: { nodeTypes, edgeKinds, includeExternal, … }, params: { …flat P() magnitudes… } }</code> with a header comment that names the code half and the exact <code>RepoGraphConfig</code> field each param maps to.</li>
+    <li><b>view config (TS)</b> — that value pushed through the mapping into a <code>create…ViewConfig</code>-shaped function/const built with <code>mergeConfigs</code>, <code>scaledValue</code>, <code>createEdgeForcer</code> from <code>graph-config.ts</code>. Nothing in <code>graph-config.ts</code> has to change for the mapping to be faithful.</li>
+  </ul>
+  <p><b>Presets.</b> A preset is one full config: its policy fills the locked rows, its defaults fill the live controls (P1 on-sets, P3 magnitudes). <b>+ fork</b> snapshots the current live settings as a new session-local preset (same policy, new defaults); it emits through the same path and becomes permanent only when the emitted config is pasted into <code>graph-config.ts</code>. P2 display toggles are bench-only inspection and are not emitted. <i>reset all</i> restores the selected preset's defaults.</p>
+
+  <h4>Decision 3 · snapshot contract</h4>
+  <p><code>data.js</code> sets <code>window.GRAPH_SNAPSHOT</code>. A target graph must provide:</p>
+  <pre>{ version, metadata: { repoName, commit, generatedAt, … },
+  nodes:     [{ id, name, type, file, line, exported, test, xfile, refsIn, refsOut }],
+  edges:     [{ kind, from, to, external }],   // from → nodes[]; to → nodes[] (or externals[] when external)
+  externals: [{ name, pkg }],
+  areas:     [{ id, name, parent, color, contains: [node index…] }] }</pre>
+  <p>Produce it with <code>npx tsx scripts/dump-analysis.ts [repoPath] [outFile]</code> (same SCIP + tree-sitter pipeline as the app). Swap it by regenerating, or by dropping in any <code>data.js</code> with those keys; every count, toggle and tree in the bench is derived from the snapshot.</p>
+
+  <h4>Shipping</h4>
+  <p>The bench is one file plus <code>data.js</code>. The app serves it at <code>/graph-playground/index.html</code> (static, via <code>public/</code>) and links to it from the graph toolbar; opening the file directly works the same.</p>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="data.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   0 · bootstrap
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SNAP = window.GRAPH_SNAPSHOT;
+const fatal = (html) => { const f = document.getElementById('fatal'); f.innerHTML = html; f.style.display = 'flex'; };
+if (!window.d3) { fatal('<div><b>d3 failed to load.</b><br><br>The bench loads d3 v7 from a CDN — check the network connection.</div>'); return; }
+if (!SNAP || !SNAP.nodes) { fatal('<div><b>No snapshot.</b><br><br>Generate <code>graph-playground/data.js</code> with<br><code>npx tsx scripts/dump-analysis.ts</code></div>'); return; }
+
+const $ = (sel, root) => (root || document).querySelector(sel);
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k === 'checked' || k === 'value') el[k] = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return el;
+}
+/** replace an element's children, flattening nested lists and skipping null / false */
+function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((c) => c != null && c !== false)); }
+const fmtN = (n) => Number(n).toLocaleString('en-US');
+const decimals = (step) => (String(step).split('.')[1] || '').length;
+const fmtV = (v, step) => Number(v).toFixed(decimals(step));
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1 · snapshot → indexes (derived once; the snapshot never changes while tuning)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const NODES = SNAP.nodes, EDGES = SNAP.edges, EXTS = SNAP.externals || [], AREAS = SNAP.areas || [];
+const N = NODES.length;
+NODES.forEach((n, i) => { n.idx = i; });
+
+const PROC_TYPES = new Set(['FUNCTION', 'METHOD', 'CLASS']);
+const DATA_TYPES = new Set(['INTERFACE', 'TYPE_ALIAS']);
+
+// policy inputs the view configs derive from the whole edge list
+// Both are computed per test-scope: with "exclude tests" on, the app's edge list has no test-file edges.
+const METRICS = { src: { outCalls: new Int32Array(N), usage: new Int32Array(N) }, all: { outCalls: new Int32Array(N), usage: new Int32Array(N) } };
+for (const e of EDGES) {
+  const fromTest = NODES[e.from].test || (!e.external && NODES[e.to].test);
+  for (const scope of fromTest ? ['all'] : ['all', 'src']) {
+    const m = METRICS[scope];
+    if (e.kind === 'CALLS') m.outCalls[e.from]++;                     // Modules radius (createModulesViewConfig)
+    if (e.kind === 'USES_TYPE' && !e.external && PROC_TYPES.has(NODES[e.from].type) && DATA_TYPES.has(NODES[e.to].type)) m.usage[e.to]++;  // countDataNodeUsage
+  }
+}
+const metrics = () => METRICS[live().excludeTests ? 'src' : 'all'];
+
+const TYPE_COUNT = {}, TYPE_COUNT_NOTEST = {};
+let TEST_NODES = 0;
+for (const n of NODES) {
+  TYPE_COUNT[n.type] = (TYPE_COUNT[n.type] || 0) + 1;
+  if (n.test) TEST_NODES++; else TYPE_COUNT_NOTEST[n.type] = (TYPE_COUNT_NOTEST[n.type] || 0) + 1;
+}
+const TYPES_PRESENT = Object.keys(TYPE_COUNT).sort((a, b) => TYPE_COUNT[b] - TYPE_COUNT[a]);
+// edge histograms: [scope][kind]; an edge is a "test edge" when either end lives in a test file
+const KIND_CNT = { src: { int: {}, ext: {} }, all: { int: {}, ext: {} } };
+for (const e of EDGES) {
+  const test = NODES[e.from].test || (!e.external && NODES[e.to].test);
+  for (const scope of test ? ['all'] : ['all', 'src']) { const m = KIND_CNT[scope][e.external ? 'ext' : 'int']; m[e.kind] = (m[e.kind] || 0) + 1; }
+}
+const KINDS_PRESENT = [...new Set(EDGES.map((e) => e.kind))].sort((a, b) => (KIND_CNT.all.int[b] || 0) + (KIND_CNT.all.ext[b] || 0) - (KIND_CNT.all.int[a] || 0) - (KIND_CNT.all.ext[a] || 0));
+const kindCounts = (L, k) => { const c = KIND_CNT[L.excludeTests ? 'src' : 'all']; return { int: c.int[k] || 0, ext: c.ext[k] || 0 }; };
+const extEdgeCount = (L) => Object.values(KIND_CNT[L.excludeTests ? 'src' : 'all'].ext).reduce((a, b) => a + b, 0);
+
+// areas: tree + transitive membership (an area's nodes = its own + every descendant's)
+const AREA_BY_ID = new Map(AREAS.map((a) => [a.id, a]));
+const AREA_KIDS = new Map(AREAS.map((a) => [a.id, []]));
+for (const a of AREAS) if (a.parent && AREA_KIDS.has(a.parent)) AREA_KIDS.get(a.parent).push(a);
+const AREA_ROOTS = AREAS.filter((a) => !a.parent || !AREA_BY_ID.has(a.parent));
+const AREA_ALL = new Map();      // id → Set(node idx), transitive
+const NODE_AREAS = new Map();    // node idx → direct areas
+const AREA_DESC = new Map();     // id → [descendant ids]
+function collectArea(a, seen) {
+  if (AREA_ALL.has(a.id)) return AREA_ALL.get(a.id);
+  const set = new Set(a.contains), desc = [];
+  seen.add(a.id);
+  for (const k of AREA_KIDS.get(a.id) || []) {
+    if (seen.has(k.id)) continue;
+    for (const i of collectArea(k, seen)) set.add(i);
+    desc.push(k.id, ...AREA_DESC.get(k.id));
+  }
+  AREA_ALL.set(a.id, set); AREA_DESC.set(a.id, desc);
+  return set;
+}
+for (const a of AREAS) collectArea(a, new Set());
+for (const a of AREAS) for (const i of a.contains) { if (!NODE_AREAS.has(i)) NODE_AREAS.set(i, []); NODE_AREAS.get(i).push(a); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2 · CODE HALF — policy mirrored from lib/analysis/graph-config.ts (shown as locked rows)
+       Nothing here is a control; the live half (P1 on-sets, P3 magnitudes) is edited on the rail.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function scaledValue(count, min, max) {           // graph-config.ts scaledValue, default log2 scale
+  if (min >= max) return min;
+  const s = Math.log2(count + 1), m = Math.log2(51);
+  return min + Math.min(s / m, 1) * (max - min);
+}
+const ROLE_COLORS = { FUNCTION: '#3b82f6', METHOD: '#60a5fa', CLASS: '#8b5cf6', INTERFACE: '#10b981', TYPE_ALIAS: '#f59e0b', MODULE: '#ec4899' };
+const OTHER_COLOR = '#6b7280';                    // DEFAULT_NODE_STYLE.color
+const EXTERNAL_COLOR = '#9ca3af';                 // bench-only stub styling for external targets
+const ALL_KINDS = ['CALLS', 'EXTENDS', 'IMPLEMENTS', 'INSTANTIATES', 'IMPORTS', 'USES_TYPE'];
+const SIM_DEFAULTS = { centerStrength: 0.1, collisionPadding: 10, alphaDecay: 0.0228, velocityDecay: 0.4, areaCluster: 0.3 };
+const ROLE_PARAMS = { color_FUNCTION: ROLE_COLORS.FUNCTION, color_METHOD: ROLE_COLORS.METHOD, color_CLASS: ROLE_COLORS.CLASS,
+  color_INTERFACE: ROLE_COLORS.INTERFACE, color_TYPE_ALIAS: ROLE_COLORS.TYPE_ALIAS, color_MODULE: ROLE_COLORS.MODULE, color_other: OTHER_COLOR };
+const DATA_FLOW_LAYER_RADII = { storage: 100, api: 260, ux: 420 };
+
+// One entry per code-defined view preset. `defaults` doubles as the list of tunables the preset exposes.
+const BASES = {
+  internal: {
+    id: 'internal', label: 'Internal Processing', ref: 'INTERNAL_PROCESSING_CONFIG',
+    nodeTypes: ['FUNCTION', 'METHOD', 'CLASS'],
+    edgeKinds: ALL_KINDS,
+    metric: 'outboundRefs.length',
+    defaults: Object.assign({
+      nodeRadiusMin: 3, nodeRadiusMax: 30, nodeOpacity: 1,
+      dist_CALLS: 60, str_CALLS: 0.5, dist_EXTENDS: 100, str_EXTENDS: 0.3, dist_IMPLEMENTS: 100, str_IMPLEMENTS: 0.3,
+      dist_INSTANTIATES: 100, str_INSTANTIATES: 0.3, dist_IMPORTS: 200, str_IMPORTS: 0.1, dist_USES_TYPE: 200, str_USES_TYPE: 0.1,
+      edgeWidth: 1, edgeOpacity: 0.6, edgeStyle: 'solid', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',
+      charge: -300, chargeInbound: 1500,
+    }, SIM_DEFAULTS, ROLE_PARAMS),
+    policy: [
+      'filters.node = FUNCTION | METHOD | CLASS ∧ hasCrossFileReference(node)',
+      'filters.edge = !edge.isExternal  (every edge kind)',
+      'style.node radius = scaledValue(outboundRefs.length, min, max)',
+      'forces.node charge = base − scaledValue(referencedAt.length, 0, chargeInbound)',
+      'forces.edge = createEdgeForcer({ per-kind distance / strength })',
+    ],
+    nodeGate: (n) => n.xfile,
+    radius: (n, P) => scaledValue(n.refsOut, P.nodeRadiusMin, P.nodeRadiusMax),
+    color: (n, P) => P['color_' + n.type] || P.color_other,
+    nodeLabel: () => false,
+    charge: (n, P) => P.charge - scaledValue(n.refsIn, 0, P.chargeInbound),
+    link: (e, P) => ({ distance: P['dist_' + e.kind] != null ? P['dist_' + e.kind] : 80, strength: P['str_' + e.kind] != null ? P['str_' + e.kind] : 0.5 }),
+  },
+  modules: {
+    id: 'modules', label: 'Modules', ref: 'createModulesViewConfig',
+    nodeTypes: ['FUNCTION', 'METHOD'],
+    edgeKinds: ['CALLS'],
+    metric: 'outbound CALLS count',
+    defaults: Object.assign({
+      nodeRadiusMin: 4, nodeRadiusMax: 30, nodeOpacity: 1,
+      edgeDistance: 80, edgeStrength: 0.5,
+      edgeWidth: 1.5, edgeOpacity: 0.6, edgeStyle: 'gradient', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',
+      charge: -400,
+    }, SIM_DEFAULTS, ROLE_PARAMS),
+    policy: [
+      'filters.node = FUNCTION | METHOD',
+      'filters.edge = CALLS ∧ !edge.isExternal',
+      'style.node radius = scaledValue(outbound CALLS count, min, max)',
+      'forces.node.collideRadius = scaledValue(referencedAt.length, 8, 40)  (not read by RepoGraph.tsx)',
+      'forces.edge = one distance / strength for every kind',
+    ],
+    nodeGate: () => true,
+    radius: (n, P) => scaledValue(metrics().outCalls[n.idx], P.nodeRadiusMin, P.nodeRadiusMax),
+    color: (n, P) => P['color_' + n.type] || P.color_other,
+    nodeLabel: () => false,
+    charge: (n, P) => P.charge,
+    link: (e, P) => ({ distance: P.edgeDistance, strength: P.edgeStrength }),
+  },
+  dataflow: {
+    id: 'dataflow', label: 'Data Flow', ref: 'createDataFlowViewConfig',
+    nodeTypes: ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS'],
+    edgeKinds: ALL_KINDS.filter((k) => k !== 'IMPORTS'),
+    metric: 'processing→data USES_TYPE count',
+    layerRadii: DATA_FLOW_LAYER_RADII,
+    defaults: Object.assign({
+      processingRadius: 6, nodeRadiusMin: 12, nodeRadiusMax: 30, nodeOpacity: 1,
+      edgeDistance: 90, edgeStrengthBase: 0.35,
+      edgeWidth: 1.5, edgeOpacity: 0.6, edgeStyle: 'gradient', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',
+      charge: -200,
+      dataColor: '#10b981', processingColor: '#9ca3af',
+    }, SIM_DEFAULTS),
+    policy: [
+      'filters.node = FUNCTION | METHOD | CLASS | INTERFACE | TYPE_ALIAS',
+      'filters.edge = kind ≠ IMPORTS ∧ !isExternal ∧ both ends in the node set',
+      'data nodes (INTERFACE, TYPE_ALIAS): labeled, radius = scaledValue(usage count, min, max)',
+      'processing nodes: fixed radius, no label',
+      'forces.edge strength = max(0.05, base / √usage(target))',
+      'forces.layerRadii = { storage: 100, api: 260, ux: 420 } — areas of those names only',
+    ],
+    nodeGate: () => true,
+    radius: (n, P) => (DATA_TYPES.has(n.type) ? scaledValue(metrics().usage[n.idx], P.nodeRadiusMin, P.nodeRadiusMax) : P.processingRadius),
+    color: (n, P) => (DATA_TYPES.has(n.type) ? P.dataColor : P.processingColor),
+    nodeLabel: (n) => DATA_TYPES.has(n.type),
+    charge: (n, P) => P.charge,
+    link: (e, P, ctx) => ({ distance: P.edgeDistance, strength: Math.max(0.05, P.edgeStrengthBase / Math.sqrt(ctx.toUsage(e) || 1)) }),
+  },
+};
+const BASE_ORDER = ['internal', 'modules', 'dataflow'];   // switcher cycle order
+
+// ── P3 registry: code-defined groups (tabs → subgroups) and bounds ─────────────────────────────
+const TABS = ['nodes', 'edges', 'forces', 'color'];
+const MAP_DESC = {
+  nodeRadiusMin: 'style.node().radius ← scaledValue(<metric>, MIN, max)',
+  nodeRadiusMax: 'style.node().radius ← scaledValue(<metric>, min, MAX)',
+  processingRadius: 'style.node().radius (processing nodes) ← PROCESSING_NODE_RADIUS',
+  nodeOpacity: 'style.node().opacity',
+  edgeDistance: 'forces.edge().distance', edgeStrength: 'forces.edge().strength',
+  edgeStrengthBase: 'forces.edge().strength ← max(0.05, BASE / √usage)',
+  edgeWidth: 'style.edge().width', edgeOpacity: 'style.edge().opacity',
+  edgeStyle: 'style.edge(): gradientSourceColor / gradientTargetColor present ⇔ "gradient"',
+  edgeColor: 'style.edge().color', gradientFrom: 'style.edge().gradientSourceColor', gradientTo: 'style.edge().gradientTargetColor',
+  charge: 'forces.node().charge', chargeInbound: 'forces.node().charge −= scaledValue(referencedAt.length, 0, MAX)',
+  centerStrength: 'simulation.centerStrength', collisionPadding: 'simulation.collisionPadding',
+  alphaDecay: 'simulation.alphaDecay', velocityDecay: 'simulation.velocityDecay',
+  areaCluster: 'forces.areaCluster  (bench: centroid-pull approximation)',
+  dataColor: 'style.node().color (data nodes)', processingColor: 'style.node().color (processing nodes)',
+};
+const PARAM_DEFS = [];
+const def = (o) => PARAM_DEFS.push(Object.assign({ type: 'num' }, o));
+def({ key: 'nodeRadiusMin', tab: 'nodes', sub: 'node size', label: 'min r', min: 1, max: 30, step: 1 });
+def({ key: 'nodeRadiusMax', tab: 'nodes', sub: 'node size', label: 'max r', min: 6, max: 80, step: 1 });
+def({ key: 'processingRadius', tab: 'nodes', sub: 'node size', label: 'processing', min: 2, max: 20, step: 1 });
+def({ key: 'nodeOpacity', tab: 'nodes', sub: 'node style', label: 'opacity', min: 0.1, max: 1, step: 0.05 });
+for (const k of ALL_KINDS) {
+  def({ key: 'dist_' + k, tab: 'edges', sub: 'link · ' + k, label: 'distance', min: 20, max: 400, step: 5, kind: k });
+  def({ key: 'str_' + k, tab: 'edges', sub: 'link · ' + k, label: 'strength', min: 0, max: 1, step: 0.05, kind: k });
+}
+def({ key: 'edgeDistance', tab: 'edges', sub: 'link force', label: 'distance', min: 20, max: 400, step: 5 });
+def({ key: 'edgeStrength', tab: 'edges', sub: 'link force', label: 'strength', min: 0, max: 1, step: 0.05 });
+def({ key: 'edgeStrengthBase', tab: 'edges', sub: 'link force', label: 'str base', min: 0.05, max: 1, step: 0.01 });
+def({ key: 'edgeWidth', tab: 'edges', sub: 'edge style', label: 'width', min: 0.5, max: 4, step: 0.1 });
+def({ key: 'edgeOpacity', tab: 'edges', sub: 'edge style', label: 'opacity', min: 0.05, max: 1, step: 0.05 });
+def({ key: 'charge', tab: 'forces', sub: 'repulsion', label: 'charge', min: -1500, max: 0, step: 10 });
+def({ key: 'chargeInbound', tab: 'forces', sub: 'repulsion', label: '+inbound', min: 0, max: 3000, step: 50 });
+def({ key: 'centerStrength', tab: 'forces', sub: 'centering & collision', label: 'center', min: 0, max: 1, step: 0.01 });
+def({ key: 'collisionPadding', tab: 'forces', sub: 'centering & collision', label: 'collide pad', min: 0, max: 40, step: 1 });
+def({ key: 'alphaDecay', tab: 'forces', sub: 'cooling', label: 'α decay', min: 0.001, max: 0.1, step: 0.001 });
+def({ key: 'velocityDecay', tab: 'forces', sub: 'cooling', label: 'v decay', min: 0.05, max: 0.9, step: 0.05 });
+def({ key: 'areaCluster', tab: 'forces', sub: 'areas', label: 'cluster', min: 0, max: 1, step: 0.05 });
+for (const t of ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS']) def({ key: 'color_' + t, tab: 'color', sub: 'node colors', label: t.toLowerCase(), type: 'color', nodeType: t });
+def({ key: 'color_other', tab: 'color', sub: 'node colors', label: 'other', type: 'color' });
+def({ key: 'dataColor', tab: 'color', sub: 'node colors', label: 'data', type: 'color' });
+def({ key: 'processingColor', tab: 'color', sub: 'node colors', label: 'processing', type: 'color' });
+def({ key: 'edgeStyle', tab: 'color', sub: 'edge colors', label: 'style', type: 'enum', options: ['solid', 'gradient'] });
+def({ key: 'edgeColor', tab: 'color', sub: 'edge colors', label: 'color', type: 'color', when: (P) => P.edgeStyle === 'solid' });
+def({ key: 'gradientFrom', tab: 'color', sub: 'edge colors', label: 'from', type: 'color', when: (P) => P.edgeStyle === 'gradient' });
+def({ key: 'gradientTo', tab: 'color', sub: 'edge colors', label: 'to', type: 'color', when: (P) => P.edgeStyle === 'gradient' });
+for (const d of PARAM_DEFS) {
+  d.map = d.kind ? (d.key.startsWith('dist_') ? 'forces.edge(' + d.kind + ').distance' : 'forces.edge(' + d.kind + ').strength')
+    : d.key.startsWith('color_') ? 'style.node().color (' + (d.nodeType || 'other types') + ')'
+    : MAP_DESC[d.key] || d.key;
+}
+const isPresent = (d) => (d.kind ? KINDS_PRESENT.includes(d.kind) : d.nodeType ? TYPES_PRESENT.includes(d.nodeType) : true);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3 · state — presets own P1 + P3; P2 is bench-only display state
+   ═══════════════════════════════════════════════════════════════════════════ */
+function cloneLive(l) {
+  return { nodeTypes: new Set(l.nodeTypes), edgeKinds: new Set(l.edgeKinds), includeAreas: l.includeAreas,
+    excludeTests: l.excludeTests, includeExternal: l.includeExternal, params: Object.assign({}, l.params) };
+}
+function codePreset(b) {
+  const d = { nodeTypes: new Set(b.nodeTypes), edgeKinds: new Set(b.edgeKinds), includeAreas: true, excludeTests: true, includeExternal: false, params: Object.assign({}, b.defaults) };
+  return { id: b.id, label: b.label, base: b.id, forked: false, defaults: d, live: cloneLive(d) };
+}
+const presets = BASE_ORDER.map((id) => codePreset(BASES[id]));
+let curId = 'modules';                      // the app's default view
+let forkSeq = 0;
+const cur = () => presets.find((p) => p.id === curId);
+const live = () => cur().live;
+const base = () => BASES[cur().base];
+
+const ui = { fold: { nodeTypes: false, edgeKinds: false, edgesDrawn: false }, tab: 'nodes', areaCollapsed: new Set(), lockOpen: {}, emitTab: 'tuning', emitOpen: false, notesOpen: false };
+const disp = {                              // P2 — display only; never touches the working set or the physics
+  showEdges: true, labels: 'preset', canvas: 'light', drawOff: new Set(),
+  areaVis: new Map(AREAS.map((a) => [a.id, true])), solo: null,
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4 · canvas engine — working set (P1 rebuild), styling + forces (P3 reheat), drawing (P2 redraw)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const stage = $('#stage'), canvas = $('#cv'), ctx = canvas.getContext('2d');
+let W = 800, H = 600, DPR = window.devicePixelRatio || 1;
+let T = d3.zoomIdentity;
+let sim = null, simNodes = [], links = [], simByIdx = new Map(), hover = null, neighbors = null;
+const POS = new Map();                      // key → {x, y}: carried across rebuilds so toggling doesn't scramble the layout
+let lastBuildMs = 0, tickCount = 0, userMoved = false, pendingFit = false;   // pendingFit: refit once after a rebuild, never after a reheat
+
+function nodeCtx() { const m = metrics(); return { toUsage: (e) => (e.external ? 0 : m.usage[e.to]) }; }
+
+/** P1 → working set. Re-filters nodes/edges from the snapshot and restarts the layout. */
+function rebuild(fit) {
+  const t0 = performance.now();
+  for (const s of simNodes) POS.set(s.key, { x: s.x, y: s.y });
+  const L = live(), B = base();
+  const ok = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    const n = NODES[i];
+    ok[i] = L.nodeTypes.has(n.type) && !(L.excludeTests && n.test) && B.nodeGate(n) ? 1 : 0;
+  }
+  const byKey = new Map();
+  const get = (key, node, ext) => {
+    let s = byKey.get(key);
+    if (!s) { s = { key, idx: ext ? -1 : node.idx, node, ext, deg: 0, r: 4, fill: '#888', charge: 0, alpha: 1, label: false }; const p = POS.get(key); if (p && p.x != null) { s.x = p.x; s.y = p.y; } byKey.set(key, s); }
+    return s;
+  };
+  const ls = [];
+  for (const e of EDGES) {
+    if (!L.edgeKinds.has(e.kind) || !ok[e.from]) continue;
+    if (e.external) {
+      if (!L.includeExternal) continue;
+      const x = EXTS[e.to];
+      ls.push({ e, source: get('n' + e.from, NODES[e.from], false), target: get('x' + e.to, { idx: -1, id: 'ext:' + e.to, name: x.name, type: 'EXTERNAL', file: x.pkg, line: 0, refsIn: 0, refsOut: 0, ext: true }, true), vis: true });
+    } else {
+      if (!ok[e.to]) continue;
+      ls.push({ e, source: get('n' + e.from, NODES[e.from], false), target: get('n' + e.to, NODES[e.to], false), vis: true });
+    }
+  }
+  links = ls;
+  simNodes = [...byKey.values()];                 // isolated nodes (degree 0) are dropped, as RepoGraph.tsx does
+  simByIdx = new Map(simNodes.filter((s) => !s.ext).map((s) => [s.idx, s]));
+  for (const l of links) { l.source.deg++; l.target.deg++; }
+
+  if (sim) sim.stop();
+  sim = d3.forceSimulation(simNodes)
+    .force('link', d3.forceLink(links).distance(1).strength(0.5))
+    .force('charge', d3.forceManyBody())
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide())
+    .force('areaCluster', clusterForce())
+    .on('tick', onTick)
+    .on('end', () => { updateSimHud(); if (pendingFit) { pendingFit = false; fitView(true); } });
+  if (B.layerRadii) sim.force('layerRadial', d3.forceRadial((d) => layerTarget(d) || 0, W / 2, H / 2).strength((d) => (layerTarget(d) == null ? 0 : 0.3)));
+  applyStyles();
+  applyForces();
+  const carried = simNodes.filter((s) => s.x != null).length / Math.max(1, simNodes.length);
+  sim.alpha(carried > 0.8 ? 0.5 : 1).restart();
+  lastBuildMs = performance.now() - t0;
+  refreshDrawFlags();
+  computeAreaCounts();
+  renderHud(); renderLegend();
+  pendingFit = !!(fit || !userMoved);
+  if (pendingFit) setTimeout(() => { if (pendingFit) fitView(false); }, 450);
+}
+
+/** P3 → per-node / per-link visuals derived from the live magnitudes. */
+function applyStyles() {
+  const B = base(), P = live().params, ctxo = nodeCtx();
+  for (const s of simNodes) {
+    if (s.ext) { s.r = 3; s.fill = EXTERNAL_COLOR; s.charge = -30; s.alpha = 0.8; s.label = false; continue; }
+    s.r = B.radius(s.node, P); s.fill = B.color(s.node, P); s.charge = B.charge(s.node, P);
+    s.alpha = P.nodeOpacity; s.label = B.nodeLabel(s.node);
+  }
+  for (const l of links) { const f = B.link(l.e, P, ctxo); l.dist = f.distance; l.str = f.strength; }
+  legendDirty = true;
+}
+let legendDirty = true;
+
+/** P3 → push the magnitudes into the running d3 forces. */
+function applyForces() {
+  if (!sim) return;
+  const P = live().params;
+  sim.force('link').distance((l) => l.dist).strength((l) => l.str);
+  sim.force('charge').strength((d) => d.charge);
+  sim.force('center').strength(P.centerStrength);
+  sim.force('collide').radius((d) => d.r + P.collisionPadding);
+  sim.alphaDecay(P.alphaDecay).velocityDecay(P.velocityDecay);
+}
+
+/** Bench approximation of the app's area cluster force: pull each node toward its area's centroid. */
+function clusterForce() {
+  let nodes = [];
+  function force(alpha) {
+    const P = live().params;
+    if (!live().includeAreas || !P.areaCluster) return;
+    const acc = new Map();
+    for (const s of nodes) {
+      const a = s.ext ? null : (NODE_AREAS.get(s.idx) || [])[0];
+      s._area = a;
+      if (!a) continue;
+      let c = acc.get(a.id); if (!c) { c = { x: 0, y: 0, n: 0 }; acc.set(a.id, c); }
+      c.x += s.x; c.y += s.y; c.n++;
+    }
+    const k = P.areaCluster * alpha;
+    for (const s of nodes) {
+      if (!s._area) continue;
+      const c = acc.get(s._area.id);
+      if (c.n < 2) continue;
+      s.vx += (c.x / c.n - s.x) * k; s.vy += (c.y / c.n - s.y) * k;
+    }
+  }
+  force.initialize = (ns) => { nodes = ns; };
+  return force;
+}
+function layerTarget(d) {
+  const radii = base().layerRadii;
+  if (!radii || d.ext) return null;
+  const rs = (NODE_AREAS.get(d.idx) || []).map((a) => radii[a.name]).filter((r) => r != null);
+  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
+}
+function layerTaggedCount() { const B = base(); return B.layerRadii ? simNodes.filter((s) => layerTarget(s) != null).length : 0; }
+
+/** P3 edit → reheat the running simulation (the cost the band's badge names). */
+function reheat() {
+  applyStyles(); applyForces();
+  if (sim) sim.alpha(Math.max(sim.alpha(), 0.35)).restart();
+  pulse('p3'); renderHud(); renderLegendIfDirty(); renderFooter();
+}
+
+function refreshDrawFlags() {
+  for (const l of links) l.vis = disp.showEdges && !disp.drawOff.has(l.e.kind);
+}
+/** P2 edit → redraw only; the simulation is left alone. */
+function redraw(which) {
+  refreshDrawFlags(); draw();
+  if (which !== 'quiet') renderP2();
+  pulse('p2');
+}
+
+// ── hit-testing, tooltip, drag, zoom ───────────────────────────────────────────────────────────
+function nodeAt(x, y) {
+  for (let i = simNodes.length - 1; i >= 0; i--) {
+    const s = simNodes[i]; if (s.x == null) continue;
+    const dx = x - s.x, dy = y - s.y, rr = s.r + 2 / T.k;
+    if (dx * dx + dy * dy <= rr * rr) return s;
+  }
+  return null;
+}
+const tip = $('#tip');
+function showTip(s, ev) {
+  if (!s) { tip.style.display = 'none'; return; }
+  const n = s.node;
+  const areas = s.ext ? '' : (NODE_AREAS.get(s.idx) || []).map((a) => a.name).join(', ');
+  fill(tip, h('div', null, n.name), h('div', { class: 't2' }, s.ext ? 'external · ' + n.file : n.type + ' · ' + n.file + ':' + (n.line + 1)),
+    s.ext ? null : h('div', { class: 't2' }, 'refs in ' + n.refsIn + ' · out ' + n.refsOut + ' · degree ' + s.deg + (areas ? ' · ' + areas : '')));
+  const rect = stage.getBoundingClientRect();
+  tip.style.display = 'block';
+  tip.style.left = Math.min(ev.clientX - rect.left + 14, rect.width - 350) + 'px';
+  tip.style.top = (ev.clientY - rect.top + 14) + 'px';
+}
+function setHover(s) {
+  if (s === hover) return;
+  hover = s; neighbors = null;
+  if (s) { neighbors = new Set([s]); for (const l of links) { if (l.source === s) neighbors.add(l.target); else if (l.target === s) neighbors.add(l.source); } }
+  draw();
+}
+canvas.addEventListener('mousemove', (ev) => {
+  const r = canvas.getBoundingClientRect();
+  const p = T.invert([ev.clientX - r.left, ev.clientY - r.top]);
+  const s = nodeAt(p[0], p[1]);
+  setHover(s); showTip(s, ev);
+});
+canvas.addEventListener('mouseleave', () => { setHover(null); showTip(null); });
+
+const zoom = d3.zoom().scaleExtent([0.03, 12]).on('zoom', (ev) => { T = ev.transform; if (ev.sourceEvent) userMoved = true; draw(); });
+d3.select(canvas).call(d3.drag().container(canvas)
+  .subject((ev) => { const p = T.invert([ev.x, ev.y]); return nodeAt(p[0], p[1]); })
+  .on('start', (ev) => { if (!ev.active) sim.alphaTarget(0.25).restart(); ev.subject.fx = ev.subject.x; ev.subject.fy = ev.subject.y; canvas.classList.add('grabbing'); })
+  .on('drag', (ev) => { const p = T.invert([ev.x, ev.y]); ev.subject.fx = p[0]; ev.subject.fy = p[1]; })
+  .on('end', (ev) => { if (!ev.active) sim.alphaTarget(0); ev.subject.fx = null; ev.subject.fy = null; canvas.classList.remove('grabbing'); }))
+  .call(zoom);
+
+function fitView(animate) {
+  const pts = simNodes.filter((s) => s.x != null);
+  if (!pts.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of pts) { x0 = Math.min(x0, s.x - s.r); y0 = Math.min(y0, s.y - s.r); x1 = Math.max(x1, s.x + s.r); y1 = Math.max(y1, s.y + s.r); }
+  const pad = 60, k = Math.min(3, (W - 2 * pad) / Math.max(x1 - x0, 1), (H - 2 * pad) / Math.max(y1 - y0, 1));
+  const t = d3.zoomIdentity.translate(W / 2 - ((x0 + x1) / 2) * k, H / 2 - ((y0 + y1) / 2) * k).scale(k);
+  const sel = d3.select(canvas);
+  (animate ? sel.transition().duration(300) : sel).call(zoom.transform, t);
+  userMoved = false;
+}
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  W = Math.max(200, r.width); H = Math.max(200, r.height); DPR = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  if (sim) { sim.force('center').x(W / 2).y(H / 2); }
+  draw();
+}
+new ResizeObserver(resize).observe(stage);
+
+// ── drawing ────────────────────────────────────────────────────────────────────────────────────
+function hexToRgb(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex); const n = m ? parseInt(m[1], 16) : 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function hashToColor(str) {                       // lib/areas/color.ts hashToColor
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); hash = hash & hash; }
+  const hue = Math.abs(hash % 360), sat = 60 + Math.abs((hash >> 8) % 20), lit = 40 + Math.abs((hash >> 16) % 15);
+  const s = sat / 100, l = lit / 100, a = s * Math.min(l, 1 - l);
+  const f = (n) => { const k = (n + hue / 30) % 12; const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * c).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
+function borderOf(hex) {                          // lib/areas/color.ts deriveBorderColor: lightness × 0.65
+  const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
+  const mx = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0), d = mx - mn;
+  let hh = 0, ss = 0, ll = (mx + mn) / 2;
+  if (d) { ss = ll > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); hh = (mx === r0 ? (g0 - b0) / d + (g0 < b0 ? 6 : 0) : mx === g0 ? (b0 - r0) / d + 2 : (r0 - g0) / d + 4) / 6; }
+  ll = Math.max(0, Math.min(1, ll * 0.65));
+  const hue = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  let r, g, b;
+  if (!ss) r = g = b = ll; else { const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss, p = 2 * ll - q; r = hue(p, q, hh + 1 / 3); g = hue(p, q, hh); b = hue(p, q, hh - 1 / 3); }
+  const x = (v) => Math.round(Math.max(0, Math.min(255, v * 255))).toString(16).padStart(2, '0');
+  return '#' + x(r) + x(g) + x(b);
+}
+const areaColor = (a) => a.color || hashToColor(a.id);
+
+function areaHull(a) {                            // lib/areas/renderer.ts computeAreaHull
+  const pts = [];
+  for (const i of AREA_ALL.get(a.id)) { const s = simByIdx.get(i); if (s && s.x != null) pts.push(s); }
+  if (!pts.length) return null;
+  const PAD = 55;
+  if (pts.length === 1) return { cx: pts[0].x, cy: pts[0].y, r: pts[0].r + PAD };
+  if (pts.length === 2) { const [p, q] = pts; return { cx: (p.x + q.x) / 2, cy: (p.y + q.y) / 2, r: Math.hypot(p.x - q.x, p.y - q.y) / 2 + Math.max(p.r, q.r) + PAD }; }
+  const hull = d3.polygonHull(pts.map((s) => [s.x, s.y]));
+  if (!hull) return null;
+  let cx = 0, cy = 0; for (const [x, y] of hull) { cx += x; cy += y; } cx /= hull.length; cy /= hull.length;
+  return { points: hull.map(([x, y]) => { const dx = x - cx, dy = y - cy, dist = Math.hypot(dx, dy); if (!dist) return [x, y]; const sc = (dist + PAD) / dist; return [cx + dx * sc, cy + dy * sc]; }) };
+}
+function drawAreas(c, light) {
+  if (!live().includeAreas) return;
+  for (const a of AREAS) {
+    if (!disp.areaVis.get(a.id)) continue;
+    const hull = areaHull(a); if (!hull) continue;
+    const fill = areaColor(a), border = borderOf(fill);
+    c.save(); c.beginPath();
+    if (hull.points) { c.moveTo(hull.points[0][0], hull.points[0][1]); for (let i = 1; i < hull.points.length; i++) c.lineTo(hull.points[i][0], hull.points[i][1]); c.closePath(); }
+    else c.arc(hull.cx, hull.cy, hull.r, 0, 2 * Math.PI);
+    c.fillStyle = fill; c.globalAlpha = 0.08; c.fill();
+    c.globalAlpha = 0.3; c.strokeStyle = border; c.lineWidth = 2.5; c.stroke();
+    c.globalAlpha = 1;
+    // pill label
+    let lx, ly;
+    if (hull.points) { let sx = 0, my = Infinity; for (const [x, y] of hull.points) { sx += x; if (y < my) my = y; } lx = sx / hull.points.length; ly = my - 14; } else { lx = hull.cx; ly = hull.cy - hull.r - 14; }
+    c.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    const tw = c.measureText(a.name).width, pw = tw + 20, ph = 25, px = lx - pw / 2, py = ly - ph / 2;
+    c.beginPath(); c.roundRect ? c.roundRect(px, py, pw, ph, 8) : c.rect(px, py, pw, ph);
+    c.fillStyle = fill; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1;
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(a.name, lx, ly + 1);
+    c.restore();
+  }
+}
+function draw() {
+  const c = ctx, light = disp.canvas === 'light', P = live().params, B = base();
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.clearRect(0, 0, W, H);
+  c.save();
+  c.translate(T.x, T.y); c.scale(T.k, T.k);
+  drawAreas(c, light);
+
+  // edges (uniform style → one batched path; gradient → per edge, capped for speed)
+  const gradient = P.edgeStyle === 'gradient';
+  const dim = hover ? 0.12 : 1;
+  const vis = links.filter((l) => l.vis && l.source.x != null && l.target.x != null);
+  c.lineWidth = P.edgeWidth;
+  if (gradient && vis.length <= 1600) {
+    for (const l of vis) {
+      const hot = hover && (l.source === hover || l.target === hover);
+      const g = c.createLinearGradient(l.source.x, l.source.y, l.target.x, l.target.y);
+      g.addColorStop(0, P.gradientFrom); g.addColorStop(1, P.gradientTo);
+      c.strokeStyle = g; c.globalAlpha = hot ? 1 : P.edgeOpacity * dim;
+      c.beginPath(); c.moveTo(l.source.x, l.source.y); c.lineTo(l.target.x, l.target.y); c.stroke();
+    }
+  } else {
+    c.strokeStyle = gradient ? P.gradientFrom : P.edgeColor;
+    c.globalAlpha = P.edgeOpacity * dim;
+    c.beginPath();
+    for (const l of vis) { if (hover && (l.source === hover || l.target === hover)) continue; c.moveTo(l.source.x, l.source.y); c.lineTo(l.target.x, l.target.y); }
+    c.stroke();
+    if (hover) {
+      c.globalAlpha = 1; c.beginPath();
+      for (const l of vis) if (l.source === hover || l.target === hover) { c.moveTo(l.source.x, l.source.y); c.lineTo(l.target.x, l.target.y); }
+      c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+
+  // nodes
+  const stroke = light ? '#ffffff' : 'rgba(255,255,255,.7)';
+  for (const s of simNodes) {
+    if (s.x == null) continue;
+    const faded = hover && !neighbors.has(s);
+    c.beginPath(); c.arc(s.x, s.y, s.r, 0, 2 * Math.PI);
+    c.globalAlpha = faded ? Math.min(s.alpha, 0.25) : s.alpha;
+    if (s.ext) { c.strokeStyle = s.fill; c.lineWidth = 1; c.stroke(); }
+    else { c.fillStyle = s.fill; c.fill(); c.globalAlpha = faded ? 0.25 : 1; c.strokeStyle = stroke; c.lineWidth = 1; c.stroke(); }
+  }
+  c.globalAlpha = 1;
+  // labels
+  if (disp.labels !== 'none') {
+    c.font = '10px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    c.fillStyle = light ? '#374151' : '#cbd5e1';
+    for (const s of simNodes) {
+      if (s.x == null || s.ext) continue;
+      if (!(disp.labels === 'all' || (disp.labels === 'preset' && s.label))) continue;
+      if (hover && !neighbors.has(s)) continue;
+      c.fillText(s.node.name, s.x, s.y + s.r + 10);
+    }
+  }
+  if (hover) {
+    c.beginPath(); c.arc(hover.x, hover.y, hover.r + 2, 0, 2 * Math.PI);
+    c.strokeStyle = '#3b82f6'; c.lineWidth = 2; c.setLineDash([4, 3]); c.stroke(); c.setLineDash([]);
+    if (!(disp.labels === 'all' || (disp.labels === 'preset' && hover.label))) { c.fillStyle = light ? '#111827' : '#fff'; c.font = '11px sans-serif'; c.textAlign = 'center'; c.fillText(hover.node.name, hover.x, hover.y + hover.r + 13); }
+  }
+  c.restore();
+}
+function onTick() {
+  draw();
+  if (++tickCount % 6 === 0) updateSimHud();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5 · stage chrome — HUD, legend
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderHud() {
+  const L = live();
+  const classes = simNodes.reduce((n, s) => n + (s.node.type === 'CLASS' ? 1 : 0), 0);
+  const areas = L.includeAreas ? AREA_ROOTS.length : 0;
+  fill($('#hud'), 
+    h('div', { id: 'hudCounts' }, 'nodes ' + simNodes.length + ' · edges ' + links.length + ' · classes ' + classes + ' · areas ' + areas),
+    h('div', { class: 'sim', id: 'hudSim' }, ''));
+  updateSimHud();
+  const g = $('#ghost');
+  if (!simNodes.length) { g.style.display = 'flex'; g.textContent = 'working set is empty — turn a node type and an edge kind on in P1'; } else g.style.display = 'none';
+}
+function updateSimHud() {
+  const el = $('#hudSim'); if (!el || !sim) return;
+  const a = sim.alpha(), hot = a > sim.alphaMin();
+  el.textContent = hot ? 'α ' + a.toFixed(3) + ' · running' : 'α settled · rebuild ' + lastBuildMs.toFixed(0) + ' ms';
+  el.className = 'sim' + (hot ? ' hot' : '');
+}
+function renderLegend() {
+  legendDirty = false;
+  const seen = new Map();
+  for (const s of simNodes) { const k = s.ext ? 'external' : s.node.type; if (!seen.has(k)) seen.set(k, s.fill); }
+  const P = live().params, B = base();
+  fill($('#legend'), ...[...seen].map(([t, col]) => h('span', null, h('span', { class: 'dot', style: { background: col } }), t.toLowerCase().replace('_', ' '))),
+    P.edgeStyle === 'gradient' ? h('span', null, h('span', { class: 'dot', style: { background: 'linear-gradient(90deg,' + P.gradientFrom + ',' + P.gradientTo + ')', borderRadius: '2px', width: '16px', height: '4px' } }), 'edge (source → target)') : null);
+}
+function renderLegendIfDirty() { if (legendDirty) renderLegend(); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 · rail — shared seam components
+   ═══════════════════════════════════════════════════════════════════════════ */
+function pulse(band) { const el = $('#' + band + ' .cost'); if (!el) return; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+
+/** live checkbox row */
+function cbRow(o) {
+  return h('label', { class: 'r' + (o.disabled ? ' dis' : ''), title: o.title || null },
+    h('input', { type: 'checkbox', checked: !!o.checked, disabled: !!o.disabled, onchange: (e) => o.onChange(e.target.checked) }),
+    h('span', { class: 'cb' }),
+    o.dot ? h('span', { class: 'dot', style: { background: o.dot } }) : null,
+    h('span', { class: 'nm' }, o.label),
+    o.count != null ? h('span', { class: 'cnt' }, o.count) : null);
+}
+/** locked (code-surfaced) row: muted, monospace, lock icon, pointer to where it is edited */
+function lockRow(id, title, lines, where) {
+  const open = !!ui.lockOpen[id];
+  return h('div', { class: 'lock' },
+    h('div', { class: 'lh', onclick: () => { ui.lockOpen[id] = !open; renderAll(true); }, title: 'code-owned policy — not a control. Edit upstream: ' + where },
+      h('span', { class: 'lk' }, '🔒'), title, h('span', { class: 'edit' }, where)),
+    open ? h('ul', null, lines.map((l) => h('li', null, l))) : h('div', { class: 'more' }, lines.length + ' rule' + (lines.length === 1 ? '' : 's') + ' · click to show'));
+}
+function fold(id, label, summary, body) {
+  const open = ui.fold[id];
+  return [h('div', { class: 'fold', onclick: () => { ui.fold[id] = !open; renderAll(true); } }, h('span', { class: 'chev' }, open ? '▾' : '▸'), label, h('span', { class: 's' }, summary)),
+    open ? h('div', { class: 'foldbody' }, body) : null];
+}
+
+function renderAll(keepScroll) {
+  const sc = $('.rail-scroll'), top = sc.scrollTop;
+  renderPreset(); renderP1(); renderP2(); renderP3(); renderFooter();
+  sc.scrollTop = keepScroll ? top : 0;
+}
+
+/* ── preset switcher ─────────────────────────────────────────────────────────────────────────── */
+function renderPreset() {
+  const P = cur();
+  const cycle = (d) => { const i = presets.findIndex((p) => p.id === curId); selectPreset(presets[(i + d + presets.length) % presets.length].id); };
+  const sel = h('select', { 'aria-label': 'view preset', onchange: (e) => selectPreset(e.target.value) },
+    presets.map((p) => h('option', { value: p.id, selected: p.id === curId ? true : null }, p.label + (p.forked ? '  ⑂' : ''))));
+  sel.value = curId;
+  fill($('#preset'), 
+    h('div', { class: 'plabel' }, 'preset', h('span', { class: 'tag' }, P.forked ? 'fork of ' + BASES[P.base].label : 'code-defined · ' + BASES[P.base].ref)),
+    h('div', { class: 'switch' },
+      h('button', { class: 'cyc', title: 'previous preset', 'aria-label': 'previous preset', onclick: () => cycle(-1) }, '‹'),
+      h('span', { class: 'selwrap' }, sel, h('span', { class: 'car' }, '▾')),
+      h('button', { class: 'cyc', title: 'next preset', 'aria-label': 'next preset', onclick: () => cycle(1) }, '›'),
+      h('button', { class: 'newp', title: 'fork a new preset from the current settings', 'aria-label': 'fork preset', onclick: forkPreset }, '+')),
+    h('div', { class: 'presethint' },
+      P.forked ? [h('button', { class: 'lnk', onclick: renamePreset }, 'rename'), h('button', { class: 'lnk', onclick: deletePreset }, 'delete'), h('span', null, 'session-local · emit to keep')]
+        : h('span', null, 'cycle the code-defined view configs · seeds the P1 default on-set · + forks a new preset')));
+}
+function selectPreset(id) {
+  curId = id; disp.drawOff = new Set(); disp.solo = null;
+  for (const a of AREAS) disp.areaVis.set(a.id, true);
+  ui.tab = 'nodes';
+  rebuild(true); renderAll(); pulse('p1');
+}
+function forkPreset() {
+  const P = cur();
+  const baseLabel = P.forked ? P.label.replace(/ fork \d+$/, '') : P.label;
+  const n = ++forkSeq;
+  const f = { id: 'fork-' + n, label: baseLabel + ' fork ' + n, base: P.base, forked: true, defaults: cloneLive(P.live), live: cloneLive(P.live) };
+  presets.push(f); selectPreset(f.id);
+}
+function renamePreset() {
+  const P = cur(); const name = window.prompt('Rename preset', P.label);
+  if (name && name.trim()) { P.label = name.trim(); renderPreset(); renderFooter(); }
+}
+function deletePreset() {
+  const P = cur(); if (!P.forked) return;
+  presets.splice(presets.indexOf(P), 1); selectPreset(P.base);
+}
+
+/* ── P1 · available data (rebuild) ───────────────────────────────────────────────────────────── */
+function renderP1() {
+  const L = live(), B = base();
+  const tc = L.excludeTests ? TYPE_COUNT_NOTEST : TYPE_COUNT;
+  const kindCount = (k) => { const c = kindCounts(L, k); return c.int + (L.includeExternal ? c.ext : 0); };
+  const change = () => { rebuild(); renderP1(); renderP2(); renderFooter(); pulse('p1'); };
+  const toggleSet = (set, v, on) => { if (on) set.add(v); else set.delete(v); change(); };
+  const setAll = (set, vals, on) => { for (const v of vals) { if (on) set.add(v); else set.delete(v); } change(); };
+  const typesOn = TYPES_PRESENT.filter((t) => L.nodeTypes.has(t)).length;
+  const kindsOn = KINDS_PRESENT.filter((k) => L.edgeKinds.has(k)).length;
+  fill($('#p1'), 
+    h('div', { class: 'hd p1t' }, h('span', { class: 'num' }, 'P1'), 'available data', h('span', { class: 'cost build', title: 'a change here re-filters the working set and re-runs the layout' }, 'rebuild')),
+    h('div', { class: 'sub' }, 'categories'),
+    cbRow({ label: 'area data', checked: L.includeAreas, count: AREAS.length, title: 'include area records (overlay tree, area cluster force)', onChange: (v) => { L.includeAreas = v; change(); } }),
+    cbRow({ label: 'exclude tests', checked: L.excludeTests, disabled: TEST_NODES === 0, count: TEST_NODES ? TEST_NODES + ' test' : 'none in snapshot',
+      title: TEST_NODES ? 'drop nodes that live in test files' : 'the snapshot has no test-file nodes (tsconfig excludes __tests__) — nothing to toggle', onChange: (v) => { L.excludeTests = v; change(); } }),
+    cbRow({ label: 'include external edges', checked: L.includeExternal, count: fmtN(extEdgeCount(L)) + ' ext', title: 'data scope: internal edges only, or also edges to targets outside the repo (drawn as hollow stubs; bench-only preview)', onChange: (v) => { L.includeExternal = v; change(); } }),
+    ...fold('nodeTypes', 'node types', typesOn + ' / ' + TYPES_PRESENT.length + ' on', [
+      h('div', { class: 'foldact' }, h('button', { onclick: () => setAll(L.nodeTypes, TYPES_PRESENT, true) }, 'all'), h('button', { onclick: () => setAll(L.nodeTypes, TYPES_PRESENT, false) }, 'none'), h('button', { onclick: () => { L.nodeTypes = new Set(cur().defaults.nodeTypes); change(); } }, 'preset default')),
+      TYPES_PRESENT.map((t) => cbRow({ label: t, dot: roleDot(t), checked: L.nodeTypes.has(t), count: fmtN(tc[t] || 0),
+        title: t + ' — ' + fmtN(tc[t] || 0) + ' nodes in the snapshot', onChange: (v) => toggleSet(L.nodeTypes, t, v) }))]),
+    ...fold('edgeKinds', 'edge kinds', kindsOn + ' / ' + KINDS_PRESENT.length + ' · ' + (L.includeExternal ? '+external' : 'internal'), [
+      h('div', { class: 'foldact' }, h('button', { onclick: () => setAll(L.edgeKinds, KINDS_PRESENT, true) }, 'all'), h('button', { onclick: () => setAll(L.edgeKinds, KINDS_PRESENT, false) }, 'none'), h('button', { onclick: () => { L.edgeKinds = new Set(cur().defaults.edgeKinds); change(); } }, 'preset default')),
+      KINDS_PRESENT.map((k) => cbRow({ label: k, checked: L.edgeKinds.has(k), count: fmtN(kindCount(k)),
+        title: k + ' — ' + fmtN(kindCounts(L, k).int) + ' internal · ' + fmtN(kindCounts(L, k).ext) + ' external', onChange: (v) => toggleSet(L.edgeKinds, k, v) }))]),
+    lockRow('p1', 'role & CONTAINS derivation', B.policy.slice(0, 2).concat([
+      'role & color: node type → ROLE colors (SYNTAX_TYPE_COLORS)',
+      'CONTAINS: no such edge in the source model — none is derived',
+      'isolated nodes (degree 0) are dropped — RepoGraph.tsx',
+    ]), 'graph-config.ts'));
+}
+function roleDot(t) { const P = live().params; return P['color_' + t] || (DATA_TYPES.has(t) && P.dataColor) || (base().id === 'dataflow' ? P.processingColor : P.color_other || OTHER_COLOR); }
+
+/* ── P2 · display (redraw) ───────────────────────────────────────────────────────────────────── */
+let areaCountMap = new Map();
+function computeAreaCounts() {
+  areaCountMap = new Map();
+  for (const a of AREAS) { let n = 0; for (const i of AREA_ALL.get(a.id)) if (simByIdx.has(i)) n++; areaCountMap.set(a.id, n); }
+}
+function areaState(a) {
+  const ids = [a.id, ...AREA_DESC.get(a.id)];
+  const on = ids.filter((id) => disp.areaVis.get(id)).length;
+  return on === ids.length ? 'on' : on === 0 ? 'off' : 'mixed';
+}
+function toggleArea(a) {            // parent-eye rollup cascade
+  const target = areaState(a) !== 'on';
+  for (const id of [a.id, ...AREA_DESC.get(a.id)]) disp.areaVis.set(id, target);
+  disp.solo = null; redraw();
+}
+function soloArea(a) {
+  if (disp.solo === a.id) { for (const x of AREAS) disp.areaVis.set(x.id, true); disp.solo = null; }
+  else { const keep = new Set([a.id, ...AREA_DESC.get(a.id)]); for (const x of AREAS) disp.areaVis.set(x.id, keep.has(x.id)); disp.solo = a.id; }
+  redraw();
+}
+function areaRows(a, depth, out) {
+  const kids = AREA_KIDS.get(a.id) || [], st = areaState(a), collapsed = ui.areaCollapsed.has(a.id);
+  out.push(h('div', { class: 'arow' + (st === 'off' ? ' off' : ''), style: { paddingLeft: depth * 13 + 'px' } },
+    kids.length ? h('span', { class: 'chev', onclick: () => { collapsed ? ui.areaCollapsed.delete(a.id) : ui.areaCollapsed.add(a.id); renderP2(); } }, collapsed ? '▸' : '▾') : h('span', { class: 'chev' }, ''),
+    h('button', { class: 'eye ' + st, title: (st === 'on' ? 'hide ' : 'show ') + a.name + (kids.length ? ' and its children' : ''), 'aria-label': (st === 'on' ? 'hide ' : 'show ') + a.name, 'aria-pressed': st !== 'off' ? 'true' : 'false', onclick: () => toggleArea(a) }, st === 'on' ? '◉' : st === 'mixed' ? '◐' : '◌'),
+    h('span', { class: 'sw', style: { background: areaColor(a) } }),
+    h('span', { class: 'nm', title: a.name }, a.name),
+    h('button', { class: 'solo' + (disp.solo === a.id ? ' active' : ''), title: 'view only this area (click again to restore)', onclick: () => soloArea(a) }, disp.solo === a.id ? 'solo ✓' : 'solo'),
+    h('span', { class: 'cnt', title: 'nodes of this area in the working set' }, areaCountMap.get(a.id) || 0)));
+  if (!collapsed) for (const k of kids) areaRows(k, depth + 1, out);
+}
+function renderP2() {
+  const L = live(), B = base();
+  const kindsInSet = [...new Set(links.map((l) => l.e.kind))];
+  const rows = []; for (const r of AREA_ROOTS) areaRows(r, 0, rows);
+  const seg = (opts, val, on) => h('span', { class: 'seg' }, opts.map((o) => h('button', { class: val === o ? 'on' : '', onclick: () => on(o) }, o)));
+  const forces = ['link', 'charge', 'collide', 'center'].concat(L.includeAreas && L.params.areaCluster ? ['areaCluster≈'] : [], B.layerRadii ? ['layerRadial (' + layerTaggedCount() + ' tagged)'] : []);
+  fill($('#p2'), 
+    h('div', { class: 'hd p2t' }, h('span', { class: 'num' }, 'P2'), 'display', h('span', { class: 'cost draw', title: 'display only — redraws without touching the simulation' }, 'redraw')),
+    cbRow({ label: 'show edges', checked: disp.showEdges, onChange: (v) => { disp.showEdges = v; redraw(); } }),
+    h('div', { class: 'rowline' }, h('span', { class: 'nm' }, 'labels'), seg(['preset', 'all', 'none'], disp.labels, (o) => { disp.labels = o; redraw(); })),
+    h('div', { class: 'rowline', title: 'bench chrome only — light matches the app (gradient edges end in black, which vanishes on dark)' }, h('span', { class: 'nm' }, 'canvas'), seg(['light', 'dark'], disp.canvas, (o) => { disp.canvas = o; stage.dataset.canvas = o; redraw(); })),
+    ...fold('edgesDrawn', 'edges drawn', kindsInSet.filter((k) => !disp.drawOff.has(k)).length + ' / ' + kindsInSet.length + ' kinds', [
+      h('div', { class: 'foldact' }, h('span', null, 'hidden kinds still pull in the layout')),
+      kindsInSet.map((k) => cbRow({ label: k, checked: !disp.drawOff.has(k), count: fmtN(links.filter((l) => l.e.kind === k).length), onChange: (v) => { if (v) disp.drawOff.delete(k); else disp.drawOff.add(k); redraw(); } }))]),
+    h('div', { class: 'sub' }, 'area overlay'),
+    L.includeAreas ? (rows.length ? h('div', { class: 'tree' }, rows) : h('div', { class: 'forces' }, 'no areas in this snapshot'))
+      : h('div', { class: 'forces' }, 'area data is off — enable it in P1 (rebuild)'),
+    lockRow('p2', 'forces in play', [forces.join(' · '), 'not simulated in the bench: areaAttract · areaParent · anchorRepel · areaPin · crossAreaPull · areaHullCollision', 'which forces run is a code decision — magnitudes are tuned in P3'], 'RepoGraph.tsx'));
+}
+
+/* ── P3 · controllable variables (reheat) ────────────────────────────────────────────────────── */
+function visibleDefs(tab) {
+  const P = live().params, B = base();
+  return PARAM_DEFS.filter((d) => d.tab === tab && d.key in B.defaults && isPresent(d) && (!d.when || d.when(P)));
+}
+function resetKeys(keys) {
+  const dflt = cur().defaults.params, P = live().params;
+  for (const k of keys) P[k] = dflt[k];
+  renderP3(); reheat();
+}
+function control(d) {
+  const P = live().params, v = P[d.key];
+  if (d.type === 'num') {
+    const out = h('span', { class: 'vv' }, fmtV(v, d.step));
+    const input = h('input', { type: 'range', min: d.min, max: d.max, step: d.step, value: v, 'aria-label': d.label + ' (' + d.map + ')',
+      oninput: (e) => { P[d.key] = parseFloat(e.target.value); out.textContent = fmtV(P[d.key], d.step); reheat(); } });
+    return h('div', { class: 'sl', title: d.map }, h('span', { class: 'lb' }, d.label), input, out, h('span', { class: 'bd' }, d.min + '–' + d.max));
+  }
+  if (d.type === 'color') {
+    const out = h('span', { class: 'vv' }, v);
+    return h('div', { class: 'sl col', title: d.map }, h('span', { class: 'lb' }, d.label),
+      h('input', { type: 'color', value: v, 'aria-label': d.label + ' color', oninput: (e) => { P[d.key] = e.target.value; out.textContent = e.target.value; reheat(); } }), out);
+  }
+  return h('div', { class: 'sl', title: d.map }, h('span', { class: 'lb' }, d.label),
+    h('span', { class: 'seg' }, d.options.map((o) => h('button', { class: v === o ? 'on' : '', onclick: () => { P[d.key] = o; renderP3(); reheat(); } }, o))), h('span', { class: 'vv' }, ''));
+}
+function renderP3() {
+  const tabDefs = TABS.map((t) => ({ t, n: visibleDefs(t).length })).filter((x) => x.n > 0);
+  if (!tabDefs.some((x) => x.t === ui.tab)) ui.tab = tabDefs[0] ? tabDefs[0].t : 'nodes';
+  const defs = visibleDefs(ui.tab);
+  const groups = []; for (const d of defs) { let g = groups.find((x) => x.sub === d.sub); if (!g) groups.push(g = { sub: d.sub, items: [] }); g.items.push(d); }
+  fill($('#p3'), 
+    h('div', { class: 'hd p3t' }, h('span', { class: 'num' }, 'P3'), 'tune', h('span', { class: 'cost heat', title: 'a change here nudges the running simulation' }, 'reheat')),
+    h('div', { class: 'tabs', role: 'tablist' }, tabDefs.map(({ t }) => h('div', { class: 'tab' + (t === ui.tab ? ' act' : ''), role: 'tab', tabindex: 0, 'aria-selected': t === ui.tab ? 'true' : 'false', onclick: () => { ui.tab = t; renderP3(); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { ui.tab = t; renderP3(); } } }, t))),
+    groups.map((g) => [h('div', { class: 'grphd' }, g.sub, h('button', { class: 'rst', title: 'reset this group to the preset defaults', onclick: () => resetKeys(g.items.map((d) => d.key)) }, 'reset')), g.items.map(control)]),
+    lockRow('p3', 'groups & bounds from code', ['groups (nodes · edges · forces · color) and min/max bounds are code-defined (PARAM_DEFS)', 'defaults + the config each control maps to: ' + base().ref, 'hover a control to see the RepoGraphConfig field it maps to'], 'graph-config.ts'));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 · config emit (decision 2) — the live half of a view config, in two forms
+   ═══════════════════════════════════════════════════════════════════════════ */
+const num = (v) => String(+(+v).toPrecision(6));
+const q = (s) => "'" + s + "'";
+const list = (a) => '[' + a.map(q).join(', ') + ']';
+const sorted = (set) => [...set].sort();
+const pascal = (s) => s.replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+const snake = (s) => s.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').toUpperCase();
+
+function paramKeys() {   // every key the preset owns, in registry order (independent of what is currently visible)
+  const B = base(); return PARAM_DEFS.filter((d) => d.key in B.defaults).map((d) => d.key);
+}
+function emitValue() {
+  const P = cur(), L = P.live, B = base();
+  const params = {}; for (const k of paramKeys()) params[k] = L.params[k];
+  return { preset: P.label, base: B.id, filters: { nodeTypes: sorted(L.nodeTypes), edgeKinds: sorted(L.edgeKinds), includeExternal: L.includeExternal, excludeTests: L.excludeTests, includeAreas: L.includeAreas }, params };
+}
+function flatPreview() {
+  const p = emitValue().params, ks = Object.keys(p);
+  return '{ ' + ks.slice(0, 5).map((k) => k + ': ' + (typeof p[k] === 'number' ? num(p[k]) : q(p[k]))).join(', ') + (ks.length > 5 ? ', …' : '') + ' }';
+}
+function litObj(o, ind) {
+  const pad = ' '.repeat(ind), pad2 = ' '.repeat(ind + 2);
+  return '{\n' + Object.entries(o).map(([k, v]) => pad2 + k + ': ' + (Array.isArray(v) ? list(v) : v && typeof v === 'object' ? litObj(v, ind + 2) : typeof v === 'number' ? num(v) : typeof v === 'boolean' ? String(v) : q(v)) + ',').join('\n') + '\n' + pad + '}';
+}
+function emitTuning() {
+  const P = cur(), B = base(), v = emitValue();
+  const keys = paramKeys().map((k) => PARAM_DEFS.find((d) => d.key === k));
+  const mapLine = (name, to) => '//   params.' + name + ' '.repeat(Math.max(1, 30 - name.length)) + '→ ' + to;
+  const mapLines = [];
+  for (const d of keys) {
+    if (d.key.startsWith('color_') && d.key !== 'color_FUNCTION' && d.key !== 'color_CLASS') continue;
+    if (d.key.startsWith('str_')) continue;
+    if (d.key.startsWith('dist_')) { if (d.kind === 'CALLS') mapLines.push(mapLine('dist_<KIND> / str_<KIND>', 'forces.edge(<KIND>).distance / .strength  (createEdgeForcer)')); continue; }
+    if (d.key === 'color_FUNCTION') { mapLines.push(mapLine('color_<SyntaxType> / color_other', 'style.node().color by node.syntaxType, else color_other')); continue; }
+    if (d.key === 'color_CLASS') continue;
+    mapLines.push(mapLine(d.key, d.map.replace('<metric>', B.metric)));
+  }
+  const fmap = (name, to) => '//   ' + name + ' '.repeat(Math.max(1, 24 - name.length)) + '→ ' + to;
+  const lines = [
+    '// Graph Tuning Bench · emit v1 · preset "' + P.label + '"' + (P.forked ? ' (fork of ' + B.label + ')' : ''),
+    '// snapshot: ' + SNAP.metadata.repoName + '@' + SNAP.metadata.commit,
+    '//',
+    '// This value is the LIVE HALF of a view config: the magnitudes you tuned + the P1 on-sets.',
+    '// The CODE HALF is lib/analysis/graph-config.ts — the policy (filter predicates, role→color, the edge-force',
+    '// model, the tunable groups) — plus the bounds in the bench\'s PARAM_DEFS. Base preset: ' + B.ref + '.',
+    '// P2 display toggles are bench-only inspection and are not emitted.',
+    '//',
+    '// field → RepoGraphConfig',
+    fmap('filters.nodeTypes', 'filters.node (SyntaxType set predicate)'),
+    fmap('filters.edgeKinds', 'filters.edge (EdgeKind set predicate)'),
+    fmap('filters.includeExternal', 'filters.edge (!edge.isExternal when false; RepoGraph drops edges to non-candidate nodes anyway)'),
+    fmap('filters.excludeTests', 'RepoGraph hideTestFiles prop (not in RepoGraphConfig)'),
+    fmap('filters.includeAreas', 'area store (not in RepoGraphConfig)'),
+  ].concat(mapLines);
+  lines.push('//', '// "view config (TS)" renders this same value through the mapping as a create…ViewConfig-shaped function.', '');
+  lines.push('export const tuning = ' + litObj(v, 0) + ';', '');
+  return lines.join('\n');
+}
+
+function emitViewConfig() {
+  const P = cur(), L = P.live, B = base(), p = L.params;
+  const name = pascal(P.label) + (P.forked ? '' : 'Tuned');
+  const NT = 'new Set<SyntaxType>([' + sorted(L.nodeTypes).map((t) => 'SyntaxType.' + t).join(', ') + '])';
+  const EK = 'new Set<EdgeKind>([' + sorted(L.edgeKinds).map((k) => 'EdgeKind.' + k).join(', ') + '])';
+  const roleColors = () => '{\n' + ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS', 'MODULE'].map((t) => '  [SyntaxType.' + t + ']: ' + q(p['color_' + t]) + ',').join('\n') + '\n}';
+  const edgeStyle = () => (p.edgeStyle === 'gradient'
+    ? '({ color: ' + q(p.edgeColor) + ', width: ' + num(p.edgeWidth) + ', opacity: ' + num(p.edgeOpacity) + ', gradientSourceColor: ' + q(p.gradientFrom) + ', gradientTargetColor: ' + q(p.gradientTo) + ' })'
+    : '({ ...DEFAULT_EDGE_STYLE, color: ' + q(p.edgeColor) + ', width: ' + num(p.edgeWidth) + ', opacity: ' + num(p.edgeOpacity) + ' })');
+  const sim = '    simulation: { centerStrength: ' + num(p.centerStrength) + ', collisionPadding: ' + num(p.collisionPadding) + ', alphaDecay: ' + num(p.alphaDecay) + ', velocityDecay: ' + num(p.velocityDecay) + ' },\n';
+  const header = [
+    '// Graph Tuning Bench · view-config emit v1 · preset "' + P.label + '"' + (P.forked ? ' (fork of ' + B.label + ')' : ''),
+    '// Live half → RepoGraphConfig via the mapping in the tuning emit. Code half = ' + B.ref + ' (merged as the base) in lib/analysis/graph-config.ts.',
+    '// Paste into lib/analysis/graph-config.ts (or a sibling module) and register it in app/page.tsx VIEW_OPTIONS to make the preset permanent.',
+    "import type { RepoGraphConfig } from '@/lib/analysis/graph-config';",
+    "import type { AnalysisEdge, AnalysisNode } from '@/lib/analysis/types';",
+    "import { EdgeKind, SyntaxType } from '@/lib/analysis/types';",
+  ];
+  const common = ['', 'const NODE_TYPES = ' + NT + ';', 'const EDGE_KINDS = ' + EK + ';', 'const INCLUDE_EXTERNAL = ' + L.includeExternal + ';'];
+  const edgeFilter = '(edge: AnalysisEdge) => EDGE_KINDS.has(edge.kind) && (INCLUDE_EXTERNAL || !edge.isExternal)';
+  let body;
+  if (B.id === 'internal') {
+    header.push("import { INTERNAL_PROCESSING_CONFIG, DEFAULT_EDGE_STYLE, DEFAULT_NODE_FORCES, DEFAULT_NODE_STYLE, createEdgeForcer, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    const forcer = ALL_KINDS.map((k) => '      [EdgeKind.' + k + ']: { distance: ' + num(p['dist_' + k]) + ', strength: ' + num(p['str_' + k]) + ' },').join('\n');
+    body = [
+      'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
+      '',
+      'function hasCrossFileReference(node: AnalysisNode): boolean {',
+      '  return (',
+      '    node.referencedAt.some((ref) => ref.filePath !== node.filePath) ||',
+      '    node.outboundRefs.some((ref) => ref.filePath !== node.filePath)',
+      '  );',
+      '}',
+      '',
+      'export const ' + snake(P.label) + (P.forked ? '' : '_TUNED') + '_CONFIG: RepoGraphConfig = mergeConfigs(INTERNAL_PROCESSING_CONFIG, {',
+      '  filters: {',
+      '    node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType) && hasCrossFileReference(node),',
+      '    edge: ' + edgeFilter + ',',
+      '  },',
+      '  style: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_STYLE,',
+      '      color: NODE_COLORS[node.syntaxType] ?? ' + q(p.color_other) + ',',
+      '      radius: scaledValue(node.outboundRefs.length, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '      opacity: ' + num(p.nodeOpacity) + ',',
+      '    }),',
+      '    edge: () => ' + edgeStyle() + ',',
+      '  },',
+      '  forces: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_FORCES,',
+      '      charge: ' + num(p.charge) + ' - scaledValue(node.referencedAt.length, 0, ' + num(p.chargeInbound) + '),',
+      '    }),',
+      '    edge: createEdgeForcer({',
+      forcer,
+      '    }),',
+      '    areaCluster: ' + num(p.areaCluster) + ',',
+      '  },',
+      sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
+      '});',
+      '',
+    ];
+  } else if (B.id === 'modules') {
+    header.push("import { DEFAULT_NODE_STYLE, createModulesViewConfig, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    body = [
+      'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
+      '',
+      'export function create' + name + 'ViewConfig(edges: AnalysisEdge[]): RepoGraphConfig {',
+      '  const base = createModulesViewConfig(edges);',
+      '  const outboundCalls = new Map<string, number>();',
+      '  for (const e of edges) {',
+      '    if (e.kind === EdgeKind.CALLS) outboundCalls.set(e.fromSymbol, (outboundCalls.get(e.fromSymbol) ?? 0) + 1);',
+      '  }',
+      '',
+      '  return mergeConfigs(base, {',
+      '    filters: {',
+      '      node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType),',
+      '      edge: ' + edgeFilter + ',',
+      '    },',
+      '    style: {',
+      '      node: (node: AnalysisNode) => ({',
+      '        ...DEFAULT_NODE_STYLE,',
+      '        color: NODE_COLORS[node.syntaxType] ?? ' + q(p.color_other) + ',',
+      '        radius: scaledValue(outboundCalls.get(node.scipSymbol) ?? 0, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '        opacity: ' + num(p.nodeOpacity) + ',',
+      '      }),',
+      '      edge: () => ' + edgeStyle().replace('...DEFAULT_EDGE_STYLE, ', '...DEFAULT_EDGE_STYLE, ') + ',',
+      '    },',
+      '    forces: {',
+      '      node: (node: AnalysisNode) => ({ ...base.forces.node(node), charge: ' + num(p.charge) + ' }),',
+      '      edge: () => ({ distance: ' + num(p.edgeDistance) + ', strength: ' + num(p.edgeStrength) + ' }),',
+      '      areaCluster: ' + num(p.areaCluster) + ',',
+      '    },',
+      sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
+      '  });',
+      '}',
+      '',
+    ];
+    if (p.edgeStyle !== 'gradient') header.splice(header.length - 1, 1, "import { DEFAULT_EDGE_STYLE, DEFAULT_NODE_STYLE, createModulesViewConfig, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+  } else {
+    header.push("import { DATA_FLOW_DATA_TYPES, DEFAULT_EDGE_STYLE, DEFAULT_NODE_STYLE, buildSymbolKindMap, countDataNodeUsage, createDataFlowViewConfig, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    body = [
+      'export function create' + name + 'ViewConfig(edges: AnalysisEdge[], nodes: AnalysisNode[]): RepoGraphConfig {',
+      '  const base = createDataFlowViewConfig(edges, nodes);',
+      '  const kindOf = buildSymbolKindMap(nodes);',
+      '  const usageByTarget = countDataNodeUsage(edges, nodes);',
+      '',
+      '  return mergeConfigs(base, {',
+      '    filters: {',
+      '      node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType),',
+      '      edge: (edge: AnalysisEdge) =>',
+      '        EDGE_KINDS.has(edge.kind) &&',
+      '        (INCLUDE_EXTERNAL || !edge.isExternal) &&',
+      '        NODE_TYPES.has(kindOf.get(edge.fromSymbol) as SyntaxType) &&',
+      '        NODE_TYPES.has(kindOf.get(edge.toSymbol) as SyntaxType),',
+      '    },',
+      '    style: {',
+      '      node: (node: AnalysisNode) =>',
+      '        DATA_FLOW_DATA_TYPES.has(node.syntaxType)',
+      '          ? {',
+      '              ...DEFAULT_NODE_STYLE,',
+      '              color: ' + q(p.dataColor) + ',',
+      '              radius: scaledValue(usageByTarget.get(node.scipSymbol) ?? 0, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '              opacity: ' + num(p.nodeOpacity) + ',',
+      '              label: true,',
+      '            }',
+      '          : { ...DEFAULT_NODE_STYLE, color: ' + q(p.processingColor) + ', radius: ' + num(p.processingRadius) + ', opacity: ' + num(p.nodeOpacity) + ', label: false },',
+      '      edge: () => ' + (p.edgeStyle === 'gradient'
+        ? '({ ...DEFAULT_EDGE_STYLE, color: ' + q(p.edgeColor) + ', width: ' + num(p.edgeWidth) + ', opacity: ' + num(p.edgeOpacity) + ', gradientSourceColor: ' + q(p.gradientFrom) + ', gradientTargetColor: ' + q(p.gradientTo) + ' })'
+        : edgeStyle()) + ',',
+      '    },',
+      '    forces: {',
+      '      node: (node: AnalysisNode) => ({ ...base.forces.node(node), charge: ' + num(p.charge) + ' }),',
+      '      edge: (edge: AnalysisEdge) => ({',
+      '        distance: ' + num(p.edgeDistance) + ',',
+      '        strength: Math.max(0.05, ' + num(p.edgeStrengthBase) + ' / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1)),',
+      '      }),',
+      '      areaCluster: ' + num(p.areaCluster) + ',',
+      '    },',
+      sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
+      '  });',
+      '}',
+      '',
+    ];
+  }
+  return header.concat(common, [''], body).join('\n');
+}
+function emitText() { return ui.emitTab === 'tuning' ? emitTuning() : emitViewConfig(); }
+
+/* ── footer + emit panel ─────────────────────────────────────────────────────────────────────── */
+function copyText(text) {
+  const fallback = () => { const ta = h('textarea', { style: { position: 'fixed', opacity: '0' } }); ta.value = text; document.body.append(ta); ta.select(); try { document.execCommand('copy'); } catch (e) { /* ignore */ } ta.remove(); };
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(fallback);
+  fallback(); return Promise.resolve();
+}
+function renderFooter() {
+  fill($('#foot'), 
+    h('span', { class: 'half', title: 'the emitted value is only half of a view config; the code half is graph-config.ts' }, 'live half · code half → graph-config.ts'),
+    h('span', { class: 'code', id: 'codeLine', title: 'click to view the full emit', onclick: toggleEmit }, flatPreview()),
+    h('span', { class: 'acts' },
+      h('button', { class: 'btn', id: 'resetAll', title: 'restore the selected preset\'s defaults (P1 on-sets, P3 magnitudes, P2 display)', onclick: resetAll }, 'reset all'),
+      h('button', { class: 'btn pri', id: 'copyBtn', onclick: (e) => { const b = e.currentTarget; copyText(emitText()).then(() => { b.textContent = 'copied ✓'; setTimeout(() => { b.textContent = 'copy config'; }, 1200); }); } }, 'copy config')));
+  if (ui.emitOpen) renderEmit();
+}
+function toggleEmit() { ui.emitOpen = !ui.emitOpen; renderEmit(); }
+function renderEmit() {
+  const el = $('#emitPanel'); el.classList.toggle('open', ui.emitOpen);
+  if (!ui.emitOpen) return;
+  fill(el, 
+    h('header', null, 'config emit', h('span', { class: 'seg' }, [['tuning', 'tuning'], ['view', 'view config (TS)']].map(([id, lab]) => h('button', { class: ui.emitTab === id ? 'on' : '', onclick: () => { ui.emitTab = id; renderEmit(); } }, lab))),
+      h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'half the config — the code is the other half'),
+      h('button', { class: 'x', 'aria-label': 'close', onclick: toggleEmit }, '✕')),
+    h('pre', { id: 'emitPre' }, emitText()));
+}
+function resetAll() {
+  const P = cur(); P.live = cloneLive(P.defaults);
+  disp.showEdges = true; disp.labels = 'preset'; disp.drawOff = new Set(); disp.solo = null;
+  for (const a of AREAS) disp.areaVis.set(a.id, true);
+  rebuild(true); renderAll(true); pulse('p1'); pulse('p3');
+}
+
+/* ── notes panel (decisions 1–3 recorded in the bench) ───────────────────────────────────────── */
+function renderNotes() {
+  const el = $('#notesPanel'); el.classList.toggle('open', ui.notesOpen);
+  $('#notesBtn').setAttribute('aria-pressed', ui.notesOpen ? 'true' : 'false');
+  if (!ui.notesOpen) return;
+  const m = SNAP.metadata || {};
+  fill(el, 
+    h('header', null, 'bench notes', h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'snapshot ' + (m.repoName || '?') + '@' + (m.commit || '?') + ' · ' + fmtN(N) + ' nodes · ' + fmtN(EDGES.length) + ' edges · ' + AREAS.length + ' areas'),
+      h('button', { class: 'x', 'aria-label': 'close', onclick: () => { ui.notesOpen = false; renderNotes(); } }, '✕')),
+    (() => { const b = h('div', { class: 'body' }); b.append($('#NOTES').content.cloneNode(true)); return b; })());
+}
+$('#notesBtn').addEventListener('click', () => { ui.notesOpen = !ui.notesOpen; renderNotes(); });
+$('#fitBtn').addEventListener('click', () => fitView(true));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 · go
+   ═══════════════════════════════════════════════════════════════════════════ */
+window.__bench = { presets, cur, live, base, emitTuning, emitViewConfig, emitValue, selectPreset, forkPreset, rebuild, get simNodes() { return simNodes; }, get links() { return links; }, get sim() { return sim; }, SNAP, PARAM_DEFS, BASES, scaledValue, METRICS, disp, areaState, toggleArea };
+resize();
+rebuild(true);
+renderAll();
+})();
+</script>
+</body>
+</html>
