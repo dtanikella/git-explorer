@@ -23,7 +23,8 @@ interface GraphToolbarProps {
  *
  * @remarks
  * Provides view mode selector (Modules, Data Flow, Internal Processing),
- * search input, zoom controls, and an auto-layout trigger.
+ * search input, zoom controls, and an auto-layout trigger, plus a link to the
+ * standalone Graph Tuning Bench.
  */
 export default function GraphToolbar({
   hideTestFiles,
@@ -57,6 +58,16 @@ export default function GraphToolbar({
           ))}
         </select>
       </label>
+
+      <a
+        href="/graph-playground/index.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ml-auto text-blue-600 hover:underline"
+        title="Open the Graph Tuning Bench (standalone, served from public/graph-playground)"
+      >
+        Tuning bench ↗
+      </a>
     </div>
   );
 }
