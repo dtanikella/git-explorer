@@ -141,3 +141,64 @@ describe('runDifftastic', () => {
     process.env.DIFFT_PATH = origPath;
   });
 });
+describe('listChangedTsFiles difft concurrency', () => {
+  let repoDir: string;
+  let baseSha: string;
+  let compareSha: string;
+  const FILE_COUNT = 20;
+
+  beforeAll(() => {
+    repoDir = mkdtempSync(join(tmpdir(), 'git-explorer-diff-conc-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: repoDir, encoding: 'utf8', stdio: 'pipe' }).trim();
+    git('init');
+    git('config', 'user.email', 'test@test.com');
+    git('config', 'user.name', 'Test');
+    for (let i = 0; i < FILE_COUNT; i++) {
+      writeFileSync(join(repoDir, `f${i}.ts`), `export const v${i} = 1;\n`, 'utf8');
+    }
+    git('add', '-A');
+    git('commit', '-m', 'base');
+    baseSha = git('rev-parse', 'HEAD');
+    for (let i = 0; i < FILE_COUNT; i++) {
+      writeFileSync(join(repoDir, `f${i}.ts`), `export const v${i} = 2;\n`, 'utf8');
+    }
+    git('add', '-A');
+    git('commit', '-m', 'compare');
+    compareSha = git('rev-parse', 'HEAD');
+  });
+
+  afterAll(() => {
+    rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  it('runs at most 6 difft calls at once and keeps order', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    let listChangedTsFiles!: typeof import('@/lib/diff/git-diff').listChangedTsFiles;
+    jest.isolateModules(() => {
+      jest.doMock('@/lib/diff/difftastic', () => ({
+        runDifftastic: jest.fn(async (_old: string, _new: string, _ext: string) => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inFlight--;
+          return { mocked: true };
+        }),
+      }));
+      ({ listChangedTsFiles } = require('@/lib/diff/git-diff'));
+    });
+
+    const files = await listChangedTsFiles(repoDir, baseSha, compareSha, { hideTestFiles: true });
+
+    expect(files).toHaveLength(FILE_COUNT);
+    expect(files.every((f) => f.difft !== undefined)).toBe(true);
+    expect(files.map((f) => f.path)).toEqual(
+      execFileSync('git', ['diff', '--name-only', baseSha, compareSha], { cwd: repoDir, encoding: 'utf8' })
+        .trim()
+        .split('\n'),
+    );
+    expect(peak).toBeLessThanOrEqual(6);
+    expect(peak).toBeGreaterThan(1);
+  });
+});
