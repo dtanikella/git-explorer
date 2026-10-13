@@ -147,9 +147,14 @@ export function runDifftastic(
         try {
           // difftastic outputs one JSON object per file pair
           const result = JSON.parse(stdout.trim());
-          const fileResult: DifftasticFileResult = Array.isArray(result)
-            ? result[0]
-            : result;
+          const raw = Array.isArray(result) ? result[0] : result;
+          // difft omits aligned_lines and chunks when it sees no syntactic change
+          // (status "unchanged": whitespace, formatting or line-ending edits only).
+          const fileResult: DifftasticFileResult = {
+            ...raw,
+            aligned_lines: raw.aligned_lines ?? [],
+            chunks: raw.chunks ?? [],
+          };
           resolve(fileResult);
         } catch {
           reject(new Error(`Failed to parse difftastic JSON output: ${stdout.slice(0, 200)}`));

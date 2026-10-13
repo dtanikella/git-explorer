@@ -138,7 +138,18 @@ describe('runDifftastic', () => {
     expect(caught).toBeInstanceOf(DifftUnavailableError);
     expect(caught.code).toBe('DIFFT_MISSING');
 
-    process.env.DIFFT_PATH = origPath;
+    if (origPath === undefined) delete process.env.DIFFT_PATH;
+    else process.env.DIFFT_PATH = origPath;
+  });
+
+  it('returns empty aligned_lines and chunks when difft reports no syntactic change', async () => {
+    const { runDifftastic } = await import('@/lib/diff/difftastic');
+
+    const result = await runDifftastic('const a = 1;\n', 'const a = 1;   \n\n', '.ts');
+
+    expect(result.status).toBe('unchanged');
+    expect(result.aligned_lines).toEqual([]);
+    expect(result.chunks).toEqual([]);
   });
 });
 describe('listChangedTsFiles difft concurrency', () => {

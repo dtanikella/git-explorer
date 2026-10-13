@@ -187,6 +187,20 @@ describe('runDiffPipeline', () => {
     }
   });
 
+  it('returns ANALYSIS_FAILED instead of throwing when labelling fails', async () => {
+    const [file] = await mockListChangedTsFiles();
+    mockListChangedTsFiles.mockResolvedValue([
+      { ...file, difft: { status: 'unchanged', language: 'TypeScript', path: 'test.ts' } },
+    ]);
+
+    const result = await runDiffPipeline({ repoPath: repoDir, base: baseSha, compare: compareSha });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('ANALYSIS_FAILED');
+    }
+  });
+
   it('returns BAD_REQUEST when repoPath is missing', async () => {
     const result = await runDiffPipeline({
       repoPath: '',

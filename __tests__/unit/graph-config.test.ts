@@ -16,12 +16,18 @@ import {
   countInboundCalls,
   createModulesViewConfig,
   createDataFlowViewConfig,
+  VANILLA_CONFIG,
+  VANILLA_BONDS,
+  VANILLA_DIRECTORY_CONFIG,
+  ownerSymbol,
+  buildStructuralBonds,
   countDataNodeUsage,
   DATA_FLOW_DATA_TYPES,
   PROCESSING_NODE_RADIUS,
   type NodeStyler,
   type ScaleFn,
 } from '@/lib/analysis/graph-config';
+import { buildDirectoryHubs } from '@/lib/analysis/directory-hubs';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 
@@ -1086,5 +1092,137 @@ describe('countInboundCalls', () => {
   it('returns 0 for node with no references', () => {
     const node = makeNode({ referencedAt: [] });
     expect(countInboundCalls(node)).toBe(0);
+  });
+});
+
+describe('Vanilla view', () => {
+  const cls = makeNode({ syntaxType: SyntaxType.CLASS, name: 'User', filePath: '/src/a.ts', scipSymbol: 'pkg a.ts/User#' });
+  const method = makeNode({ syntaxType: SyntaxType.METHOD, name: 'save', filePath: '/src/a.ts', scipSymbol: 'pkg a.ts/User#save().' });
+  const sibling = makeNode({ name: 'helper', filePath: '/src/a.ts', scipSymbol: 'pkg a.ts/helper().' });
+  const other = makeNode({ name: 'far', filePath: '/src/b.ts', scipSymbol: 'pkg b.ts/far().' });
+
+  it('finds the owner of a member symbol and none for top-level symbols', () => {
+    expect(ownerSymbol('pkg a.ts/User#save().')).toBe('pkg a.ts/User#');
+    expect(ownerSymbol('pkg a.ts/User#')).toBeNull();
+    expect(ownerSymbol('pkg a.ts/helper().')).toBeNull();
+  });
+
+  it('bonds class to member at the strongest tier and other same-file pairs at the file tier', () => {
+    const links = buildStructuralBonds([cls, method, sibling, other], VANILLA_BONDS);
+    const find = (a: string, b: string) => links.filter((l) => (l.source === a && l.target === b) || (l.source === b && l.target === a));
+    expect(find(cls.scipSymbol, method.scipSymbol)).toHaveLength(1);
+    expect(find(cls.scipSymbol, method.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.classMember);
+    expect(find(cls.scipSymbol, sibling.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameFile!);
+    expect(find(method.scipSymbol, sibling.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameFile!);
+    expect(find(other.scipSymbol, cls.scipSymbol)).toHaveLength(0);
+    expect(links).toHaveLength(3);
+  });
+
+  it('bonds remaining pairs that share an area at the area tier, and only when areas are given', () => {
+    const areas = new Map([
+      [cls.scipSymbol, ['ui']], [method.scipSymbol, ['ui']], [sibling.scipSymbol, ['ui']], [other.scipSymbol, ['ui', 'db']],
+    ]);
+    const nodes = [cls, method, sibling, other];
+    const links = buildStructuralBonds(nodes, VANILLA_BONDS, areas);
+    const find = (a: string, b: string) => links.filter((l) => (l.source === a && l.target === b) || (l.source === b && l.target === a));
+    expect(find(other.scipSymbol, cls.scipSymbol)).toHaveLength(1);
+    expect(find(other.scipSymbol, cls.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameArea!);
+    expect(find(cls.scipSymbol, method.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.classMember);
+    expect(find(cls.scipSymbol, sibling.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameFile!);
+    expect(links).toHaveLength(6);
+    expect(buildStructuralBonds(nodes, VANILLA_BONDS)).toHaveLength(3);
+    expect(buildStructuralBonds(nodes, { ...VANILLA_BONDS, sameArea: undefined }, areas)).toHaveLength(3);
+  });
+
+  it('bonds area-tagged pairs sharing no area at the cross-area tier, only at nonzero strength', () => {
+    const areas = new Map([[cls.scipSymbol, ['ui']], [method.scipSymbol, ['ui']], [sibling.scipSymbol, ['db']], [other.scipSymbol, ['ui', 'db']]]);
+    const nodes = [cls, method, sibling, other, makeNode({ name: 'untagged', filePath: '/src/c.ts', scipSymbol: 'pkg c.ts/u().' })];
+    const on = { ...VANILLA_BONDS, diffArea: { distance: 300, strength: 0.02 } };
+    const diff = buildStructuralBonds(nodes, on, areas).filter((l) => l.distance === 300);
+    const pairs = diff.map((l) => [l.source, l.target].sort().join('|'));
+    expect(pairs.sort()).toEqual([[cls.scipSymbol, sibling.scipSymbol].sort().join('|'), [method.scipSymbol, sibling.scipSymbol].sort().join('|')].sort());
+    expect(diff[0]).toMatchObject(on.diffArea);
+    expect(buildStructuralBonds(nodes, VANILLA_BONDS, areas).filter((l) => l.distance === 300)).toHaveLength(0);
+  });
+
+  it('orders bond tiers: class member strongest and shortest, then same-file, then standard edges', () => {
+    const std = VANILLA_CONFIG.forces.edge(makeEdge());
+    expect(VANILLA_BONDS.classMember.distance).toBeLessThanOrEqual(20);
+    expect(VANILLA_BONDS.classMember.strength).toBeGreaterThan(VANILLA_BONDS.sameFile!.strength);
+    expect(VANILLA_BONDS.sameFile!.distance).toBe(50);
+    expect(VANILLA_BONDS.sameFile!.strength).toBeGreaterThan(std.strength);
+    expect(std.distance).toBe(400);
+    expect(VANILLA_BONDS.sameArea!.strength).toBeLessThan(VANILLA_BONDS.sameFile!.strength);
+    expect(VANILLA_BONDS.sameArea!.strength).toBeGreaterThan(std.strength);
+    expect(VANILLA_BONDS.sameArea!.distance).toBeGreaterThan(VANILLA_BONDS.sameFile!.distance);
+  });
+
+  it('has no area-to-area forces', () => {
+    const f = VANILLA_CONFIG.forces;
+    expect([f.areaAttract, f.areaParent, f.anchorRepel, f.areaPin, f.crossAreaPull, f.areaHullCollision]).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+});
+
+describe('Vanilla (directory) view', () => {
+  const a1 = makeNode({ name: 'a1', filePath: 'src/ui/a.ts', scipSymbol: 'pkg a.ts/a1().' });
+  const a2 = makeNode({ name: 'a2', filePath: 'src/ui/a.ts', scipSymbol: 'pkg a.ts/a2().' });
+  const b = makeNode({ name: 'b', filePath: 'src/db/b.ts', scipSymbol: 'pkg b.ts/b().' });
+  const top = makeNode({ name: 't', filePath: 'top.ts', scipSymbol: 'pkg top.ts/t().' });
+  const input = [a1, a2, b, top].map((n) => ({ id: n.scipSymbol, filePath: n.filePath }));
+
+  it('makes one hub per file and per folder up to the root, with no sibling pairs', () => {
+    const { hubs, links } = buildDirectoryHubs(input);
+    const paths = (kind: string) => hubs.filter((h) => h.kind === kind).map((h) => h.path).sort();
+    expect(paths('FILE')).toEqual(['src/db/b.ts', 'src/ui/a.ts', 'top.ts']);
+    expect(paths('FOLDER')).toEqual(['', 'src', 'src/db', 'src/ui']);
+    expect(new Set(hubs.map((h) => h.id)).size).toBe(hubs.length);
+    expect(links.filter((l) => l.kind === 'IN_FILE')).toHaveLength(4);
+    expect(links.filter((l) => l.kind === 'IN_FOLDER')).toHaveLength(3);
+    expect(links.filter((l) => l.kind === 'IN_PARENT')).toHaveLength(3);
+  });
+
+  it('links a folder only to its direct parent, and every node to its own file hub', () => {
+    const { hubs, links } = buildDirectoryHubs(input);
+    const pathOf = new Map(hubs.map((h) => [h.id, h.path]));
+    const parents = links.filter((l) => l.kind === 'IN_PARENT').map((l) => [pathOf.get(l.source), pathOf.get(l.target)]);
+    expect(parents).toEqual(expect.arrayContaining([['src/ui', 'src'], ['src/db', 'src'], ['src', '']]));
+    const inFile = links.filter((l) => l.kind === 'IN_FILE' && l.source === a1.scipSymbol);
+    expect(inFile).toHaveLength(1);
+    expect(pathOf.get(inFile[0].target)).toBe('src/ui/a.ts');
+  });
+
+  it('creates no hubs for no nodes, and treats absolute paths as hanging off the root', () => {
+    expect(buildDirectoryHubs([])).toEqual({ hubs: [], links: [] });
+    const { hubs } = buildDirectoryHubs([{ id: 'x', filePath: '/src/a.ts' }]);
+    expect(hubs.filter((h) => h.kind === 'FOLDER').map((h) => h.path).sort()).toEqual(['', '/src']);
+  });
+
+  it('keeps the class bond but drops the pairwise file/area bonds, and zeroes every area force', () => {
+    const f = VANILLA_DIRECTORY_CONFIG.forces;
+    expect(f.bonds).toEqual({ classMember: VANILLA_BONDS.classMember });
+    expect(buildStructuralBonds([a1, a2, b], f.bonds!)).toHaveLength(0);
+    expect([f.areaCluster, f.areaAttract, f.areaParent, f.anchorRepel, f.areaPin, f.crossAreaPull, f.areaHullCollision]).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('orders directory tiers node→file strongest, hides them by default, and keeps hubs invisible and chargeless', () => {
+    const d = VANILLA_DIRECTORY_CONFIG.forces.directory!;
+    expect(d.tiers.IN_FILE.strength).toBeGreaterThan(d.tiers.IN_FOLDER.strength);
+    expect(d.tiers.IN_FOLDER.strength).toBeGreaterThan(d.tiers.IN_PARENT.strength);
+    expect(Object.values(d.tiers).every((t) => t.style === null)).toBe(true);
+    expect(d.hubs.FILE).toMatchObject({ charge: 0, opacity: 0 });
+    expect(d.hubs.FOLDER).toMatchObject({ charge: 0, opacity: 0 });
+  });
+
+  it('centers hubs on their members and draws file overlays by default', () => {
+    const d = VANILLA_DIRECTORY_CONFIG.forces.directory!;
+    expect(d.hubCenter).toBeGreaterThan(0);
+    expect(d.overlay).toMatchObject({ reach: Infinity, minMembers: 3 });
+  });
+
+  it('survives mergeConfigs and leaves Vanilla untouched', () => {
+    const merged = mergeConfigs(VANILLA_DIRECTORY_CONFIG, { simulation: { alphaDecay: 0.05 } });
+    expect(merged.forces.directory).toBe(VANILLA_DIRECTORY_CONFIG.forces.directory);
+    expect(VANILLA_CONFIG.forces.directory).toBeUndefined();
+    expect(VANILLA_CONFIG.forces.bonds).toEqual(VANILLA_BONDS);
   });
 });

@@ -20,6 +20,7 @@ const mockSelectionState = {
   toggleExpandedNode: jest.fn(),
   state: {
     selectedNodeIds: new Set<string>(),
+    lockedNodeIds: new Set<string>(),
     expansions: new Map(),
   },
 };

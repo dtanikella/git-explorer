@@ -4,7 +4,23 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { AnalysisResult, AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
-import { DEFAULT_REPO_GRAPH_CONFIG } from '@/lib/analysis/graph-config';
+import { DEFAULT_REPO_GRAPH_CONFIG, buildStructuralBonds } from '@/lib/analysis/graph-config';
+import {
+  ancestorFolders,
+  buildDirectoryHubs,
+  fileHubId,
+  folderHubId,
+  type DirectoryEdgeKind,
+  type DirectoryHubKind,
+} from '@/lib/analysis/directory-hubs';
+import {
+  computeFileOverlays,
+  drawFileOverlays,
+  overlayAt,
+  type FileOverlay,
+  type OverlayEmphasis,
+  type OverlayInput,
+} from '@/lib/analysis/file-overlay';
 import { useSelection } from '@/app/contexts/SelectionContext';
 import { useAreaStore } from '@/app/contexts/AreaContext';
 import { drawAreaOverlays, computeAreaHull } from '@/lib/areas/renderer';
@@ -32,6 +48,26 @@ interface RepoGraphProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
+  /** `dark` draws on a dark canvas and calls out diff-changed, selected and locked nodes and their file overlays; default `light` */
+  theme?: 'light' | 'dark';
+}
+
+/** Dark-theme colors: diff status fills, selection rings and the canvas itself. */
+const DARK = {
+  canvas: '#0b0f19',
+  border: '#1f2937',
+  node: '#64748b',
+  edge: '#64748b',
+  label: '#e5e7eb',
+  selected: '#f8fafc',
+  locked: '#fbbf24',
+  status: { added: '#4ade80', modified: '#60a5fa', deleted: '#f87171' } as Record<string, string>,
+} as const;
+
+/** The diff color of a node, or null when it is unchanged or not part of a diff. */
+function changeColor(n: AnalysisNode): string | null {
+  const status = (n as { diffStatus?: string }).diffStatus;
+  return status ? DARK.status[status] ?? null : null;
 }
 
 interface SimpleNode extends d3.SimulationNodeDatum {
@@ -45,6 +81,59 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
   source: string;
   target: string;
   data: AnalysisEdge;
+  /** set on synthetic structural-bond links, which are simulated but never drawn */
+  bond?: { distance: number; strength: number };
+}
+
+/** Synthetic file/folder anchor: simulated, optionally drawn, never selectable, searchable or hoverable. */
+interface HubNode extends d3.SimulationNodeDatum {
+  id: string;
+  kind: 'hub';
+  hubKind: DirectoryHubKind;
+  path: string;
+  /** the nodes the hub holds: a file's own, or everything under a folder */
+  members: SimpleNode[];
+}
+
+/** Link between a node/hub and its containing hub; `edgeKind` picks the tier's drawing style. */
+interface HubLink extends SimpleEdge {
+  edgeKind: DirectoryEdgeKind;
+}
+
+/**
+ * Which file overlays to call out: those holding a locked or selected node.
+ *
+ * @param hubs - The directory hubs; only file hubs are considered.
+ * @param selectedIds - Selected node ids.
+ * @param lockedIds - Locked node ids.
+ * @returns Emphasis by file hub id. The accent is the diff color most of the file's highlighted nodes share, else the selection color.
+ */
+function overlayEmphasis(
+  hubs: readonly HubNode[],
+  selectedIds: ReadonlySet<string>,
+  lockedIds: ReadonlySet<string>,
+): Map<string, OverlayEmphasis> {
+  const out = new Map<string, OverlayEmphasis>();
+  for (const hub of hubs) {
+    if (hub.hubKind !== 'FILE') continue;
+    let locked = false;
+    let any = false;
+    const tally = new Map<string, number>();
+    for (const m of hub.members) {
+      const isLocked = lockedIds.has(m.id);
+      if (!isLocked && !selectedIds.has(m.id)) continue;
+      any = true;
+      locked ||= isLocked;
+      const color = changeColor(m.data);
+      if (color) tally.set(color, (tally.get(color) ?? 0) + 1);
+    }
+    if (!any) continue;
+    let accent: string = DARK.selected;
+    let best = 0;
+    for (const [color, count] of tally) if (count > best) { best = count; accent = color; }
+    out.set(hub.id, { level: locked ? 'locked' : 'selected', accent });
+  }
+  return out;
 }
 
 /**
@@ -63,8 +152,9 @@ interface SimpleEdge extends d3.SimulationLinkDatum<SimpleNode> {
  * @param analysisData - The full analysis result (nodes and edges).
  * @param loading - Whether analysis is in progress.
  * @param error - Analysis error message, if any.
+ * @param theme - `dark` for the diff view's dark canvas and highlighting; default `light`.
  */
-export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error }: RepoGraphProps) {
+export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNode, analysisData, loading, error, theme = 'light' }: RepoGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const tooltipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, any> | null>(null);
@@ -74,13 +164,20 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const simNodesRef = useRef<SimpleNode[]>([]);
   const hoveredNodeRef = useRef<SimpleNode | null>(null);
   const hoveredAreaIdRef = useRef<string | null>(null);
+  const hoveredOverlayRef = useRef<FileOverlay | null>(null);
+  const overlaysRef = useRef<FileOverlay[]>([]);
   const drawFrameRef = useRef<(() => void) | null>(null);
+  const refreshOverlaysRef = useRef<(() => void) | null>(null);
   const configRef = useRef<RepoGraphConfig>(DEFAULT_REPO_GRAPH_CONFIG);
   const toggleNodeRef = useRef<(id: string) => void>(() => {});
 
   const [ctxError, setCtxError] = useState(false);
   const { activeNodeIds, hasSelection, toggleNode } = useSelection();
-  const selectedNodeIds = useSelection().state.selectedNodeIds;
+  const selectionState = useSelection().state;
+  const selectedNodeIds = selectionState.selectedNodeIds;
+  const lockedNodeIds = selectionState.lockedNodeIds;
+  const lockedNodeIdsRef = useRef(lockedNodeIds);
+  const themeRef = useRef(theme);
   const activeNodeIdsRef = useRef(activeNodeIds);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
   const hasSelectionRef = useRef(hasSelection);
@@ -95,10 +192,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   useEffect(() => {
     activeNodeIdsRef.current = activeNodeIds;
     selectedNodeIdsRef.current = selectedNodeIds;
+    lockedNodeIdsRef.current = lockedNodeIds;
+    themeRef.current = theme;
     hasSelectionRef.current = hasSelection;
     toggleNodeRef.current = toggleNode;
+    // dark overlays keep files holding a selected or locked node, so the set of overlays follows the selection
+    refreshOverlaysRef.current?.();
     drawFrameRef.current?.();
-  }, [activeNodeIds, selectedNodeIds, hasSelection, toggleNode]);
+  }, [activeNodeIds, selectedNodeIds, lockedNodeIds, hasSelection, toggleNode, theme]);
 
   useEffect(() => {
     areasRef.current = areas;
@@ -283,7 +384,23 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       return cursorAreas[0];
     };
 
-    const hitAreaId = areaHitTest();
+    // File overlays (directory views): the overlay under the cursor, when no node is
+    const overlay = !found && configRef.current.forces.directory ? overlayAt(overlaysRef.current, mx, my) : null;
+    if (overlay?.id !== hoveredOverlayRef.current?.id) {
+      hoveredOverlayRef.current = overlay;
+      drawFrameRef.current?.();
+    }
+    if (overlay && tooltipRef.current) {
+      tooltipRef.current
+        .style('visibility', 'visible')
+        .text(`${overlay.path} · ${overlay.memberCount} nodes`)
+        .style('top', event.pageY - 10 + 'px')
+        .style('left', event.pageX + 10 + 'px');
+    } else if (!found && tooltipRef.current) {
+      tooltipRef.current.style('visibility', 'hidden');
+    }
+
+    const hitAreaId = configRef.current.forces.directory ? null : areaHitTest();
     if (hitAreaId !== hoveredAreaIdRef.current) {
       hoveredAreaIdRef.current = hitAreaId;
       const canvas = canvasRef.current;
@@ -298,6 +415,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   const handleMouseLeave = useCallback(() => {
     hoveredNodeRef.current = null;
     hoveredAreaIdRef.current = null;
+    hoveredOverlayRef.current = null;
     if (canvasRef.current) {
       canvasRef.current.style.cursor = 'default';
     }
@@ -324,6 +442,9 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     const width = canvas.width;
     const height = canvas.height;
 
+    // Canvas shadows are costly: with many changed nodes, glow them only once zoomed in
+    const changedTotal = themeRef.current === 'dark' ? simNodes.reduce((k, n) => k + (changeColor(n.data) ? 1 : 0), 0) : 0;
+
     function drawFrame() {
       const c = ctxRef.current;
       const cv = canvasRef.current;
@@ -342,9 +463,49 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         const nStyle = cfg.style.node(n.data, n.degree);
         nodePositionMap.set(n.id, { x: n.x, y: n.y, radius: nStyle.radius });
       }
-      drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current);
+      const dirCfg = cfg.forces.directory;
+      if (dirCfg) {
+        if (dirCfg.overlay) {
+          const dark = themeRef.current === 'dark';
+          drawFileOverlays(c, overlaysRef.current, dirCfg.overlay, hoveredOverlayRef.current?.id ?? null, {
+            theme: themeRef.current,
+            emphasis: dark ? overlayEmphasis(hubNodes, selectedNodeIdsRef.current, lockedNodeIdsRef.current) : undefined,
+          });
+        }
+      } else {
+        drawAreaOverlays(c, areasRef.current, runtimeStateRef.current, nodePositionMap, hoveredAreaIdRef.current);
+      }
+
+      // Draw directory links (only tiers with a style) and hubs that are not fully transparent, behind the nodes
+      if (directory) {
+        for (const l of hubLinks) {
+          const style = directory.tiers[l.edgeKind].style;
+          const src = l.source as unknown as HubNode | SimpleNode;
+          const tgt = l.target as unknown as HubNode | SimpleNode;
+          if (!style || src.x == null || src.y == null || tgt.x == null || tgt.y == null) continue;
+          c.beginPath();
+          c.moveTo(src.x, src.y);
+          c.lineTo(tgt.x, tgt.y);
+          c.strokeStyle = style.color;
+          c.lineWidth = style.width;
+          c.globalAlpha = style.opacity;
+          c.stroke();
+          c.globalAlpha = 1.0;
+        }
+        for (const h of hubNodes) {
+          const style = directory.hubs[h.hubKind];
+          if (style.opacity <= 0 || h.x == null || h.y == null) continue;
+          c.beginPath();
+          c.arc(h.x, h.y, style.radius, 0, 2 * Math.PI);
+          c.fillStyle = style.color;
+          c.globalAlpha = style.opacity;
+          c.fill();
+          c.globalAlpha = 1.0;
+        }
+      }
 
       // Draw edges
+      const dark = themeRef.current === 'dark';
       for (const e of simEdges) {
         const src = e.source as unknown as SimpleNode;
         const tgt = e.target as unknown as SimpleNode;
@@ -359,9 +520,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           grad.addColorStop(1, eStyle.gradientTargetColor);
           c.strokeStyle = grad;
         } else {
-          c.strokeStyle = eStyle.color;
+          c.strokeStyle = dark ? DARK.edge : eStyle.color;
         }
         c.lineWidth = eStyle.width;
+        const edgeChanged = dark && (changeColor(src.data) != null || changeColor(tgt.data) != null);
+        const edgeFade = dark && !edgeChanged ? 0.45 : 1;
 
         // Compute area filtering state for edges
         const allAreasE = areasRef.current;
@@ -371,14 +534,14 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         if (hasSelectionRef.current) {
           const srcActive = activeNodeIdsRef.current.has(src.id);
           const tgtActive = activeNodeIdsRef.current.has(tgt.id);
-          c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity : 0.15;
+          c.globalAlpha = (srcActive || tgtActive) ? eStyle.opacity * edgeFade : 0.15;
         } else if (isAreaFilteringE) {
           const srcInArea = resolveAreaInfluence(src.id, visibleAreasE, nodeToAreasRef.current);
           const tgtInArea = resolveAreaInfluence(tgt.id, visibleAreasE, nodeToAreasRef.current);
           const bothDimmed = srcInArea?.dimmed && tgtInArea?.dimmed;
-          c.globalAlpha = bothDimmed ? 0.08 : eStyle.opacity;
+          c.globalAlpha = bothDimmed ? 0.08 : eStyle.opacity * edgeFade;
         } else {
-          c.globalAlpha = eStyle.opacity;
+          c.globalAlpha = eStyle.opacity * edgeFade;
         }
 
         c.stroke();
@@ -386,6 +549,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       }
 
       // Draw nodes
+      const cfgZoom = t.k;
       for (const n of simNodes) {
         if (n.x == null || n.y == null) continue;
         const nStyle = cfg.style.node(n.data, n.degree);
@@ -402,28 +566,57 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
         // Never dim active/selected nodes via area influence
         const finalAlpha = (areaInfluence?.dimmed && !isActive) ? Math.min(nodeAlpha, 0.15) : nodeAlpha;
 
+        const isSelected = selectedNodeIdsRef.current.has(n.id);
+        const isLocked = lockedNodeIdsRef.current.has(n.id);
+        const changed = dark ? changeColor(n.data) : null;
+        const radius = changed ? nStyle.radius + 1 : nStyle.radius;
+
         c.beginPath();
-        c.arc(n.x, n.y, nStyle.radius, 0, 2 * Math.PI);
-        c.fillStyle = nStyle.color;
-        c.globalAlpha = finalAlpha;
-        c.fill();
-        c.globalAlpha = 1.0;
-        c.strokeStyle = '#fff';
+        c.arc(n.x, n.y, radius, 0, 2 * Math.PI);
+        if (dark) {
+          // diff-changed nodes glow in their status color; everything else recedes
+          c.fillStyle = changed ?? DARK.node;
+          c.globalAlpha = changed ? Math.max(finalAlpha, 0.9) : Math.min(finalAlpha, isSelected || isLocked ? 0.8 : 0.45);
+          if (changed && (changedTotal <= 1500 || cfgZoom >= 2)) {
+            c.shadowColor = changed;
+            c.shadowBlur = 14;
+          }
+          c.fill();
+          c.shadowBlur = 0;
+          c.globalAlpha = 1.0;
+          c.strokeStyle = DARK.canvas;
+        } else {
+          c.fillStyle = nStyle.color;
+          c.globalAlpha = finalAlpha;
+          c.fill();
+          c.globalAlpha = 1.0;
+          c.strokeStyle = '#fff';
+        }
         c.lineWidth = 1;
         c.stroke();
-        if (nStyle.label) {
-          c.globalAlpha = finalAlpha;
-          c.fillStyle = '#374151';
+
+        const showLabel = nStyle.label || (dark && (changed != null || isSelected || isLocked) && cfgZoom >= 1.5);
+        if (showLabel) {
+          c.globalAlpha = dark ? 1 : finalAlpha;
+          c.fillStyle = dark ? DARK.label : '#374151';
           c.font = '10px sans-serif';
           c.textAlign = 'center';
-          c.fillText(n.name, n.x, n.y + nStyle.radius + 10);
+          c.fillText(n.name, n.x, n.y + radius + 10);
           c.globalAlpha = 1.0;
         }
 
-        if (selectedNodeIdsRef.current.has(n.id)) {
+        // Rings: locked is solid, selected is dashed; a node can carry both
+        if (isLocked && dark) {
           c.beginPath();
-          c.arc(n.x, n.y, nStyle.radius + 2, 0, 2 * Math.PI);
-          c.strokeStyle = '#3b82f6';
+          c.arc(n.x, n.y, radius + 5, 0, 2 * Math.PI);
+          c.strokeStyle = DARK.locked;
+          c.lineWidth = 2;
+          c.stroke();
+        }
+        if (isSelected) {
+          c.beginPath();
+          c.arc(n.x, n.y, radius + 2, 0, 2 * Math.PI);
+          c.strokeStyle = dark ? DARK.selected : '#3b82f6';
           c.lineWidth = 2;
           c.setLineDash([4, 3]);
           c.stroke();
@@ -447,25 +640,62 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
     ]);
     const crossAreaWeights = buildCrossAreaEdgeWeights(simEdgePairs, nodeToAreas);
     const nodeCrossAreaTargets = buildNodeCrossAreaTargets(simEdgePairs, nodeToAreas);
-    const allSimNodes: Array<SimpleNode | AreaAnchorNode> = [...simNodes, ...anchors];
+    const directory = cfg.forces.directory;
+    const hubData = directory ? buildDirectoryHubs(simNodes.map((n) => ({ id: n.id, filePath: n.data.filePath }))) : null;
+    const hubNodes: HubNode[] = hubData
+      ? hubData.hubs.map((h) => ({ id: h.id, kind: 'hub', hubKind: h.kind, path: h.path, members: [] }))
+      : [];
+    const hubById = new Map(hubNodes.map((h) => [h.id, h]));
+    if (hubData) {
+      for (const n of simNodes) {
+        hubById.get(fileHubId(n.data.filePath))?.members.push(n);
+        for (const folder of ancestorFolders(n.data.filePath)) hubById.get(folderHubId(folder))?.members.push(n);
+      }
+    }
+    const hubLinks: HubLink[] = directory && hubData
+      ? hubData.links.map((l) => ({
+          source: l.source,
+          target: l.target,
+          data: undefined as unknown as AnalysisEdge,
+          bond: { distance: directory.tiers[l.kind].distance, strength: directory.tiers[l.kind].strength },
+          edgeKind: l.kind,
+        }))
+      : [];
+    const allSimNodes: Array<SimpleNode | AreaAnchorNode | HubNode> = [...simNodes, ...anchors, ...hubNodes];
+    const bondLinks: SimpleEdge[] = cfg.forces.bonds
+      ? buildStructuralBonds(
+          simNodes.map((n) => n.data),
+          cfg.forces.bonds,
+          new Map([...nodeToAreas].map(([id, list]) => [id, list.map((a) => a.id)])),
+        ).map((b) => ({
+          source: b.source,
+          target: b.target,
+          data: undefined as unknown as AnalysisEdge,
+          bond: { distance: b.distance, strength: b.strength },
+        }))
+      : [];
 
     const simulation = d3
       .forceSimulation<any>(allSimNodes)
       .force(
         'link',
         d3
-          .forceLink<SimpleNode, SimpleEdge>(simEdges)
+          .forceLink<SimpleNode, SimpleEdge>([...simEdges, ...bondLinks, ...hubLinks])
           .id((d) => d.id)
-          .distance((d: any) => cfg.forces.edge(d.data).distance)
-          .strength((d: any) => cfg.forces.edge(d.data).strength)
+          .distance((d: any) => (d.bond ?? cfg.forces.edge(d.data)).distance)
+          .strength((d: any) => (d.bond ?? cfg.forces.edge(d.data)).strength)
       )
       .force('charge', d3.forceManyBody<any>()
-        .strength((d: any) => (d.kind === 'anchor' ? 0 : cfg.forces.node(d.data).charge)))
+        .strength((d: any) => {
+          if (d.kind === 'anchor') return 0;
+          if (d.kind === 'hub') return directory?.hubs[d.hubKind as DirectoryHubKind].charge ?? 0;
+          return cfg.forces.node(d.data).charge;
+        }))
       .force('center', d3.forceCenter(width / 2, height / 2)
         .strength(cfg.simulation.centerStrength))
       .force('collide', d3.forceCollide<any>()
         .radius((d: any) => {
-          if (d.kind === 'anchor') return 0;
+          if (d.kind === 'anchor' || d.kind === 'hub') return 0;
           const nStyle = cfg.style.node(d.data, d.degree);
           return nStyle.radius + cfg.simulation.collisionPadding;
         }))
@@ -512,11 +742,55 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
       );
     }
 
+    // Directory views: pull each hub to the centroid of what it holds, so the hub and the overlay centered on it sit in the middle of their members
+    if (directory && directory.hubCenter > 0) {
+      const k = directory.hubCenter;
+      simulation.force('hubCenter', () => {
+        for (const hub of hubNodes) {
+          if (hub.x == null || hub.y == null) continue;
+          let sx = 0, sy = 0, count = 0;
+          for (const m of hub.members) if (m.x != null && m.y != null) { sx += m.x; sy += m.y; count++; }
+          if (count) { hub.vx = (sx / count - hub.x) * k; hub.vy = (sy / count - hub.y) * k; }
+        }
+      });
+    }
+
+    const updateOverlays = () => {
+      if (!directory?.overlay) return;
+      const inputs: OverlayInput[] = [];
+      for (const hub of hubNodes) {
+        if (hub.hubKind !== 'FILE') continue;
+        inputs.push({
+          id: hub.id,
+          path: hub.path,
+          center: hub.x != null && hub.y != null ? { x: hub.x, y: hub.y } : null,
+          members: hub.members
+            .filter((m) => m.x != null && m.y != null)
+            .map((m) => ({ x: m.x as number, y: m.y as number, r: cfg.style.node(m.data, m.degree).radius })),
+        });
+      }
+      // In the dark theme a file holding a selected or locked node keeps its overlay however few nodes it has
+      let keep: Set<string> | undefined;
+      if (themeRef.current === 'dark') {
+        keep = new Set();
+        for (const hub of hubNodes) {
+          if (hub.hubKind === 'FILE' && hub.members.some((m) => selectedNodeIdsRef.current.has(m.id) || lockedNodeIdsRef.current.has(m.id))) keep.add(hub.id);
+        }
+      }
+      overlaysRef.current = [...computeFileOverlays(inputs, directory.overlay, keep).values()];
+    };
+
+    // d3's simulation.tick() does not fire 'tick', so a caller that steps the simulation by hand must refresh the overlays itself
+    refreshOverlaysRef.current = updateOverlays;
+
     simulation.alphaDecay(cfg.simulation.alphaDecay);
     simulation.velocityDecay(cfg.simulation.velocityDecay);
 
     simulationRef.current = simulation;
-    simulation.on('tick', drawFrame);
+    simulation.on('tick', () => {
+      updateOverlays();
+      drawFrame();
+    });
 
     const zoomBehavior = d3
       .zoom<HTMLCanvasElement, unknown>()
@@ -576,8 +850,11 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
 
     return () => {
       simulation.stop();
+      overlaysRef.current = [];
+      hoveredOverlayRef.current = null;
       zoomRef.current = null;
       drawFrameRef.current = null;
+      refreshOverlaysRef.current = null;
       resizeObserver.disconnect();
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
@@ -629,6 +906,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
           while (sim.alpha() > sim.alphaMin()) {
             sim.tick();
           }
+          refreshOverlaysRef.current?.();
           drawFrameRef.current?.();
         }
       }
@@ -709,7 +987,7 @@ export default function RepoGraph({ repoPath, hideTestFiles, config, onSearchNod
   if (!analysisData) return null;
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 8, border: '1px solid #ccc', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', background: theme === 'dark' ? DARK.canvas : '#fff', borderRadius: 8, border: `1px solid ${theme === 'dark' ? DARK.border : '#ccc'}`, position: 'relative' }}>
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block' }}

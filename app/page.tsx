@@ -14,6 +14,8 @@ import ManageSelectionSidebar from './components/selection/ManageSelectionSideba
 import AreaManagerView from './components/areas/AreaManagerView';
 import {
   INTERNAL_PROCESSING_CONFIG,
+  VANILLA_CONFIG,
+  VANILLA_DIRECTORY_CONFIG,
   createModulesViewConfig,
   createDataFlowViewConfig,
   DEFAULT_REPO_GRAPH_CONFIG,
@@ -33,6 +35,8 @@ const VIEW_OPTIONS: Record<string, {
   internal: { label: 'Internal Processing', config: INTERNAL_PROCESSING_CONFIG },
   modules: { label: 'Modules', config: createModulesViewConfig },
   dataflow: { label: 'Data Flow', config: createDataFlowViewConfig },
+  vanilla: { label: 'Vanilla', config: VANILLA_CONFIG },
+  vanillaDirectory: { label: 'Vanilla (directory)', config: VANILLA_DIRECTORY_CONFIG },
 };
 
 function ManageSelectionSidebarWrapper({ repoPath }: { repoPath: string }) {
@@ -228,6 +232,7 @@ export default function HomePage() {
     err: string | null;
     selectionValue: ReturnType<typeof useSelectionState>;
     bridgeSelection?: boolean;
+    theme?: 'light' | 'dark';
   }) => (
     <SelectionProvider value={opts.selectionValue}>
       <AreaProvider areas={areasData} repoPath={repoPath} onAreasChange={setAreasData}>
@@ -263,6 +268,7 @@ export default function HomePage() {
                 analysisData={opts.data}
                 loading={opts.isLoading}
                 error={opts.err}
+                theme={opts.theme}
               />
             </div>
           </div>
@@ -352,6 +358,7 @@ export default function HomePage() {
                       isLoading: false,
                       err: null,
                       selectionValue: diffSelectionState,
+                      theme: 'dark',
                     });
                   })()}
                 </div>
