@@ -54,7 +54,8 @@ export function layoutBands(layout: RadialLayout, config: DisplayConfig = DEFAUL
       n.children.forEach((c, i) => walk(c, null, i, siblingIndexAmong(n, c), siblingsOf(n, c)));
       return;
     }
-    const tier = n.tier as 'folder' | 'file';
+    if (n.tier === 'symbol') return; // symbols are dots, not bands
+    const tier = n.tier;
     const hue = bandHue({ tier, parentHue, topIndex, siblingIndex, siblingCount }, config);
     const style = bandStyle({ tier, depth: n.depth, path: n.path, hue, siblingIndex, siblingCount }, config);
     const node = placed.get(n)!;

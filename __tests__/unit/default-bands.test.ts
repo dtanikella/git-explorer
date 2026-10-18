@@ -72,6 +72,13 @@ describe('layoutBands', () => {
     expect(lib.endAngle).toBeCloseTo(Math.max(...files.map((f) => f.endAngle)), 6);
   });
 
+  it('makes only folder and file bands, all with finite geometry', () => {
+    const bands = bandsOf(mixed);
+    expect(bands.every((b) => b.tier === 'folder' || b.tier === 'file')).toBe(true);
+    expect(bands.every((b) => b.node.node.tier === b.tier)).toBe(true);
+    for (const b of bands) for (const v of [b.inner, b.outer, b.startAngle, b.endAngle]) expect(Number.isFinite(v)).toBe(true);
+  });
+
   it('gives the root no band', () => {
     expect(bandsOf(mixed).some((b) => b.node.node.tier === 'root')).toBe(false);
   });
