@@ -13,7 +13,6 @@ interface Snapshot {
   nodes: Array<{ id: string; name: string; type: string; file: string; test: boolean; xfile: boolean; refsIn: number; refsOut: number }>;
   edges: Array<{ kind: string; from: number; to: number; external: boolean }>;
   externals: Array<{ name: string; pkg: string }>;
-  areas: Array<{ id: string; name: string; parent: string | null; color: string | null; contains: number[] }>;
 }
 
 function loadSnapshot(): Snapshot {
@@ -25,9 +24,9 @@ function loadSnapshot(): Snapshot {
 describe('graph-playground snapshot contract', () => {
   const snap = loadSnapshot();
 
-  it('provides the five keys a bench snapshot must have', () => {
+  it('provides the keys a bench snapshot must have', () => {
     expect(snap.version).toBe(1);
-    expect(Object.keys(snap)).toEqual(expect.arrayContaining(['metadata', 'nodes', 'edges', 'externals', 'areas']));
+    expect(Object.keys(snap)).toEqual(expect.arrayContaining(['metadata', 'nodes', 'edges', 'externals']));
     expect(snap.metadata.tool).toBe('scripts/dump-analysis.ts');
     expect(snap.nodes.length).toBeGreaterThan(0);
     expect(snap.edges.length).toBeGreaterThan(0);
@@ -48,15 +47,6 @@ describe('graph-playground snapshot contract', () => {
     for (const e of snap.edges) {
       expect(snap.nodes[e.from]).toBeDefined();
       expect(e.external ? snap.externals[e.to] : snap.nodes[e.to]).toBeDefined();
-    }
-  });
-
-  it('has a consistent area tree over existing nodes', () => {
-    const ids = new Set(snap.areas.map((a) => a.id));
-    expect(ids.size).toBe(snap.areas.length);
-    for (const a of snap.areas) {
-      if (a.parent) expect(ids.has(a.parent)).toBe(true);
-      for (const i of a.contains) expect(snap.nodes[i]).toBeDefined();
     }
   });
 });

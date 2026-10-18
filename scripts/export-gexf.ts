@@ -36,18 +36,10 @@ interface SnapshotEdge {
   external: boolean;
 }
 
-interface SnapshotArea {
-  id: string;
-  name: string;
-  parent: string | null;
-  contains: number[];
-}
-
 interface Snapshot {
   metadata: { repoName?: string; commit?: string; generatedAt?: string };
   nodes: SnapshotNode[];
   edges: SnapshotEdge[];
-  areas: SnapshotArea[];
 }
 
 const VANILLA_NODE_TYPES = new Set(['FUNCTION', 'METHOD', 'CONSTRUCTOR', 'CLASS']);
@@ -96,22 +88,6 @@ for (const e of keptEdges) {
 }
 const nodeIndices = [...gexfId.keys()].sort((a, b) => gexfId.get(a)! - gexfId.get(b)!);
 
-// Leaf area per node: the contained-in area with the most ancestors (areas can nest).
-const depth = new Map<string, number>();
-const areaById = new Map(snap.areas.map((a) => [a.id, a]));
-const depthOf = (id: string | null): number => {
-  if (id === null || !areaById.has(id)) return 0;
-  if (!depth.has(id)) depth.set(id, 1 + depthOf(areaById.get(id)!.parent));
-  return depth.get(id)!;
-};
-const areaOfNode = new Map<number, SnapshotArea>();
-for (const area of snap.areas) {
-  for (const i of area.contains) {
-    const cur = areaOfNode.get(i);
-    if (!cur || depthOf(area.id) > depthOf(cur.id)) areaOfNode.set(i, area);
-  }
-}
-
 const NODE_ATTRS: Array<[string, string]> = [
   ['type', 'string'],
   ['file', 'string'],
@@ -121,7 +97,6 @@ const NODE_ATTRS: Array<[string, string]> = [
   ['xfile', 'boolean'],
   ['refsIn', 'integer'],
   ['refsOut', 'integer'],
-  ['area', 'string'],
   ['symbol', 'string'],
 ];
 
@@ -154,7 +129,6 @@ for (const i of nodeIndices) {
     n.xfile,
     n.refsIn,
     n.refsOut,
-    areaOfNode.get(i)?.name ?? '',
     n.id,
   ];
   lines.push(`      <node id="${gexfId.get(i)}" label="${xml(n.name)}">`);

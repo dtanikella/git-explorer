@@ -3,8 +3,6 @@
 import { createContext, useContext, useState, useMemo, useCallback, useReducer, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
-import type { Area } from '@/lib/areas/types';
-import { getDescendantIds } from '@/lib/areas/containment';
 import { computeExpansionGroups, computeActiveNodeIds, collectRelationIds } from '@/lib/selection/candidates';
 import type { ExpansionGroup, ExpansionType, SourceKey } from '@/lib/selection/candidates';
 
@@ -17,21 +15,15 @@ import type { ExpansionGroup, ExpansionType, SourceKey } from '@/lib/selection/c
 export interface SelectionState {
   /** Nodes the user explicitly checked. */
   explicitNodeIds: Set<string>;
-  /** Areas the user checked. */
-  selectedAreaIds: Set<string>;
-  /** Nodes the user unchecked within a checked area. */
-  excludedNodeIds: Set<string>;
   /** Nodes the user locked. */
   lockedNodeIds: Set<string>;
-  /** Areas the user locked. */
-  lockedAreaIds: Set<string>;
   /** Expansion groups (same-file, callers, callees only), covering whole-selection and per-row expansions. */
   expansions: Map<string, ExpansionGroup>;
   /** Relations switched on per row, keyed by the row's source. */
   rowExpansions: Map<SourceKey, Set<ExpansionType>>;
   /** The row the expansion group is scoped to, or null for "All selected". */
   focusKey: SourceKey | null;
-  /** Derived: explicitNodeIds ∪ (members of checked areas \ excludedNodeIds). */
+  /** Derived: the same set as explicitNodeIds. */
   selectedNodeIds: Set<string>;
 }
 
@@ -44,8 +36,7 @@ export interface SelectionContextValue {
   hasSelection: boolean;
   toggleNode(id: string): void;
   toggleNodes(ids: string[], on: boolean): void;
-  toggleArea(id: string): void;
-  toggleLock(target: { kind: 'node' | 'area'; id: string } | { kind: 'nodes'; ids: string[] }): void;
+  toggleLock(target: { kind: 'node'; id: string } | { kind: 'nodes'; ids: string[] }): void;
   lockAll(): void;
   clearUnlocked(): void;
   clearSelection(): void;
@@ -68,7 +59,6 @@ export interface SelectionStateConfig {
   nodes: AnalysisNode[];
   edges: AnalysisEdge[];
   visibleNodeIds: Set<string>;
-  areas: Area[];
   /** Node ids that should be seeded as selected and locked (e.g. diff changes). */
   seedNodeIds?: Set<string>;
 }
@@ -78,7 +68,7 @@ export interface SelectionStateConfig {
 const SelectionContext = createContext<SelectionContextValue | null>(null);
 
 /**
- * Returns the selection context for node and area highlighting.
+ * Returns the selection context for node highlighting.
  *
  * @throws Error when called outside {@link SelectionProvider}.
  */
@@ -89,88 +79,6 @@ export function useSelection(): SelectionContextValue {
 }
 
 // --- Helpers ---
-
-/**
- * Computes the derived selectedNodeIds from the user-driven state.
- * A node is selected when:
- * - it is in explicitNodeIds, OR
- * - it is a member of a checked area (including descendant area members)
- *   and is NOT in excludedNodeIds
- */
-function computeSelectedNodeIds(
-  explicitNodeIds: Set<string>,
-  selectedAreaIds: Set<string>,
-  excludedNodeIds: Set<string>,
-  areas: Area[],
-): Set<string> {
-  const result = new Set(explicitNodeIds);
-
-  if (selectedAreaIds.size > 0) {
-    const areasById = new Map(areas.map((a) => [a.id, a]));
-    const areaMembers = new Set<string>();
-
-    for (const areaId of selectedAreaIds) {
-      const area = areasById.get(areaId);
-      if (!area) continue;
-      // Direct members
-      for (const id of area.contains) areaMembers.add(id);
-      // Descendant members
-      for (const descId of getDescendantIds(areas, areaId)) {
-        const desc = areasById.get(descId);
-        if (desc) {
-          for (const id of desc.contains) areaMembers.add(id);
-        }
-      }
-    }
-
-    for (const id of areaMembers) {
-      if (!excludedNodeIds.has(id)) {
-        result.add(id);
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
- * Checks whether a node id is a member of any of the given area ids
- * (including through descendant areas).
- */
-function isNodeInAreas(nodeId: string, areaIds: Set<string>, areas: Area[]): boolean {
-  if (areaIds.size === 0) return false;
-  const areasById = new Map(areas.map((a) => [a.id, a]));
-  for (const areaId of areaIds) {
-    const area = areasById.get(areaId);
-    if (!area) continue;
-    if (area.contains.includes(nodeId)) return true;
-    for (const descId of getDescendantIds(areas, areaId)) {
-      const desc = areasById.get(descId);
-      if (desc && desc.contains.includes(nodeId)) return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Collects all member node ids for a set of area ids (including descendants).
- */
-function getMemberIdsForAreas(areaIds: Set<string>, areas: Area[]): Set<string> {
-  const result = new Set<string>();
-  const areasById = new Map(areas.map((a) => [a.id, a]));
-  for (const areaId of areaIds) {
-    const area = areasById.get(areaId);
-    if (!area) continue;
-    for (const id of area.contains) result.add(id);
-    for (const descId of getDescendantIds(areas, areaId)) {
-      const desc = areasById.get(descId);
-      if (desc) {
-        for (const id of desc.contains) result.add(id);
-      }
-    }
-  }
-  return result;
-}
 
 // --- Hook: useSelectionState ---
 
@@ -186,18 +94,15 @@ function getMemberIdsForAreas(areaIds: Set<string>, areas: Area[]): Set<string> 
  * @returns A {@link SelectionContextValue} with state and actions.
  */
 export function useSelectionState(config: SelectionStateConfig): SelectionContextValue {
-  const { nodes, edges, visibleNodeIds, areas, seedNodeIds } = config;
+  const { nodes, edges, visibleNodeIds, seedNodeIds } = config;
 
   // --- Core state ---
   const [explicitNodeIds, setExplicitNodeIds] = useState<Set<string>>(
     () => seedNodeIds ? new Set(seedNodeIds) : new Set(),
   );
-  const [selectedAreaIds, setSelectedAreaIds] = useState<Set<string>>(new Set());
-  const [excludedNodeIds, setExcludedNodeIds] = useState<Set<string>>(new Set());
   const [lockedNodeIds, setLockedNodeIds] = useState<Set<string>>(
     () => seedNodeIds ? new Set(seedNodeIds) : new Set(),
   );
-  const [lockedAreaIds, setLockedAreaIds] = useState<Set<string>>(new Set());
   const [wholeEnabled, setWholeEnabled] = useState<Set<ExpansionType>>(new Set());
   const [disabledByType, setDisabledByType] = useState<Map<ExpansionType, Set<string>>>(new Map());
   const [rowExpansions, setRowExpansions] = useState<Map<SourceKey, Set<ExpansionType>>>(new Map());
@@ -260,26 +165,21 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
   }, [seedNodeIds]);
 
   // --- Derived: selectedNodeIds ---
-  const selectedNodeIds = useMemo(
-    () => computeSelectedNodeIds(explicitNodeIds, selectedAreaIds, excludedNodeIds, areas),
-    [explicitNodeIds, selectedAreaIds, excludedNodeIds, areas],
-  );
+  const selectedNodeIds = explicitNodeIds;
 
   // --- Expansions (whole-selection and per-row) ---
   const currentExpansions = useMemo(
     () => computeExpansionGroups({
       selectedNodeIds,
-      selectedAreaIds,
       nodes,
       edges,
       visibleNodeIds,
-      areas,
       wholeEnabled,
       rowExpansions,
       disabledIds: disabledByType,
       focusKey,
     }),
-    [selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas, wholeEnabled, rowExpansions, disabledByType, focusKey],
+    [selectedNodeIds, nodes, edges, visibleNodeIds, wholeEnabled, rowExpansions, disabledByType, focusKey],
   );
 
   // --- Derived: activeNodeIds ---
@@ -288,15 +188,9 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     [selectedNodeIds, currentExpansions],
   );
 
-  const hasSelection = selectedNodeIds.size > 0 || selectedAreaIds.size > 0;
+  const hasSelection = selectedNodeIds.size > 0;
 
   // Refs to always have the latest state values inside callbacks
-  const selectedAreaIdsRef = useRef(selectedAreaIds);
-  selectedAreaIdsRef.current = selectedAreaIds;
-
-  const areasRef = useRef(areas);
-  areasRef.current = areas;
-
   const lockedNodeIdsRef = useRef(lockedNodeIds);
   lockedNodeIdsRef.current = lockedNodeIds;
   const seedNodeIdsRef = useRef(seedNodeIds);
@@ -305,165 +199,40 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
   const explicitNodeIdsRef = useRef(explicitNodeIds);
   explicitNodeIdsRef.current = explicitNodeIds;
 
-  const excludedNodeIdsRef = useRef(excludedNodeIds);
-  excludedNodeIdsRef.current = excludedNodeIds;
-
   // --- Actions ---
 
   const toggleNode = useCallback((id: string) => {
     if (lockedNodeIdsRef.current.has(id)) return;
-
-    const isExplicit = explicitNodeIdsRef.current.has(id);
-    const isInArea = isNodeInAreas(id, selectedAreaIdsRef.current, areasRef.current);
-    const isExcluded = excludedNodeIdsRef.current.has(id);
-    const isSelected = isExplicit || (isInArea && !isExcluded);
-
-    if (isSelected) {
-      // Deselecting
-      setExplicitNodeIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      if (isInArea) {
-        setExcludedNodeIds((prev) => new Set(prev).add(id));
-      }
-    } else {
-      // Selecting
-      setExplicitNodeIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-      setExcludedNodeIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
-  }, []);
-
-  const toggleNodes = useCallback((ids: string[], on: boolean) => {
-    if (on) {
-      setExplicitNodeIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) {
-          if (!lockedNodeIdsRef.current.has(id)) {
-            next.add(id);
-          }
-        }
-        return next;
-      });
-      setExcludedNodeIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) next.delete(id);
-        return next;
-      });
-    } else {
-      setExplicitNodeIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) {
-          if (!lockedNodeIdsRef.current.has(id)) {
-            next.delete(id);
-            if (isNodeInAreas(id, selectedAreaIdsRef.current, areasRef.current)) {
-              setExcludedNodeIds((exPrev) => new Set(exPrev).add(id));
-            }
-          }
-        }
-        return next;
-      });
-    }
-  }, []);
-
-  const toggleArea = useCallback((id: string) => {
-    setSelectedAreaIds((prev) => {
+    setExplicitNodeIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        // Unchecking — remove area, clear exclusions for its members,
-        // remove unlocked members from explicitNodeIds
-        next.delete(id);
-        const memberIds = getMemberIdsForAreas(new Set([id]), areasRef.current);
-
-        setExcludedNodeIds((exPrev) => {
-          const exNext = new Set(exPrev);
-          for (const mId of memberIds) exNext.delete(mId);
-          return exNext;
-        });
-
-        setExplicitNodeIds((exPrev) => {
-          const exNext = new Set(exPrev);
-          for (const mId of memberIds) {
-            if (!lockedNodeIdsRef.current.has(mId)) {
-              exNext.delete(mId);
-            }
-          }
-          return exNext;
-        });
-
-        return next;
-      } else {
-        // Checking — add area, remove descendant areas from selection
-        next.add(id);
-        for (const area of areasRef.current) {
-          if (area.parent === id || getDescendantIds(areasRef.current, id).has(area.id)) {
-            next.delete(area.id);
-          }
-        }
-
-        // Clear exclusions for this area's members
-        const memberIds = getMemberIdsForAreas(new Set([id]), areasRef.current);
-        setExcludedNodeIds((exPrev) => {
-          const exNext = new Set(exPrev);
-          for (const mId of memberIds) exNext.delete(mId);
-          return exNext;
-        });
-
-        return next;
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   }, []);
 
-  const toggleLock = useCallback((target: { kind: 'node' | 'area'; id: string } | { kind: 'nodes'; ids: string[] }) => {
-    if (target.kind === 'node') {
-      setLockedNodeIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(target.id)) {
-          next.delete(target.id);
-        } else {
-          next.add(target.id);
-        }
-        return next;
-      });
-    } else if (target.kind === 'nodes') {
-      setLockedNodeIds((prev) => {
-        const next = new Set(prev);
-        for (const id of target.ids) {
-          if (next.has(id)) {
-            next.delete(id);
-          } else {
-            next.add(id);
-          }
-        }
-        return next;
-      });
-    } else if (target.kind === 'area') {
-      setLockedAreaIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(target.id)) {
-          next.delete(target.id);
-        } else {
-          next.add(target.id);
-          // Locking an area clears exclusions for its members
-          const memberIds = getMemberIdsForAreas(new Set([target.id]), areasRef.current);
-          setExcludedNodeIds((exPrev) => {
-            const exNext = new Set(exPrev);
-            for (const mId of memberIds) exNext.delete(mId);
-            return exNext;
-          });
-        }
-        return next;
-      });
-    }
+  const toggleNodes = useCallback((ids: string[], on: boolean) => {
+    setExplicitNodeIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (lockedNodeIdsRef.current.has(id)) continue;
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleLock = useCallback((target: { kind: 'node'; id: string } | { kind: 'nodes'; ids: string[] }) => {
+    const ids = target.kind === 'node' ? [target.id] : target.ids;
+    setLockedNodeIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
   }, []);
 
   // Clearing removes every per-row expansion and returns focus to "All selected"
@@ -495,17 +264,12 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
       }
       return next;
     });
-    setSelectedAreaIds(new Set());
-    setExcludedNodeIds(new Set());
     clearExpansions();
   }, [clearExpansions]);
 
   const clearSelection = useCallback(() => {
     setExplicitNodeIds(new Set());
-    setSelectedAreaIds(new Set());
-    setExcludedNodeIds(new Set());
     setLockedNodeIds(new Set());
-    setLockedAreaIds(new Set());
     clearExpansions();
   }, [clearExpansions]);
 
@@ -513,10 +277,7 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
   const resetSelection = useCallback(() => {
     const seed = seedNodeIdsRef.current;
     setExplicitNodeIds(seed ? new Set(seed) : new Set());
-    setSelectedAreaIds(new Set());
-    setExcludedNodeIds(new Set());
     setLockedNodeIds(seed ? new Set(seed) : new Set());
-    setLockedAreaIds(new Set());
     clearExpansions();
   }, [clearExpansions]);
 
@@ -576,10 +337,7 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
 
   const state: SelectionState = {
     explicitNodeIds,
-    selectedAreaIds,
-    excludedNodeIds,
     lockedNodeIds,
-    lockedAreaIds,
     expansions: currentExpansions,
     rowExpansions,
     focusKey,
@@ -592,7 +350,6 @@ export function useSelectionState(config: SelectionStateConfig): SelectionContex
     hasSelection,
     toggleNode,
     toggleNodes,
-    toggleArea,
     toggleLock,
     lockAll,
     clearUnlocked,
@@ -621,18 +378,17 @@ export interface SelectionProviderProps {
   nodes?: AnalysisNode[];
   edges?: AnalysisEdge[];
   visibleNodeIds?: Set<string>;
-  areas?: Area[];
   seedNodeIds?: Set<string>;
   children: ReactNode;
 }
 
 /**
- * Context provider for node and area selection/highlighting state.
+ * Context provider for node selection/highlighting state.
  *
  * @remarks
  * Supports two modes:
  * 1. **Thin wrapper** — pass a pre-built `value` from {@link useSelectionState}.
- * 2. **Self-contained** — pass `nodes`, `edges`, `visibleNodeIds`, `areas` and
+ * 2. **Self-contained** — pass `nodes`, `edges`, `visibleNodeIds` and
  *    optionally `seedNodeIds` to create internal state.
  *
  * The thin wrapper mode is used for per-tab persistence: `page.tsx` calls
@@ -643,7 +399,6 @@ export function SelectionProvider({
   nodes,
   edges,
   visibleNodeIds,
-  areas,
   seedNodeIds,
   children,
 }: SelectionProviderProps) {
@@ -652,7 +407,6 @@ export function SelectionProvider({
     nodes: nodes ?? [],
     edges: edges ?? [],
     visibleNodeIds: visibleNodeIds ?? new Set(),
-    areas: areas ?? [],
     seedNodeIds,
   });
 

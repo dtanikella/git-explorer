@@ -2,7 +2,6 @@
 
 import { useSelection } from '@/app/contexts/SelectionContext';
 
-type BrowseMode = 'area' | 'file';
 type FilterMode = 'all' | 'selected' | 'locked';
 
 interface SelectionToolbarProps {
@@ -10,8 +9,6 @@ interface SelectionToolbarProps {
   onSearchQueryChange: (query: string) => void;
   searchNotFound: boolean;
   onSearchSubmit: () => void;
-  browseMode: BrowseMode;
-  onBrowseModeChange: (mode: BrowseMode) => void;
   filterMode: FilterMode;
   onFilterModeChange: (mode: FilterMode) => void;
 }
@@ -20,7 +17,7 @@ interface SelectionToolbarProps {
  * Header toolbar for the selection sidebar.
  *
  * @remarks
- * Provides search, browse mode toggle (By area / By file),
+ * Provides search,
  * filter toggle (All / Selected / Locked) with counts,
  * Clear unlocked, Clear all, Reset, and Lock all controls.
  *
@@ -28,8 +25,6 @@ interface SelectionToolbarProps {
  * @param onSearchQueryChange - Called when search input changes.
  * @param searchNotFound - Whether the last search returned no results.
  * @param onSearchSubmit - Called when the search button or Enter is pressed.
- * @param browseMode - Current browse mode ('area' | 'file').
- * @param onBrowseModeChange - Called when browse mode changes.
  * @param filterMode - Current filter mode ('all' | 'selected' | 'locked').
  * @param onFilterModeChange - Called when filter mode changes.
  */
@@ -38,14 +33,12 @@ export default function SelectionToolbar({
   onSearchQueryChange,
   searchNotFound,
   onSearchSubmit,
-  browseMode,
-  onBrowseModeChange,
   filterMode,
   onFilterModeChange,
 }: SelectionToolbarProps) {
   const { state, clearSelection, resetSelection, clearUnlocked, lockAll, hasSelection } = useSelection();
-  const { lockedNodeIds, lockedAreaIds, selectedNodeIds } = state;
-  const hasLocks = lockedNodeIds.size > 0 || lockedAreaIds.size > 0;
+  const { lockedNodeIds, selectedNodeIds } = state;
+  const hasLocks = lockedNodeIds.size > 0;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') onSearchSubmit();
@@ -106,7 +99,7 @@ export default function SelectionToolbar({
             value={searchQuery}
             onChange={(e) => { onSearchQueryChange(e.target.value); }}
             onKeyDown={handleKeyDown}
-            placeholder="Search node or area..."
+            placeholder="Search node..."
             style={{
               flex: 1,
               padding: '5px 8px',
@@ -134,42 +127,6 @@ export default function SelectionToolbar({
         {searchNotFound && (
           <div style={{ color: '#dc2626', fontSize: 11, marginTop: 4 }}>Not found</div>
         )}
-      </div>
-
-      {/* Browse mode tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', padding: '0 12px' }}>
-        <button
-          onClick={() => onBrowseModeChange('area')}
-          style={{
-            flex: 1,
-            padding: '6px 0',
-            fontSize: 11,
-            fontWeight: 500,
-            background: 'none',
-            border: 'none',
-            borderBottom: browseMode === 'area' ? '2px solid #3b82f6' : '2px solid transparent',
-            color: browseMode === 'area' ? '#3b82f6' : '#6b7280',
-            cursor: 'pointer',
-          }}
-        >
-          By area
-        </button>
-        <button
-          onClick={() => onBrowseModeChange('file')}
-          style={{
-            flex: 1,
-            padding: '6px 0',
-            fontSize: 11,
-            fontWeight: 500,
-            background: 'none',
-            border: 'none',
-            borderBottom: browseMode === 'file' ? '2px solid #3b82f6' : '2px solid transparent',
-            color: browseMode === 'file' ? '#3b82f6' : '#6b7280',
-            cursor: 'pointer',
-          }}
-        >
-          By file
-        </button>
       </div>
 
       {/* Filter tabs */}

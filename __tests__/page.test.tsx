@@ -23,27 +23,20 @@ jest.mock('@/app/contexts/SelectionContext', () => ({
   useSelection: () => ({
     activeNodeIds: new Set<string>(mockPageSelectedNodeIds),
     selectedNodeIds: mockPageSelectedNodeIds,
-    selectedAreaIds: new Set<string>(),
     hasSelection: mockPageSelectedNodeIds.size > 0,
     toggleNode: mockPageToggleNode,
-    toggleArea: jest.fn(),
     clearSelection: jest.fn(),
     toggleExpansionGroup: jest.fn(),
     toggleExpandedNode: jest.fn(),
-    toggleAreaMember: jest.fn(),
     state: {
       selectedNodeIds: mockPageSelectedNodeIds,
-      selectedAreaIds: new Set<string>(),
       expansions: new Map(),
     },
   }),
   useSelectionState: () => ({
     state: {
       explicitNodeIds: new Set<string>(),
-      selectedAreaIds: new Set<string>(),
-      excludedNodeIds: new Set<string>(),
       lockedNodeIds: new Set<string>(),
-      lockedAreaIds: new Set<string>(),
       expansions: new Map(),
       selectedNodeIds: new Set<string>(),
     },
@@ -51,7 +44,6 @@ jest.mock('@/app/contexts/SelectionContext', () => ({
     hasSelection: false,
     toggleNode: jest.fn(),
     toggleNodes: jest.fn(),
-    toggleArea: jest.fn(),
     toggleLock: jest.fn(),
     lockAll: jest.fn(),
     clearUnlocked: jest.fn(),
@@ -65,14 +57,6 @@ jest.mock('@/app/contexts/SelectionContext', () => ({
 jest.mock('@/app/components/selection/SearchSelectSidebar', () => {
   return function MockSearchSelectSidebar() {
     return <div data-testid="search-select-sidebar" />;
-  };
-});
-
-jest.mock('@/app/components/selection/ManageSelectionSidebar', () => {
-  return function MockManageSelectionSidebar() {
-    const { hasSelection } = require('@/app/contexts/SelectionContext').useSelection();
-    if (!hasSelection) return null;
-    return <div data-testid="manage-selection-sidebar" />;
   };
 });
 
@@ -136,7 +120,6 @@ jest.mock('@/app/components/TabSidebar', () => {
       <div data-testid="tab-sidebar">
         <button onClick={() => onTabChange('graph')}>Graph</button>
         <button onClick={() => onTabChange('stats')}>Stats</button>
-        <button onClick={() => onTabChange('areas')}>Areas</button>
         <button onClick={() => onTabChange('diff')}>Diff</button>
       </div>
     );
@@ -316,7 +299,6 @@ describe('Homepage', () => {
 
     expect(lastSelectionProviderProps?.value?.state?.selectedNodeIds).toBeDefined();
     expect(screen.getByTestId('search-select-sidebar')).toBeInTheDocument();
-    expect(screen.queryByTestId('manage-selection-sidebar')).not.toBeInTheDocument();
   });
 
   it('consumes pending selection after switching from stats to graph', async () => {

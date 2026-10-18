@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
-import { useAreaStore } from '@/app/contexts/AreaContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
 import { collectRelationIds, EXPANSION_TYPES } from '@/lib/selection/candidates';
 import type { ExpansionType, SourceKey, SourceRelation } from '@/lib/selection/candidates';
@@ -21,9 +20,9 @@ const GROUP_LABELS: Record<ExpansionType, string> = {
 };
 
 const GROUP_HINTS: Record<ExpansionType, string> = {
-  'same-file': 'Nodes in the same files. For an area or folder: every file in it.',
-  'callers': 'Nodes that call it. For an area or folder: callers from outside it.',
-  'callees': 'Nodes it calls. For an area or folder: callees outside it.',
+  'same-file': 'Nodes in the same files. For a folder: every file in it.',
+  'callers': 'Nodes that call it. For a folder: callers from outside it.',
+  'callees': 'Nodes it calls. For a folder: callees outside it.',
 };
 
 /**
@@ -32,7 +31,7 @@ const GROUP_HINTS: Record<ExpansionType, string> = {
  *
  * @remarks
  * The group is scoped by an "Applies to" line. By default it covers everything
- * selected; focusing a row (the funnel on a node, area, folder or file row)
+ * selected; focusing a row (the funnel on a node, folder or file row)
  * switches the toggles, counts and trees to that row alone. Rows with any
  * expansion on stay listed as chips that re-focus them. Excluded nodes are
  * shared by both scopes. The group scrolls into view when a row is focused.
@@ -43,7 +42,6 @@ export default function ExpansionGroups({ nodes }: ExpansionGroupsProps) {
   const {
     state, toggleExpansionGroup, toggleFocus, toggleFocusedExpansion, toggleExpandedNode, setExpandedNodes,
   } = useSelection();
-  const { areas, nodeToAreas, runtimeState } = useAreaStore();
   const { copiedKey, copy } = useCopyFeedback();
   const { expansions, focusKey } = state;
   const rowExpansions = state.rowExpansions ?? new Map<SourceKey, Set<ExpansionType>>();
@@ -72,35 +70,13 @@ export default function ExpansionGroups({ nodes }: ExpansionGroupsProps) {
     });
   };
 
-  const labelFor = (key: SourceKey): { text: string; color?: string } => {
+  const labelFor = (key: SourceKey): { text: string } => {
     const value = key.slice(2);
-    if (key.startsWith('a:')) {
-      const area = areas.find((a) => a.id === value);
-      return { text: area?.name ?? value, color: runtimeState.get(value)?.color ?? '#6b7280' };
-    }
     if (key.startsWith('n:')) return { text: nodesBySymbol.get(value)?.name ?? value };
     return { text: filePaths.has(value) ? value : `${value}/` };
   };
 
-  const renderLabel = (key: SourceKey) => {
-    const { text, color } = labelFor(key);
-    if (!color) return <span>{text}</span>;
-    return (
-      <span
-        style={{
-          display: 'inline-block',
-          background: `${color}26`,
-          color,
-          fontSize: 10,
-          padding: '1px 7px',
-          borderRadius: 9,
-          fontWeight: 500,
-        }}
-      >
-        {text}
-      </span>
-    );
-  };
+  const renderLabel = (key: SourceKey) => <span>{labelFor(key).text}</span>;
 
   const chipStyle = (on: boolean): React.CSSProperties => ({
     border: `1px solid ${on ? '#3b82f6' : '#d1d5db'}`,
@@ -142,7 +118,6 @@ export default function ExpansionGroups({ nodes }: ExpansionGroupsProps) {
     const node = nodesBySymbol.get(nodeId);
     if (!node) return null;
     const isDisabled = disabledIds.has(nodeId);
-    const nodeAreas = nodeToAreas.get(nodeId) ?? [];
     return (
       <label
         key={nodeId}
@@ -163,27 +138,7 @@ export default function ExpansionGroups({ nodes }: ExpansionGroupsProps) {
         }}
       >
         <input type="checkbox" checked={!isDisabled} readOnly style={{ margin: 0, cursor: 'pointer' }} />
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          <span>{node.name}</span>
-          {nodeAreas.map((area) => {
-            const color = runtimeState.get(area.id)?.color ?? '#6b7280';
-            return (
-              <span
-                key={area.id}
-                style={{
-                  background: `${color}26`,
-                  color,
-                  fontSize: 9,
-                  padding: '1px 5px',
-                  borderRadius: 8,
-                  fontWeight: 500,
-                }}
-              >
-                {area.name}
-              </span>
-            );
-          })}
-        </span>
+        <span>{node.name}</span>
       </label>
     );
   };

@@ -3,7 +3,6 @@ import {
   DEFAULT_EDGE_STYLE,
   DEFAULT_NODE_FORCES,
   DEFAULT_EDGE_FORCES,
-  DEFAULT_AREA_FORCES,
   DEFAULT_SIMULATION,
   DEFAULT_REPO_GRAPH_CONFIG,
   INTERNAL_PROCESSING_CONFIG,
@@ -109,24 +108,6 @@ describe('graph-config defaults', () => {
       expect(DEFAULT_SIMULATION.velocityDecay).toBeGreaterThan(0);
     });
   });
-
-  describe('DEFAULT_AREA_FORCES', () => {
-    it('has a positive cluster pull strength', () => {
-      expect(DEFAULT_AREA_FORCES.areaCluster).toBeGreaterThan(0);
-    });
-
-    it('has a positive area-attract strength', () => {
-      expect(DEFAULT_AREA_FORCES.areaAttract).toBeGreaterThan(0);
-    });
-
-    it('has a positive parent-pull strength', () => {
-      expect(DEFAULT_AREA_FORCES.areaParent).toBeGreaterThan(0);
-    });
-
-    it('has a positive anchor-repel strength', () => {
-      expect(DEFAULT_AREA_FORCES.anchorRepel).toBeGreaterThan(0);
-    });
-  });
 });
 
 const makeNode = (overrides?: Partial<AnalysisNode>): AnalysisNode => ({
@@ -218,13 +199,6 @@ describe('DEFAULT_REPO_GRAPH_CONFIG', () => {
 
   it('has default simulation params', () => {
     expect(DEFAULT_REPO_GRAPH_CONFIG.simulation).toEqual(DEFAULT_SIMULATION);
-  });
-
-  it('exposes the area force constants', () => {
-    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaCluster).toBe(DEFAULT_AREA_FORCES.areaCluster);
-    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaAttract).toBe(DEFAULT_AREA_FORCES.areaAttract);
-    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.areaParent).toBe(DEFAULT_AREA_FORCES.areaParent);
-    expect(DEFAULT_REPO_GRAPH_CONFIG.forces.anchorRepel).toBe(DEFAULT_AREA_FORCES.anchorRepel);
   });
 });
 
@@ -391,18 +365,6 @@ describe('mergeConfigs', () => {
     expect(edgeStyle).toEqual(DEFAULT_EDGE_STYLE);
   });
 
-  it('keeps base area force values when override does not specify forces', () => {
-    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {});
-    expect(result.forces.areaCluster).toBe(DEFAULT_AREA_FORCES.areaCluster);
-  });
-
-  it('applies an override area force value', () => {
-    const result = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
-      forces: { areaCluster: 0.99 },
-    });
-    expect(result.forces.areaCluster).toBe(0.99);
-    expect(result.forces.areaAttract).toBe(DEFAULT_AREA_FORCES.areaAttract);
-  });
 });
 
 describe('INTERNAL_PROCESSING_CONFIG', () => {
@@ -843,11 +805,6 @@ describe('createDataFlowViewConfig', () => {
     expect(config.forces.edge(edge)).toEqual({ distance: 90, strength: 0.175 });
   });
 
-  it('exposes fixed storage/api/ux layer radii for the concentric layout, unlike other views', () => {
-    const config = createDataFlowViewConfig([], [functionNode, interfaceNode]);
-
-    expect(config.forces.layerRadii).toEqual({ storage: 100, api: 260, ux: 420 });
-  });
 });
 
 describe('createModulesViewConfig', () => {
@@ -857,10 +814,6 @@ describe('createModulesViewConfig', () => {
     makeEdge({ fromSymbol: 'test#bar.', toSymbol: 'test#baz.', kind: EdgeKind.CALLS }),
   ];
   const config = createModulesViewConfig(modulesEdges);
-
-  it('leaves layerRadii undefined (concentric layering is Data Flow-only)', () => {
-    expect(config.forces.layerRadii).toBeUndefined();
-  });
 
   describe('node filter', () => {
     it('accepts FUNCTION nodes', () => {
@@ -1118,33 +1071,6 @@ describe('Vanilla view', () => {
     expect(links).toHaveLength(3);
   });
 
-  it('bonds remaining pairs that share an area at the area tier, and only when areas are given', () => {
-    const areas = new Map([
-      [cls.scipSymbol, ['ui']], [method.scipSymbol, ['ui']], [sibling.scipSymbol, ['ui']], [other.scipSymbol, ['ui', 'db']],
-    ]);
-    const nodes = [cls, method, sibling, other];
-    const links = buildStructuralBonds(nodes, VANILLA_BONDS, areas);
-    const find = (a: string, b: string) => links.filter((l) => (l.source === a && l.target === b) || (l.source === b && l.target === a));
-    expect(find(other.scipSymbol, cls.scipSymbol)).toHaveLength(1);
-    expect(find(other.scipSymbol, cls.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameArea!);
-    expect(find(cls.scipSymbol, method.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.classMember);
-    expect(find(cls.scipSymbol, sibling.scipSymbol)[0]).toMatchObject(VANILLA_BONDS.sameFile!);
-    expect(links).toHaveLength(6);
-    expect(buildStructuralBonds(nodes, VANILLA_BONDS)).toHaveLength(3);
-    expect(buildStructuralBonds(nodes, { ...VANILLA_BONDS, sameArea: undefined }, areas)).toHaveLength(3);
-  });
-
-  it('bonds area-tagged pairs sharing no area at the cross-area tier, only at nonzero strength', () => {
-    const areas = new Map([[cls.scipSymbol, ['ui']], [method.scipSymbol, ['ui']], [sibling.scipSymbol, ['db']], [other.scipSymbol, ['ui', 'db']]]);
-    const nodes = [cls, method, sibling, other, makeNode({ name: 'untagged', filePath: '/src/c.ts', scipSymbol: 'pkg c.ts/u().' })];
-    const on = { ...VANILLA_BONDS, diffArea: { distance: 300, strength: 0.02 } };
-    const diff = buildStructuralBonds(nodes, on, areas).filter((l) => l.distance === 300);
-    const pairs = diff.map((l) => [l.source, l.target].sort().join('|'));
-    expect(pairs.sort()).toEqual([[cls.scipSymbol, sibling.scipSymbol].sort().join('|'), [method.scipSymbol, sibling.scipSymbol].sort().join('|')].sort());
-    expect(diff[0]).toMatchObject(on.diffArea);
-    expect(buildStructuralBonds(nodes, VANILLA_BONDS, areas).filter((l) => l.distance === 300)).toHaveLength(0);
-  });
-
   it('orders bond tiers: class member strongest and shortest, then same-file, then standard edges', () => {
     const std = VANILLA_CONFIG.forces.edge(makeEdge());
     expect(VANILLA_BONDS.classMember.distance).toBeLessThanOrEqual(20);
@@ -1152,15 +1078,8 @@ describe('Vanilla view', () => {
     expect(VANILLA_BONDS.sameFile!.distance).toBe(50);
     expect(VANILLA_BONDS.sameFile!.strength).toBeGreaterThan(std.strength);
     expect(std.distance).toBe(400);
-    expect(VANILLA_BONDS.sameArea!.strength).toBeLessThan(VANILLA_BONDS.sameFile!.strength);
-    expect(VANILLA_BONDS.sameArea!.strength).toBeGreaterThan(std.strength);
-    expect(VANILLA_BONDS.sameArea!.distance).toBeGreaterThan(VANILLA_BONDS.sameFile!.distance);
   });
 
-  it('has no area-to-area forces', () => {
-    const f = VANILLA_CONFIG.forces;
-    expect([f.areaAttract, f.areaParent, f.anchorRepel, f.areaPin, f.crossAreaPull, f.areaHullCollision]).toEqual([0, 0, 0, 0, 0, 0]);
-  });
 });
 
 describe('Vanilla (directory) view', () => {
@@ -1197,11 +1116,10 @@ describe('Vanilla (directory) view', () => {
     expect(hubs.filter((h) => h.kind === 'FOLDER').map((h) => h.path).sort()).toEqual(['', '/src']);
   });
 
-  it('keeps the class bond but drops the pairwise file/area bonds, and zeroes every area force', () => {
+  it('keeps the class bond but drops the pairwise file bonds', () => {
     const f = VANILLA_DIRECTORY_CONFIG.forces;
     expect(f.bonds).toEqual({ classMember: VANILLA_BONDS.classMember });
     expect(buildStructuralBonds([a1, a2, b], f.bonds!)).toHaveLength(0);
-    expect([f.areaCluster, f.areaAttract, f.areaParent, f.anchorRepel, f.areaPin, f.crossAreaPull, f.areaHullCollision]).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 
   it('orders directory tiers node→file strongest, hides them by default, and keeps hubs invisible and chargeless', () => {

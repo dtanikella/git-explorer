@@ -130,18 +130,6 @@
   .lock li{margin:0;}
   .lock .more{color:var(--dim);}
 
-  /* area overlay tree */
-  .tree{max-height:128px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
-  .tree::-webkit-scrollbar{width:6px;} .tree::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
-  .arow{display:flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 0;min-height:21px;}
-  .arow .chev{width:11px;text-align:center;color:var(--muted);font-size:10px;cursor:pointer;flex:0 0 auto;}
-  .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto;}
-  .arow .r{flex:1 1 auto;min-width:0;padding:0;}
-  .arow .nm{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .arow.off .nm{color:var(--dim);}
-  .solo{display:none;font-size:9px;color:var(--accent);cursor:pointer;background:none;border:0;padding:0 0 0 4px;}
-  .arow:hover .solo,.arow .solo.active{display:inline;}
-  .arow .solo.active{color:var(--ok);}
   .forces{font:9.5px ui-monospace,monospace;color:var(--muted);line-height:1.55;margin-top:2px;}
 
   /* P3: tabs, sliders */
@@ -157,10 +145,6 @@
   .sl.inh .lb,.sl.inh .vv{opacity:.5;font-style:italic;} .sl.inh input[type=range]{opacity:.45;}
   .sl.inh .clr{visibility:hidden;}
   .clr{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;} .clr:hover{color:var(--text);}
-  .ovc{border:1px solid var(--line2);border-radius:7px;padding:5px 7px 3px;margin:6px 0;}
-  .ovc .oh{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:2px;}
-  .ovc .oh .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .ovadd{width:100%;height:24px;margin:4px 0;border:1px dashed var(--line2);border-radius:6px;background:var(--panel2);color:var(--muted);font-size:10.5px;padding:0 6px;}
   .sl .lb{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .sl .vv{font:9.5px ui-monospace,monospace;color:var(--muted);text-align:right;}
   .sl .bd{font:8.5px ui-monospace,monospace;color:var(--dim);grid-column:2;margin-top:-3px;}
@@ -254,18 +238,16 @@
   <pre>{ version, metadata: { repoName, commit, generatedAt, … },
   nodes:     [{ id, name, type, file, line, exported, test, xfile, refsIn, refsOut }],
   edges:     [{ kind, from, to, external }],   // from → nodes[]; to → nodes[] (or externals[] when external)
-  externals: [{ name, pkg }],
-  areas:     [{ id, name, parent, color, contains: [node index…] }] }</pre>
+  externals: [{ name, pkg }] }</pre>
   <p>Produce it with <code>npx tsx scripts/dump-analysis.ts [repoPath] [outFile]</code> (same SCIP + tree-sitter pipeline as the app). Swap it by regenerating, or by dropping in any <code>data.js</code> with those keys; every count, toggle and tree in the bench is derived from the snapshot.</p>
 
   <h4>Decision 4 · Playground preset &amp; tiers</h4>
-  <p><b>Playground</b> is a fourth, bench-only preset: the union of the three code presets' node types and edge kinds. Its tunables resolve through tiers, most specific first: <b>edge kind / node role → per-area override → area default → global</b>. A dimmed slider is inheriting the tier above; <b>×</b> clears an override. Tiers cover edge distance and strength, charge, collision padding and gravity (a per-node pull to the center — <code>centerStrength</code> itself stays <code>d3.forceCenter</code>, global only).</p>
-  <p>The app cannot express area tiers today (<code>forces.node()</code> / <code>forces.edge()</code> never see areas) and has one global collision padding. The emit therefore carries kind and role charge, distance and strength into the <code>RepoGraphConfig</code>, and puts the rest in a <code>…_BENCH_ONLY_TIERS</code> const.</p>
-  <p><b>Area clustering</b> is now a port of <code>lib/areas/forces.ts</code> for every preset: one anchor per area plus <code>clusterPull</code>, <code>areaAttract</code>, <code>parentPull</code>, <code>anchorRepel</code>, <code>crossAreaPull</code> and <code>areaHullCollision</code>, each with a slider on the <i>areas</i> tab. <code>areaPin</code> is not simulated (the snapshot has no <code>pinnedZones</code>). The port is a copy, so it can drift from the app's forces. It differs from <code>RepoGraph.tsx</code> in three places, all to stop the layout drifting outward on every reheat: anchors are integrated outside d3's many-body force (as sim nodes they are pushed away by every node's charge), <code>areaHullCollision</code> clamps each node's summed push (nested areas otherwise stack pushes on the same node), and <code>anchorRepel</code>'s size factor is capped at 3 (uncapped, repel and cluster pull feed each other). Anchor seeds are deterministic, so a snapshot always lays out the same way.</p>
+  <p><b>Playground</b> is a fourth, bench-only preset: the union of the three code presets' node types and edge kinds. Its tunables resolve through tiers, most specific first: <b>edge kind / node role → global</b>. A dimmed slider is inheriting the global value; <b>×</b> clears an override. Tiers cover edge distance and strength, charge, collision padding and gravity (a per-node pull to the center — <code>centerStrength</code> itself stays <code>d3.forceCenter</code>, global only).</p>
+  <p>The app has one global collision padding and no per-node gravity. The emit therefore carries kind and role charge, distance and strength into the <code>RepoGraphConfig</code>, and puts the rest in a <code>…_BENCH_ONLY_TIERS</code> const.</p>
 
   <h4>Decision 5 · Vanilla (directory)</h4>
-  <p><b>Vanilla (directory)</b> is Vanilla with file and folder structure in place of areas. Every node is tied to a hidden <b>file hub</b> (<code>IN_FILE</code>), every file hub to its <b>folder hub</b> (<code>IN_FOLDER</code>), and every folder hub to its parent folder's hub (<code>IN_PARENT</code>, direct parent only). Each tier has its own distance, strength and edge style; the links are simulated but drawn only when a tier is switched to <i>shown</i>. Hubs are anchors: near-invisible by default (opacity 0, no charge, no collision) and never hoverable, selectable or counted as nodes.</p>
-  <p>Hubs replace the pairwise <code>sameFile</code> bond (n&sup2; links for a big file) with one link per node; the class &harr; member bond is kept. Area data is ignored, and every area force is zero. The hub builder is <code>lib/analysis/directory-hubs.ts</code>; this bench keeps a copy of it, so it can drift.</p>
+  <p><b>Vanilla (directory)</b> is Vanilla with file and folder structure in place of pairwise file bonds. Every node is tied to a hidden <b>file hub</b> (<code>IN_FILE</code>), every file hub to its <b>folder hub</b> (<code>IN_FOLDER</code>), and every folder hub to its parent folder's hub (<code>IN_PARENT</code>, direct parent only). Each tier has its own distance, strength and edge style; the links are simulated but drawn only when a tier is switched to <i>shown</i>. Hubs are anchors: near-invisible by default (opacity 0, no charge, no collision) and never hoverable, selectable or counted as nodes.</p>
+  <p>Hubs replace the pairwise <code>sameFile</code> bond (n&sup2; links for a big file) with one link per node; the class &harr; member bond is kept. The hub builder is <code>lib/analysis/directory-hubs.ts</code>; this bench keeps a copy of it, so it can drift.</p>
   <p><b>File overlays.</b> Each file with at least a few nodes gets one overlay centered on its hub: a circle whose radius is a percentile of node distance, molded with smooth bulges to reach every node outside it, so by default (<i>mold reach</i> &infin;) the outline hugs all of the file's nodes. Lower <i>circle covers</i>, <i>padding</i> and <i>mold smooth</i> to tighten it. Overlays are display-only (P2) and never feed the simulation. Because d3's link force leaves a hub with hundreds of springs nearly immobile, hubs drift off their own members; the <i>center on members</i> force (P3, forces tab) pulls each hub to its members' centroid, and is <code>forces.directory.hubCenter</code> in the app. The overlay settings are <code>forces.directory.overlay</code>; the app computes and draws them in <code>lib/analysis/file-overlay.ts</code>, a port of this bench's code that can drift.</p>
   <p><b>Folder physics</b> (bench-only for now). Files organize around their immediate folder with two forces that act on a whole file at once: <i>files &rarr; folder</i> nudges every node of a file toward its folder hub, and <i>sibling separation</i> treats sibling files as circles and pushes overlapping ones apart, leaving the <i>sibling gap</i>. Springs between hubs can't do this: d3 splits a link's pull by link count, so a file hub with hundreds of springs never moves, and long-range node repulsion overwhelms a weak spring. <i>repel reach</i> caps the many-body force's distance, so far-away files stop pushing each other out; it changes the whole layout, and 3000 means unlimited. Only files pack, not sub-folders.</p>
 
@@ -313,7 +295,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 /* ═══════════════════════════════════════════════════════════════════════════
    1 · snapshot → indexes (derived once; the snapshot never changes while tuning)
    ═══════════════════════════════════════════════════════════════════════════ */
-const NODES = SNAP.nodes, EDGES = SNAP.edges, EXTS = SNAP.externals || [], AREAS = SNAP.areas || [];
+const NODES = SNAP.nodes, EDGES = SNAP.edges, EXTS = SNAP.externals || [];
 const N = NODES.length;
 NODES.forEach((n, i) => { n.idx = i; });
 
@@ -350,38 +332,6 @@ const KINDS_PRESENT = [...new Set(EDGES.map((e) => e.kind))].sort((a, b) => (KIN
 const kindCounts = (L, k) => { const c = KIND_CNT[L.excludeTests ? 'src' : 'all']; return { int: c.int[k] || 0, ext: c.ext[k] || 0 }; };
 const extEdgeCount = (L) => Object.values(KIND_CNT[L.excludeTests ? 'src' : 'all'].ext).reduce((a, b) => a + b, 0);
 
-// areas: tree + transitive membership (an area's nodes = its own + every descendant's)
-const AREA_BY_ID = new Map(AREAS.map((a) => [a.id, a]));
-const AREA_KIDS = new Map(AREAS.map((a) => [a.id, []]));
-for (const a of AREAS) if (a.parent && AREA_KIDS.has(a.parent)) AREA_KIDS.get(a.parent).push(a);
-const AREA_ROOTS = AREAS.filter((a) => !a.parent || !AREA_BY_ID.has(a.parent));
-const AREA_ALL = new Map();      // id → Set(node idx), transitive
-const NODE_AREAS = new Map();    // node idx → direct areas
-const AREA_DESC = new Map();     // id → [descendant ids]
-function collectArea(a, seen) {
-  if (AREA_ALL.has(a.id)) return AREA_ALL.get(a.id);
-  const set = new Set(a.contains), desc = [];
-  seen.add(a.id);
-  for (const k of AREA_KIDS.get(a.id) || []) {
-    if (seen.has(k.id)) continue;
-    for (const i of collectArea(k, seen)) set.add(i);
-    desc.push(k.id, ...AREA_DESC.get(k.id));
-  }
-  AREA_ALL.set(a.id, set); AREA_DESC.set(a.id, desc);
-  return set;
-}
-for (const a of AREAS) collectArea(a, new Set());
-for (const a of AREAS) for (const i of a.contains) { if (!NODE_AREAS.has(i)) NODE_AREAS.set(i, []); NODE_AREAS.get(i).push(a); }
-// every area a node sits in — direct areas plus their ancestors — smallest area first (the tier resolver takes the first match)
-const CHAIN = new Map();
-function chainOf(idx) {
-  let c = CHAIN.get(idx); if (c) return c;
-  const seen = new Set(); c = [];
-  for (const a of NODE_AREAS.get(idx) || []) for (let x = a; x && !seen.has(x.id); x = x.parent ? AREA_BY_ID.get(x.parent) : null) { seen.add(x.id); c.push(x); }
-  c.sort((p, q) => AREA_ALL.get(p.id).size - AREA_ALL.get(q.id).size);
-  CHAIN.set(idx, c); return c;
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    2 · CODE HALF — policy mirrored from lib/analysis/graph-config.ts (shown as locked rows)
        Nothing here is a control; the live half (P1 on-sets, P3 magnitudes) is edited on the rail.
@@ -395,20 +345,17 @@ const ROLE_COLORS = { FUNCTION: '#3b82f6', METHOD: '#60a5fa', CLASS: '#8b5cf6', 
 const OTHER_COLOR = '#6b7280';                    // DEFAULT_NODE_STYLE.color
 const EXTERNAL_COLOR = '#9ca3af';                 // bench-only stub styling for external targets
 const ALL_KINDS = ['CALLS', 'EXTENDS', 'IMPLEMENTS', 'INSTANTIATES', 'IMPORTS', 'USES_TYPE'];
-// area-force magnitudes default to DEFAULT_AREA_FORCES in graph-config.ts (areaPin has no bench control: the snapshot carries no pinnedZones)
-const SIM_DEFAULTS = { centerStrength: 0.1, collisionPadding: 10, alphaDecay: 0.0228, velocityDecay: 0.4,
-  areaCluster: 0.3, areaAttract: 0.15, areaParent: 0.5, anchorRepel: 4000, crossAreaPull: 0.25, areaHullCollision: 0.5 };
-// Playground tiers — every value resolves most-specific-first: kind / role → per-area override → area default → global.  null = inherit.
+const SIM_DEFAULTS = { centerStrength: 0.1, collisionPadding: 10, alphaDecay: 0.0228, velocityDecay: 0.4 };
+// Playground tiers — every value resolves most-specific-first: kind / role → global.  null = inherit.
 const TIER_ROLES = ['FUNCTION', 'METHOD', 'CONSTRUCTOR', 'CLASS', 'INTERFACE', 'TYPE_ALIAS'];
 const TIER_INHERIT = (() => {
-  const o = { areaEdgeDistance: null, areaEdgeStrength: null, areaCharge: null, areaCollisionPadding: null, areaGravity: null };
+  const o = {};
   for (const k of ALL_KINDS) { o['dist_' + k] = null; o['str_' + k] = null; }
   for (const t of TIER_ROLES) { o['charge_' + t] = null; o['collisionPadding_' + t] = null; o['gravity_' + t] = null; }
   return o;
 })();
 const ROLE_PARAMS = { color_FUNCTION: ROLE_COLORS.FUNCTION, color_METHOD: ROLE_COLORS.METHOD, color_CLASS: ROLE_COLORS.CLASS,
   color_INTERFACE: ROLE_COLORS.INTERFACE, color_TYPE_ALIAS: ROLE_COLORS.TYPE_ALIAS, color_MODULE: ROLE_COLORS.MODULE, color_other: OTHER_COLOR };
-const DATA_FLOW_LAYER_RADII = { storage: 100, api: 260, ux: 420 };
 
 // One entry per code-defined view preset. `defaults` doubles as the list of tunables the preset exposes.
 const BASES = {
@@ -468,7 +415,6 @@ const BASES = {
     nodeTypes: ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS'],
     edgeKinds: ALL_KINDS.filter((k) => k !== 'IMPORTS'),
     metric: 'processing→data USES_TYPE count',
-    layerRadii: DATA_FLOW_LAYER_RADII,
     defaults: Object.assign({
       processingRadius: 6, nodeRadiusMin: 12, nodeRadiusMax: 30, nodeOpacity: 1,
       edgeDistance: 90, edgeStrengthBase: 0.35,
@@ -482,7 +428,6 @@ const BASES = {
       'data nodes (INTERFACE, TYPE_ALIAS): labeled, radius = scaledValue(usage count, min, max)',
       'processing nodes: fixed radius, no label',
       'forces.edge strength = max(0.05, base / √usage(target))',
-      'forces.layerRadii = { storage: 100, api: 260, ux: 420 } — areas of those names only',
     ],
     nodeGate: () => true,
     radius: (n, P) => (DATA_TYPES.has(n.type) ? scaledValue(metrics().usage[n.idx], P.nodeRadiusMin, P.nodeRadiusMax) : P.processingRadius),
@@ -507,19 +452,17 @@ BASES.playground = {
     'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS | INTERFACE | TYPE_ALIAS',
     'filters.edge = every kind, !edge.isExternal',
     'style.node radius = scaledValue(outboundRefs.length, min, max)  ·  data nodes (INTERFACE, TYPE_ALIAS) labeled',
-    'tier order (most specific wins): edge kind / node role → per-area override → area default → global',
-    'area default applies to edges with both ends in one area, and to nodes that belong to any area',
-    'per-area override: the smallest area that has one wins (fewest members)',
+    'tier order (most specific wins): edge kind / node role → global',
     'gravity = per-node pull to the canvas center (d3.forceX/forceY); centerStrength stays d3.forceCenter (global only)',
   ],
   nodeGate: () => true,
   radius: (n, P) => scaledValue(n.refsOut, P.nodeRadiusMin, P.nodeRadiusMax),
   color: (n, P) => P['color_' + n.type] || P.color_other,
   nodeLabel: (n) => DATA_TYPES.has(n.type),
-  charge: (n, P, c, s) => c.tier.node(s, 'charge', 'charge', 'areaCharge', 'charge_') - scaledValue(n.refsIn, 0, P.chargeInbound),
-  pad: (n, P, c, s) => c.tier.node(s, 'pad', 'collisionPadding', 'areaCollisionPadding', 'collisionPadding_'),
-  gravity: (n, P, c, s) => c.tier.node(s, 'gravity', 'gravity', 'areaGravity', 'gravity_'),
-  link: (e, P, c, l) => ({ distance: c.tier.edge(l, 'dist', 'edgeDistance', 'areaEdgeDistance', 'dist_'), strength: c.tier.edge(l, 'str', 'edgeStrength', 'areaEdgeStrength', 'str_') }),
+  charge: (n, P, c, s) => c.tier.node(s, 'charge', 'charge_') - scaledValue(n.refsIn, 0, P.chargeInbound),
+  pad: (n, P, c, s) => c.tier.node(s, 'collisionPadding', 'collisionPadding_'),
+  gravity: (n, P, c, s) => c.tier.node(s, 'gravity', 'gravity_'),
+  link: (e, P, c, l) => ({ distance: c.tier.edge(l, 'edgeDistance', 'dist_'), strength: c.tier.edge(l, 'edgeStrength', 'str_') }),
 };
 BASES.vanilla = {
   id: 'vanilla', label: 'Vanilla', ref: 'VANILLA_CONFIG', bonds: true,
@@ -529,19 +472,16 @@ BASES.vanilla = {
   defaults: Object.assign({
     nodeRadiusMin: 6, nodeRadiusMax: 6, nodeOpacity: 1,            // DEFAULT_NODE_STYLE: fixed radius 6 (min = max ⇒ scaledValue returns min)
     edgeDistance: 400, edgeStrength: 0.05,
-    bondClassDist: 20, bondClassStr: 1, bondFileDist: 50, bondFileStr: 0.6, bondAreaDist: 120, bondAreaStr: 0.3, bondDiffDist: 300, bondDiffStr: 0,
+    bondClassDist: 20, bondClassStr: 1, bondFileDist: 50, bondFileStr: 0.6, 
     edgeWidth: 1, edgeOpacity: 0.6, edgeStyle: 'solid', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',   // DEFAULT_EDGE_STYLE
     charge: -400,
-  }, SIM_DEFAULTS, ROLE_PARAMS, { areaAttract: 0, areaParent: 0, anchorRepel: 0, crossAreaPull: 0, areaHullCollision: 0 }),
+  }, SIM_DEFAULTS, ROLE_PARAMS),
   policy: [
     'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS',
     'filters.edge = every kind, !edge.isExternal — each one a weak, long spring (the "everything else" tier)',
     'forces.bonds.classMember = a class ↔ each of its members (SCIP owner prefix): strongest, shortest (≤ 20px)',
     'forces.bonds.sameFile = any two nodes declared in one file, unless already class ↔ member: strong, 50px',
-    'forces.bonds.sameArea = any two nodes sharing a direct area, unless already bonded at a stronger tier: loose, 120px (only with areas on)',
-    'forces.bonds.diffArea = any two area-tagged nodes sharing no direct area: 300px, strength 0 (off) — a long spring that pushes areas apart; ~n² links when on',
     'bond links are simulated, never drawn; a pair gets one bond at its strongest tier',
-    'area ↔ area forces (attract, parent pull, anchor repel, cross pull, hull collide) are 0; areaCluster is the only area force left',
     'style.node = DEFAULT_NODE_STYLE (radius 6, opacity 1); style.edge = DEFAULT_EDGE_STYLE (solid #9ca3af, 1px, 0.6); role colors as the other views',
     'radius is bench-tunable: min = max = 6 reproduces the code; a spread sizes nodes by outboundRefs.length',
   ],
@@ -552,7 +492,7 @@ BASES.vanilla = {
   charge: (n, P) => P.charge,
   link: (e, P) => ({ distance: P.edgeDistance, strength: P.edgeStrength }),
 };
-// Vanilla (directory): Vanilla's node set, call edges and class bond, with file / folder hubs in place of areas (lib/analysis/directory-hubs.ts).
+// Vanilla (directory): Vanilla's node set, call edges and class bond, with file / folder hubs in place of pairwise file bonds (lib/analysis/directory-hubs.ts).
 // Hubs are invisible anchors: node → file hub (IN_FILE), file hub → folder hub (IN_FOLDER), folder hub → parent folder hub (IN_PARENT).
 const DIR_DEFAULTS = {
   dirFileDist: 20, dirFileStr: 1, dirFolderDist: 80, dirFolderStr: 0.6, dirParentDist: 160, dirParentStr: 0.3,
@@ -567,28 +507,27 @@ const DIR_DEFAULTS = {
 };
 const DIR_TIERS = [['File', 'node → file', 'IN_FILE'], ['Folder', 'file → folder', 'IN_FOLDER'], ['Parent', 'folder → parent folder', 'IN_PARENT']];
 BASES.vanillaDirectory = Object.assign({}, BASES.vanilla, {
-  id: 'vanillaDirectory', label: 'Vanilla (directory)', ref: 'VANILLA_DIRECTORY_CONFIG', directory: true, noAreas: true,
+  id: 'vanillaDirectory', label: 'Vanilla (directory)', ref: 'VANILLA_DIRECTORY_CONFIG', directory: true,
   defaults: (() => {
     const d = Object.assign({}, BASES.vanilla.defaults);
-    for (const k of ['bondFileDist', 'bondFileStr', 'bondAreaDist', 'bondAreaStr', 'bondDiffDist', 'bondDiffStr', 'areaCluster', 'areaAttract', 'areaParent', 'anchorRepel', 'crossAreaPull', 'areaHullCollision']) delete d[k];
+    for (const k of ['bondFileDist', 'bondFileStr']) delete d[k];
     return Object.assign(d, DIR_DEFAULTS);
   })(),
   policy: [
     'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS',
     'filters.edge = every kind, !edge.isExternal — each one a weak, long spring (the "everything else" tier)',
-    'forces.bonds.classMember = a class ↔ each of its members (SCIP owner prefix): strongest, shortest (≤ 20px); no pairwise same-file / same-area / cross-area bonds',
+    'forces.bonds.classMember = a class ↔ each of its members (SCIP owner prefix): strongest, shortest (≤ 20px); no pairwise same-file bonds',
     'forces.directory.tiers.IN_FILE = every node ↔ the hub of the file it is declared in (a star, not n² pairs)',
     'forces.directory.tiers.IN_FOLDER = every file hub ↔ the hub of its folder; IN_PARENT = every folder hub ↔ its parent folder hub (direct parent only; the root folder has none)',
     'hubs are anchors: simulated, never selectable, searchable or hoverable; opacity 0 hides them, charge 0 leaves them out of the many-body force, no collision',
     'directory links are simulated and, by default, not drawn; each tier has its own style, switched on in the edges tab',
-    'area data is ignored: every area force is 0',
     'style.node = DEFAULT_NODE_STYLE (radius 6, opacity 1); style.edge = DEFAULT_EDGE_STYLE (solid #9ca3af, 1px, 0.6); role colors as the other views',
   ],
 });
 const BASE_ORDER = ['vanilla', 'vanillaDirectory', 'internal', 'modules', 'dataflow', 'playground'];   // switcher cycle order
 
 // ── P3 registry: code-defined groups (tabs → subgroups) and bounds ─────────────────────────────
-const TABS = ['nodes', 'edges', 'forces', 'areas', 'color'];
+const TABS = ['nodes', 'edges', 'forces', 'color'];
 const MAP_DESC = {
   nodeRadiusMin: 'style.node().radius ← scaledValue(<metric>, MIN, max)',
   nodeRadiusMax: 'style.node().radius ← scaledValue(<metric>, min, MAX)',
@@ -602,8 +541,6 @@ const MAP_DESC = {
   charge: 'forces.node().charge', chargeInbound: 'forces.node().charge −= scaledValue(referencedAt.length, 0, MAX)',
   centerStrength: 'simulation.centerStrength', collisionPadding: 'simulation.collisionPadding',
   alphaDecay: 'simulation.alphaDecay', velocityDecay: 'simulation.velocityDecay',
-  areaCluster: 'forces.areaCluster  (clusterPull multiplier)', areaAttract: 'forces.areaAttract', areaParent: 'forces.areaParent',
-  anchorRepel: 'forces.anchorRepel', crossAreaPull: 'forces.crossAreaPull', areaHullCollision: 'forces.areaHullCollision',
   dataColor: 'style.node().color (data nodes)', processingColor: 'style.node().color (processing nodes)',
 };
 const PARAM_DEFS = [];
@@ -618,10 +555,6 @@ def({ key: 'bondClassDist', tab: 'edges', sub: 'bond · class ↔ member', label
 def({ key: 'bondClassStr', tab: 'edges', sub: 'bond · class ↔ member', label: 'strength', min: 0, max: 1, step: 0.05, map: 'forces.bonds.classMember.strength' });
 def({ key: 'bondFileDist', tab: 'edges', sub: 'bond · same file', label: 'distance', min: 5, max: 200, step: 5, map: 'forces.bonds.sameFile.distance' });
 def({ key: 'bondFileStr', tab: 'edges', sub: 'bond · same file', label: 'strength', min: 0, max: 1, step: 0.05, map: 'forces.bonds.sameFile.strength' });
-def({ key: 'bondAreaDist', tab: 'edges', sub: 'bond · same area', label: 'distance', min: 5, max: 400, step: 5, needsAreas: true, map: 'forces.bonds.sameArea.distance' });
-def({ key: 'bondAreaStr', tab: 'edges', sub: 'bond · same area', label: 'strength', min: 0, max: 1, step: 0.05, needsAreas: true, map: 'forces.bonds.sameArea.strength' });
-def({ key: 'bondDiffDist', tab: 'edges', sub: 'bond · different area', label: 'distance', min: 50, max: 1000, step: 10, needsAreas: true, map: 'forces.bonds.diffArea.distance' });
-def({ key: 'bondDiffStr', tab: 'edges', sub: 'bond · different area', label: 'strength', min: 0, max: 0.2, step: 0.005, needsAreas: true, map: 'forces.bonds.diffArea.strength' });
 for (const [k, label, kind] of DIR_TIERS) {
   const sub = 'directory · ' + label, at = 'forces.directory.tiers.' + kind, shown = (P) => P['dir' + k + 'Link'] === 'shown';
   def({ key: 'dir' + k + 'Dist', tab: 'edges', sub, label: 'distance', min: 5, max: 400, step: 5, map: at + '.distance' });
@@ -645,38 +578,24 @@ for (const [k, kind] of [['File', 'FILE'], ['Folder', 'FOLDER']]) {
   def({ key: 'hub' + k + 'Opacity', tab: 'nodes', sub: 'directory hubs', label: lc + ' opacity', min: 0, max: 1, step: 0.05, map: at + '.opacity  (0 = invisible anchor)' });
   def({ key: 'hub' + k + 'Color', tab: 'color', sub: 'directory hubs', label: lc, type: 'color', map: at + '.color' });
 }
-def({ key: 'areaEdgeDistance', tab: 'edges', sub: 'link · area default', label: 'distance', min: 20, max: 400, step: 5, nullable: true, needsAreas: true, from: ['edgeDistance'],
-  map: 'bench-only tier: edges with both ends in one area (no RepoGraphConfig field — forces.edge() sees no areas)' });
-def({ key: 'areaEdgeStrength', tab: 'edges', sub: 'link · area default', label: 'strength', min: 0, max: 1, step: 0.05, nullable: true, needsAreas: true, from: ['edgeStrength'],
-  map: 'bench-only tier: edges with both ends in one area (no RepoGraphConfig field — forces.edge() sees no areas)' });
 for (const k of ALL_KINDS) {
-  def({ key: 'dist_' + k, tab: 'edges', sub: 'link · ' + k, label: 'distance', min: 20, max: 400, step: 5, kind: k, nullable: true, from: ['areaEdgeDistance', 'edgeDistance'] });
-  def({ key: 'str_' + k, tab: 'edges', sub: 'link · ' + k, label: 'strength', min: 0, max: 1, step: 0.05, kind: k, nullable: true, from: ['areaEdgeStrength', 'edgeStrength'] });
+  def({ key: 'dist_' + k, tab: 'edges', sub: 'link · ' + k, label: 'distance', min: 20, max: 400, step: 5, kind: k, nullable: true, from: ['edgeDistance'] });
+  def({ key: 'str_' + k, tab: 'edges', sub: 'link · ' + k, label: 'strength', min: 0, max: 1, step: 0.05, kind: k, nullable: true, from: ['edgeStrength'] });
 }
 def({ key: 'edgeStrengthBase', tab: 'edges', sub: 'link force', label: 'str base', min: 0.05, max: 1, step: 0.01 });
 def({ key: 'edgeWidth', tab: 'edges', sub: 'edge style', label: 'width', min: 0.5, max: 4, step: 0.1 });
 def({ key: 'edgeOpacity', tab: 'edges', sub: 'edge style', label: 'opacity', min: 0.05, max: 1, step: 0.05 });
 const roleLabel = (t) => t.toLowerCase().replace('_', ' ');
-const TIER_MAP_AREA = 'bench-only tier: nodes that belong to any area (no RepoGraphConfig field — forces.node() sees no areas)';
 def({ key: 'charge', tab: 'forces', sub: 'repulsion', tsub: 'repulsion · global', label: 'charge', min: -1500, max: 0, step: 10 });
 def({ key: 'chargeInbound', tab: 'forces', sub: 'repulsion', tsub: 'repulsion · global', label: '+inbound', min: 0, max: 3000, step: 50 });
-def({ key: 'areaCharge', tab: 'forces', sub: 'repulsion · area default', label: 'charge', min: -1500, max: 0, step: 10, nullable: true, needsAreas: true, from: ['charge'], map: TIER_MAP_AREA });
-for (const t of TIER_ROLES) def({ key: 'charge_' + t, tab: 'forces', sub: 'repulsion · by role', label: roleLabel(t), min: -1500, max: 0, step: 10, nodeType: t, nullable: true, from: ['areaCharge', 'charge'], family: 'charge_<SyntaxType>', map: 'forces.node().charge by node.syntaxType, else the tier above' });
+for (const t of TIER_ROLES) def({ key: 'charge_' + t, tab: 'forces', sub: 'repulsion · by role', label: roleLabel(t), min: -1500, max: 0, step: 10, nodeType: t, nullable: true, from: ['charge'], family: 'charge_<SyntaxType>', map: 'forces.node().charge by node.syntaxType, else the tier above' });
 def({ key: 'centerStrength', tab: 'forces', sub: 'centering & collision', tsub: 'centering · translate (global only)', label: 'center', min: 0, max: 1, step: 0.01 });
 def({ key: 'collisionPadding', tab: 'forces', sub: 'centering & collision', tsub: 'collision · global', label: 'collide pad', min: 0, max: 40, step: 1 });
-def({ key: 'areaCollisionPadding', tab: 'forces', sub: 'collision · area default', label: 'collide pad', min: 0, max: 40, step: 1, nullable: true, needsAreas: true, from: ['collisionPadding'], map: TIER_MAP_AREA });
-for (const t of TIER_ROLES) def({ key: 'collisionPadding_' + t, tab: 'forces', sub: 'collision · by role', label: roleLabel(t), min: 0, max: 40, step: 1, nodeType: t, nullable: true, from: ['areaCollisionPadding', 'collisionPadding'], family: 'collisionPadding_<SyntaxType>', map: 'bench-only tier: RepoGraph uses one simulation.collisionPadding' });
+for (const t of TIER_ROLES) def({ key: 'collisionPadding_' + t, tab: 'forces', sub: 'collision · by role', label: roleLabel(t), min: 0, max: 40, step: 1, nodeType: t, nullable: true, from: ['collisionPadding'], family: 'collisionPadding_<SyntaxType>', map: 'bench-only tier: RepoGraph uses one simulation.collisionPadding' });
 def({ key: 'gravity', tab: 'forces', sub: 'gravity', tsub: 'gravity · global (pull to center)', label: 'gravity', min: 0, max: 0.5, step: 0.005, map: 'bench-only: per-node d3.forceX/forceY toward the center — no RepoGraphConfig field' });
-def({ key: 'areaGravity', tab: 'forces', sub: 'gravity · area default', label: 'gravity', min: 0, max: 0.5, step: 0.005, nullable: true, needsAreas: true, from: ['gravity'], map: TIER_MAP_AREA });
-for (const t of TIER_ROLES) def({ key: 'gravity_' + t, tab: 'forces', sub: 'gravity · by role', label: roleLabel(t), min: 0, max: 0.5, step: 0.005, nodeType: t, nullable: true, from: ['areaGravity', 'gravity'], family: 'gravity_<SyntaxType>', map: 'bench-only tier: per-node pull to the center by node.syntaxType' });
+for (const t of TIER_ROLES) def({ key: 'gravity_' + t, tab: 'forces', sub: 'gravity · by role', label: roleLabel(t), min: 0, max: 0.5, step: 0.005, nodeType: t, nullable: true, from: ['gravity'], family: 'gravity_<SyntaxType>', map: 'bench-only tier: per-node pull to the center by node.syntaxType' });
 def({ key: 'alphaDecay', tab: 'forces', sub: 'cooling', label: 'α decay', min: 0.001, max: 0.1, step: 0.001 });
 def({ key: 'velocityDecay', tab: 'forces', sub: 'cooling', label: 'v decay', min: 0.05, max: 0.9, step: 0.05 });
-def({ key: 'areaCluster', tab: 'areas', sub: 'area clustering', label: 'cluster', min: 0, max: 1, step: 0.05, needsAreas: true });
-def({ key: 'areaAttract', tab: 'areas', sub: 'area clustering', label: 'attract', min: 0, max: 1, step: 0.01, needsAreas: true });
-def({ key: 'areaParent', tab: 'areas', sub: 'area clustering', label: 'parent pull', min: 0, max: 2, step: 0.05, needsAreas: true });
-def({ key: 'anchorRepel', tab: 'areas', sub: 'area clustering', label: 'anchor repel', min: 0, max: 20000, step: 100, needsAreas: true });
-def({ key: 'crossAreaPull', tab: 'areas', sub: 'area clustering', label: 'cross pull', min: 0, max: 1, step: 0.05, needsAreas: true });
-def({ key: 'areaHullCollision', tab: 'areas', sub: 'area clustering', label: 'hull collide', min: 0, max: 2, step: 0.05, needsAreas: true });
 for (const t of ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS']) def({ key: 'color_' + t, tab: 'color', sub: 'node colors', label: t.toLowerCase(), type: 'color', nodeType: t });
 def({ key: 'color_other', tab: 'color', sub: 'node colors', label: 'other', type: 'color' });
 def({ key: 'dataColor', tab: 'color', sub: 'node colors', label: 'data', type: 'color' });
@@ -696,11 +615,10 @@ const isPresent = (d) => (d.kind ? KINDS_PRESENT.includes(d.kind) : d.nodeType ?
    3 · state — presets own P1 + P3; P2 is bench-only display state
    ═══════════════════════════════════════════════════════════════════════════ */
 function cloneLive(l) {
-  return { nodeTypes: new Set(l.nodeTypes), edgeKinds: new Set(l.edgeKinds), includeAreas: l.includeAreas,
-    excludeTests: l.excludeTests, includeExternal: l.includeExternal, params: Object.assign({}, l.params), areaOver: clone(l.areaOver || {}) };
+  return { nodeTypes: new Set(l.nodeTypes), edgeKinds: new Set(l.edgeKinds), excludeTests: l.excludeTests, includeExternal: l.includeExternal, params: Object.assign({}, l.params) };
 }
 function codePreset(b) {
-  const d = { nodeTypes: new Set(b.nodeTypes), edgeKinds: new Set(b.edgeKinds), includeAreas: !b.noAreas, excludeTests: true, includeExternal: false, params: Object.assign({}, b.defaults), areaOver: {} };
+  const d = { nodeTypes: new Set(b.nodeTypes), edgeKinds: new Set(b.edgeKinds), excludeTests: true, includeExternal: false, params: Object.assign({}, b.defaults) };
   return { id: b.id, label: b.label, base: b.id, forked: false, defaults: d, live: cloneLive(d) };
 }
 const presets = BASE_ORDER.map((id) => codePreset(BASES[id]));
@@ -710,11 +628,10 @@ const cur = () => presets.find((p) => p.id === curId);
 const live = () => cur().live;
 const base = () => BASES[cur().base];
 
-const ui = { fold: { nodeTypes: false, edgeKinds: false, edgesDrawn: false, areaOverlay: false, dirOverlay: true }, tab: 'nodes', areaCollapsed: new Set(), lockOpen: {}, emitTab: 'tuning', emitOpen: false, notesOpen: false };
+const ui = { fold: { nodeTypes: false, edgeKinds: false, edgesDrawn: false, dirOverlay: true }, tab: 'nodes', lockOpen: {}, emitTab: 'tuning', emitOpen: false, notesOpen: false };
 const DIR_OV_DEFAULTS = { on: true, labels: true, pct: 0.3, pad: 6, reach: 10, smooth: 10, minMem: 3, fill: 0.12, stroke: 0.4 };   // = DEFAULT_FILE_OVERLAY in lib/analysis/file-overlay.ts (reach 10 = ∞)
 const disp = {                              // P2 — display only; never touches the working set or the physics
   showEdges: true, labels: 'preset', canvas: 'dark', drawOff: new Set(),
-  areaVis: new Map(AREAS.map((a) => [a.id, true])), solo: null,
   // Vanilla (directory) file overlays: a circle around the file hub, molded to include its nodes (see computeFileOverlays)
   dirOv: Object.assign({}, DIR_OV_DEFAULTS),
 };
@@ -725,31 +642,19 @@ const disp = {                              // P2 — display only; never touche
 const stage = $('#stage'), canvas = $('#cv'), ctx = canvas.getContext('2d');
 let W = 800, H = 600, DPR = window.devicePixelRatio || 1;
 let T = d3.zoomIdentity;
-let sim = null, simNodes = [], links = [], bondLinks = [], simByIdx = new Map(), hover = null, hoverArea = null, neighbors = null;
+let sim = null, simNodes = [], links = [], bondLinks = [], simByIdx = new Map(), hover = null, hoverOv = null, neighbors = null;
 const POS = new Map();                      // key → {x, y}: carried across rebuilds so toggling doesn't scramble the layout
 let lastBuildMs = 0, tickCount = 0, userMoved = false, pendingFit = false;   // pendingFit: refit once after a rebuild, never after a reheat
 
 function nodeCtx() { const m = metrics(); return { toUsage: (e) => (e.external ? 0 : m.usage[e.to]), tier: makeTier() }; }
 
-/** Playground tiers. Node: role → per-area override → area default → global. Edge: kind → per-area override → area default → global. null / undefined = inherit. */
+/** Playground tiers. Node: role → global. Edge: kind → global. null / undefined = inherit. */
 function makeTier() {
-  const L = live(), P = L.params, ov = L.areaOver || {}, useAreas = L.includeAreas;
+  const P = live().params;
   const has = (v) => v != null;
-  const pick = (areas, f) => { for (const a of areas) { const o = ov[a.id]; if (o && has(o[f])) return o[f]; } return null; };
   return {
-    node(s, f, gKey, aKey, rKey) {
-      const r = P[rKey + s.node.type]; if (has(r)) return r;
-      if (useAreas && s._chain.length) { const o = pick(s._chain, f); if (has(o)) return o; if (has(P[aKey])) return P[aKey]; }
-      return P[gKey];
-    },
-    edge(l, f, gKey, aKey, kKey) {
-      const k = P[kKey + l.e.kind]; if (has(k)) return k;
-      if (useAreas && !l.target.ext) {
-        const shared = l.source._chain.filter((a) => l.target._chainIds.has(a.id));
-        if (shared.length) { const o = pick(shared, f); if (has(o)) return o; if (has(P[aKey])) return P[aKey]; }
-      }
-      return P[gKey];
-    },
+    node(s, gKey, rKey) { const r = P[rKey + s.node.type]; return has(r) ? r : P[gKey]; },
+    edge(l, gKey, kKey) { const k = P[kKey + l.e.kind]; return has(k) ? k : P[gKey]; },
   };
 }
 
@@ -766,19 +671,6 @@ function buildBondLinks() {
   for (const g of byFile.values()) for (let a = 0; a < g.length; a++) for (let b = a + 1; b < g.length; b++) {
     if (done.has(g[a].key + '|' + g[b].key) || done.has(g[b].key + '|' + g[a].key)) continue;
     out.push({ source: g[a], target: g[b], bond: 'file' }); done.add(g[a].key + '|' + g[b].key);
-  }
-  if (live().includeAreas) {
-    const byArea = new Map();
-    for (const s of real) for (const a of NODE_AREAS.get(s.idx) || []) { const g = byArea.get(a.id); if (g) g.push(s); else byArea.set(a.id, [s]); }
-    for (const g of byArea.values()) for (let a = 0; a < g.length; a++) for (let b = a + 1; b < g.length; b++) {
-      if (done.has(g[a].key + '|' + g[b].key) || done.has(g[b].key + '|' + g[a].key)) continue;
-      out.push({ source: g[a], target: g[b], bond: 'area' }); done.add(g[a].key + '|' + g[b].key);
-    }
-    const tagged = live().params.bondDiffStr > 0 ? real.filter((s) => (NODE_AREAS.get(s.idx) || []).length) : [], ids = new Map(tagged.map((s) => [s, new Set(NODE_AREAS.get(s.idx).map((a) => a.id))]));
-    for (let a = 0; a < tagged.length; a++) for (let b = a + 1; b < tagged.length; b++) {
-      const sb = ids.get(tagged[b]); let shared = false; for (const id of ids.get(tagged[a])) if (sb.has(id)) { shared = true; break; }
-      if (!shared) out.push({ source: tagged[a], target: tagged[b], bond: 'diff' });
-    }
   }
   return out;
 }
@@ -929,7 +821,7 @@ function drawFileOverlays(c) {
   const O = disp.dirOv, line = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5)).context(c);
   for (const ov of FILE_OVS) {
     if (!ov.vis) continue;
-    const fillc = hashToColor(ov.path), hot = ov === hoverArea;
+    const fillc = hashToColor(ov.path), hot = ov === hoverOv;
     c.save(); c.beginPath(); line(ov.pts); c.closePath();
     c.fillStyle = fillc; c.globalAlpha = hot ? Math.min(1, O.fill * 2) : O.fill; c.fill();
     c.globalAlpha = hot ? Math.min(1, O.stroke + 0.35) : O.stroke; c.strokeStyle = borderOf(fillc); c.lineWidth = 1.5; c.stroke();
@@ -983,37 +875,25 @@ function rebuild(fit) {
   simByIdx = new Map(simNodes.filter((s) => !s.ext).map((s) => [s.idx, s]));
   for (const l of links) { l.source.deg++; l.target.deg++; }
 
-  for (const s of simNodes) { s._chain = s.ext ? [] : chainOf(s.idx); s._chainIds = new Set(s._chain.map((a) => a.id)); }
-
   bondLinks = B.bonds ? buildBondLinks() : [];
   if (B.directory) buildHubs(); else { hubNodes = []; hubLinks = []; }
   if (sim) sim.stop();
-  AP = buildAreaPhysics();
-  sim = d3.forceSimulation(simNodes.concat(hubNodes))      // area anchors are not sim nodes — see anchorStepForce; directory hubs are
+  sim = d3.forceSimulation(simNodes.concat(hubNodes))      // directory hubs are sim nodes too
     .force('link', d3.forceLink(links.concat(bondLinks, hubLinks)).distance(1).strength(0.5))
     .force('charge', d3.forceManyBody())
     .force('center', d3.forceCenter(W / 2, H / 2))
     .force('collide', d3.forceCollide())
-    .force('anchorRepel', anchorRepelForce())
-    .force('clusterPull', clusterPullForce())
-    .force('areaAttract', areaAttractForce())
-    .force('parentPull', parentPullForce())
-    .force('crossAreaPull', crossAreaPullForce())
-    .force('areaHullCollision', hullCollisionForce())
-    .force('anchorStep', anchorStepForce())
     .force('hubCenter', hubCenterForce())
     .force('folderPhysics', folderPhysicsForce())
     .on('tick', onTick)
     .on('end', () => { updateSimHud(); if (pendingFit) { pendingFit = false; fitView(true); } });
   if (B.tiered) sim.force('gx', d3.forceX(W / 2)).force('gy', d3.forceY(H / 2));
-  if (B.layerRadii) sim.force('layerRadial', d3.forceRadial((d) => layerTarget(d) || 0, W / 2, H / 2).strength((d) => (layerTarget(d) == null ? 0 : 0.3)));
   applyStyles();
   applyForces();
   const carried = simNodes.filter((s) => s.x != null).length / Math.max(1, simNodes.length);
   sim.alpha(carried > 0.8 ? 0.5 : 1).restart();
   lastBuildMs = performance.now() - t0;
   refreshDrawFlags();
-  computeAreaCounts();
   renderHud(); renderLegend();
   pendingFit = !!(fit || !userMoved);
   if (pendingFit) setTimeout(() => { if (pendingFit) fitView(false); }, 450);
@@ -1031,7 +911,7 @@ function applyStyles() {
   for (const l of links) { const f = B.link(l.e, P, ctxo, l); l.dist = f.distance; l.str = f.strength; }
   for (const x of hubNodes) { const k = x.hubKind === 'FILE' ? 'File' : 'Folder'; x.r = P['hub' + k + 'Radius']; x.fill = P['hub' + k + 'Color']; x.alpha = P['hub' + k + 'Opacity']; x.charge = P['hub' + k + 'Charge']; }
   for (const l of hubLinks) { const k = l.dkind === 'IN_FILE' ? 'File' : l.dkind === 'IN_FOLDER' ? 'Folder' : 'Parent'; l.dist = P['dir' + k + 'Dist']; l.str = P['dir' + k + 'Str']; }
-  for (const l of bondLinks) { l.dist = l.bond === 'class' ? P.bondClassDist : l.bond === 'area' ? P.bondAreaDist : l.bond === 'diff' ? P.bondDiffDist : P.bondFileDist; l.str = l.bond === 'class' ? P.bondClassStr : l.bond === 'area' ? P.bondAreaStr : l.bond === 'diff' ? P.bondDiffStr : P.bondFileStr; }
+  for (const l of bondLinks) { l.dist = l.bond === 'class' ? P.bondClassDist : P.bondFileDist; l.str = l.bond === 'class' ? P.bondClassStr : P.bondFileStr; }
   legendDirty = true;
 }
 let legendDirty = true;
@@ -1041,7 +921,7 @@ function applyForces() {
   if (!sim) return;
   const P = live().params;
   sim.force('link').distance((l) => l.dist).strength((l) => l.str);
-  sim.force('charge').strength((d) => d.charge || 0);          // anchors carry no charge
+  sim.force('charge').strength((d) => d.charge || 0);          
   sim.force('center').strength(P.centerStrength);
   if (P.repelReach != null) sim.force('charge').distanceMax(P.repelReach >= 3000 ? Infinity : P.repelReach);
   sim.force('collide').radius((d) => (d.hub ? 0 : (d.r || 0) + (d.pad || 0)));   // hubs never collide
@@ -1049,171 +929,8 @@ function applyForces() {
   sim.alphaDecay(P.alphaDecay).velocityDecay(P.velocityDecay);
 }
 
-/* ── area physics — port of lib/areas/forces.ts: one anchor node per area + the app's forces (clusterPull, areaAttract, parentPull,
-      anchorRepel, crossAreaPull, areaHullCollision). areaPin is left out: the snapshot carries no pinnedZones, so it would be a no-op. ── */
-const ANCHORS = new Map();      // areaId → anchor sim node, kept across rebuilds so areas do not jump (anchorsRef in RepoGraph.tsx)
-let AP = { anchors: [], byId: new Map(), members: new Map(), nodeAreas: new Map(), crossW: new Map(), nodeCross: new Map(), pairs: [] };
-const MIN_DIST = 1, MAX_HULL_PUSH = 100, RADIUS_SCALE = 100;
-// anchorRepel scales with combined area radius, but the radius itself grows as the repel pushes anchors apart and clusterPull drags members after them —
-// unbounded, that loop raised the median node radius ~380 per reheat (uncapped 1498 → 3003 over four; cap 3 holds it near-flat). Not in forces.ts.
-const MAX_SIZE_FACTOR = 3;
-
-function areasRelated(a, b) {     // areAreasRelated — ancestor / descendant in either direction
-  const up = (x, id) => { const seen = new Set(); for (let c = x; c && c.parent && !seen.has(c.id); c = AREA_BY_ID.get(c.parent)) { seen.add(c.id); if (c.parent === id) return true; } return false; };
-  return up(a, b.id) || up(b, a.id);
-}
-const jitter = (id, salt) => { let h = salt * 2654435761; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619); return ((h >>> 0) / 4294967295 - 0.5) * 60; };   // deterministic seed: same snapshot → same layout
-/** per-rebuild bookkeeping: anchors, direct memberships, cross-area edge weights (buildCrossAreaEdgeWeights / buildNodeCrossAreaTargets) */
-function buildAreaPhysics() {
-  const ap = { anchors: [], byId: new Map(), members: new Map(), nodeAreas: new Map(), crossW: new Map(), nodeCross: new Map(), pairs: [] };
-  if (!live().includeAreas) return ap;
-  for (const a of AREAS) {
-    const mem = []; for (const i of AREA_ALL.get(a.id)) { const s = simByIdx.get(i); if (s) mem.push(s); }
-    if (!mem.length) continue;
-    let an = ANCHORS.get(a.id);
-    if (!an) {
-      const seeded = mem.filter((s) => s.x != null);
-      an = { kind: 'anchor', areaId: a.id, r: 0, charge: 0, pad: 0, grav: 0,
-        x: seeded.length ? d3.mean(seeded, (s) => s.x) : W / 2 + jitter(a.id, 1), y: seeded.length ? d3.mean(seeded, (s) => s.y) : H / 2 + jitter(a.id, 2) };
-      ANCHORS.set(a.id, an);
-    }
-    ap.anchors.push(an); ap.byId.set(a.id, an); ap.members.set(a.id, mem);
-  }
-  for (const s of simNodes) if (!s.ext) ap.nodeAreas.set(s, (NODE_AREAS.get(s.idx) || []).filter((a) => ap.byId.has(a.id)));
-  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
-  for (const l of links) {
-    const sa = ap.nodeAreas.get(l.source) || [], ta = ap.nodeAreas.get(l.target) || [];
-    for (const x of sa) for (const y of ta) if (x.id !== y.id) bump(ap.crossW, x.id < y.id ? x.id + '|' + y.id : y.id + '|' + x.id);
-    const sIds = new Set(sa.map((a) => a.id)), tIds = new Set(ta.map((a) => a.id));
-    const toward = (node, own, others) => { for (const a of others) { if (own.has(a.id)) continue; let m = ap.nodeCross.get(node); if (!m) ap.nodeCross.set(node, m = new Map()); bump(m, a.id); } };
-    toward(l.source, sIds, ta); toward(l.target, tIds, sa);
-  }
-  const live_ = AREAS.filter((a) => ap.byId.has(a.id));
-  for (let i = 0; i < live_.length; i++) for (let j = i + 1; j < live_.length; j++) if (!areasRelated(live_[i], live_[j])) ap.pairs.push([live_[i], live_[j]]);
-  return ap;
-}
-const ok2 = (a) => a.x != null && a.y != null;
-
-function clusterPullForce() {       // createClusterPullForce — nodes toward the mean of their areas' anchors (every area weighs 1: the snapshot has no clusterStrength)
-  return (alpha) => {
-    const k = live().params.areaCluster; if (!k) return;
-    for (const s of simNodes) {
-      const as = AP.nodeAreas.get(s); if (!as || !as.length || !ok2(s)) continue;
-      let tx = 0, ty = 0, n = 0;
-      for (const a of as) { const an = AP.byId.get(a.id); if (an && ok2(an)) { tx += an.x; ty += an.y; n++; } }
-      if (!n) continue;
-      s.vx += (tx / n - s.x) * k * alpha; s.vy += (ty / n - s.y) * k * alpha;
-    }
-  };
-}
-/** Anchors are integrated here instead of by d3. RepoGraph.tsx makes them sim nodes, but then d3's many-body force pushes every anchor away from every
- *  node's charge: anchors drift far from their own members, clusterPull drags the areas after them, and every reheat ratchets the layout outward
- *  (measured: median node radius +300–500 per reheat with the cluster force alone, dead flat once anchors sit outside the many-body force).
- *  Registered after every anchor force so it integrates in the same slot d3 would. */
-function anchorStepForce() {
-  return () => { const keep = 1 - sim.velocityDecay(); for (const an of AP.anchors) { an.vx = (an.vx || 0) * keep; an.vy = (an.vy || 0) * keep; an.x += an.vx; an.y += an.vy; } };
-}
-function areaAttractForce() {       // createAreaAttractForce — anchors of areas that share cross-area edges pull together
-  return (alpha) => {
-    const k = live().params.areaAttract; if (!k) return;
-    for (const [key, w] of AP.crossW) {
-      const [ia, ib] = key.split('|'), a = AP.byId.get(ia), b = AP.byId.get(ib);
-      if (!a || !b || !ok2(a) || !ok2(b)) continue;
-      const dx = b.x - a.x, dy = b.y - a.y, d = Math.max(Math.hypot(dx, dy), MIN_DIST), m = w * k * alpha;
-      a.vx += dx / d * m; a.vy += dy / d * m; b.vx -= dx / d * m; b.vy -= dy / d * m;
-    }
-  };
-}
-function parentPullForce() {        // createParentPullForce — child anchor toward its parent's
-  return (alpha) => {
-    const k = live().params.areaParent; if (!k) return;
-    for (const an of AP.anchors) {
-      const a = AREA_BY_ID.get(an.areaId), pa = a && a.parent ? AP.byId.get(a.parent) : null;
-      if (!pa || !ok2(an) || !ok2(pa)) continue;
-      an.vx += (pa.x - an.x) * k * alpha; an.vy += (pa.y - an.y) * k * alpha;
-    }
-  };
-}
-function computeAreaRadii() {       // computeAreaRadii — farthest direct member from the anchor, widened through the hierarchy
-  const direct = new Map();
-  for (const s of simNodes) {
-    if (!ok2(s)) continue;
-    for (const a of AP.nodeAreas.get(s) || []) { const an = AP.byId.get(a.id); if (an && ok2(an)) direct.set(a.id, Math.max(direct.get(a.id) || 0, Math.hypot(s.x - an.x, s.y - an.y))); }
-  }
-  const done = new Map();
-  const resolve = (id, seen) => {
-    if (done.has(id)) return done.get(id);
-    if (seen.has(id)) return direct.get(id) || 0;
-    seen.add(id);
-    const an = AP.byId.get(id); let r = direct.get(id) || 0;
-    if (an && ok2(an)) for (const k of AREA_KIDS.get(id) || []) { const ka = AP.byId.get(k.id); if (ka && ok2(ka)) r = Math.max(r, Math.hypot(ka.x - an.x, ka.y - an.y) + resolve(k.id, seen)); }
-    done.set(id, r); return r;
-  };
-  for (const an of AP.anchors) resolve(an.areaId, new Set());
-  return done;
-}
-function anchorRepelForce() {       // createAnchorRepelForce — inverse-square on the raw distance, strength scaled by combined area radius
-  return (alpha) => {
-    const k = live().params.anchorRepel; if (!k || AP.anchors.length < 2) return;
-    const radii = computeAreaRadii(), an = AP.anchors;
-    for (let i = 0; i < an.length; i++) for (let j = i + 1; j < an.length; j++) {
-      const a = an[i], b = an[j]; if (!ok2(a) || !ok2(b)) continue;
-      const dx = b.x - a.x, dy = b.y - a.y, d = Math.max(Math.hypot(dx, dy), MIN_DIST);
-      const size = Math.min(1 + ((radii.get(a.areaId) || 0) + (radii.get(b.areaId) || 0)) / RADIUS_SCALE, MAX_SIZE_FACTOR), m = k * size * alpha / (d * d);
-      a.vx -= dx / d * m; a.vy -= dy / d * m; b.vx += dx / d * m; b.vy += dy / d * m;
-    }
-  };
-}
-function crossAreaPullForce() {     // createCrossAreaPullForce — a node that talks to other areas leans toward its region's edge facing them
-  return (alpha) => {
-    const k = live().params.crossAreaPull; if (!k) return;
-    const cx = W / 2, cy = H / 2, hw = W / 2, hh = H / 2;   // no pinnedZones in the snapshot → every area's region is the whole canvas
-    for (const s of simNodes) {
-      const own = AP.nodeAreas.get(s), cross = AP.nodeCross.get(s);
-      if (!own || !own.length || !cross || !cross.size || !ok2(s)) continue;
-      let ew = 0, ex = 0, ey = 0;
-      for (const [id, w] of cross) { const an = AP.byId.get(id); if (an && ok2(an)) { ew += w; ex += an.x * w; ey += an.y * w; } }
-      if (ew <= 0) continue;
-      ex /= ew; ey /= ew;
-      const dx = ex - cx, dy = ey - cy, d = Math.max(Math.hypot(dx, dy), MIN_DIST), ux = dx / d, uy = dy / d;
-      const t = Math.min(ux ? hw / Math.abs(ux) : Infinity, uy ? hh / Math.abs(uy) : Infinity);
-      s.vx += (cx + ux * t - s.x) * k * alpha; s.vy += (cy + uy * t - s.y) * k * alpha;
-    }
-  };
-}
-function hullCircle(a) { const g = areaHull(a); if (!g) return null; if (g.points) { let x = 0, y = 0; for (const [px, py] of g.points) { x += px; y += py; } x /= g.points.length; y /= g.points.length; let r = 0; for (const [px, py] of g.points) r = Math.max(r, Math.hypot(px - x, py - y)); return { cx: x, cy: y, r }; } return g; }
-function hullCollisionForce() {     // createAreaHullCollisionForce — unrelated areas whose hulls overlap push their members apart
-  return (alpha) => {
-    const k = live().params.areaHullCollision; if (!k || !AP.pairs.length) return;
-    const hulls = new Map(); for (const [a, b] of AP.pairs) for (const x of [a, b]) if (!hulls.has(x.id)) hulls.set(x.id, hullCircle(x));
-    // The app pushes per pair, so a node in nested areas is pushed by several overlapping pairs in one tick and the pushes stack. That stretches the
-    // area, its hull radius grows, the overlap grows — a runaway (median radius 4k → 7k over five reheats with this force alone). Here each node's
-    // pushes are summed and the total is clamped to one pair's cap, which keeps the force bounded (flat at ~1.4k).
-    const acc = new Map();
-    const add = (s, x, y) => { const v = acc.get(s); if (v) { v[0] += x; v[1] += y; } else acc.set(s, [x, y]); };
-    for (const [a, b] of AP.pairs) {
-      const ha = hulls.get(a.id), hb = hulls.get(b.id); if (!ha || !hb) continue;
-      const dx = hb.cx - ha.cx, dy = hb.cy - ha.cy, d = Math.max(Math.hypot(dx, dy), MIN_DIST), raw = ha.r + hb.r - d;
-      if (raw <= 0) continue;
-      const o = Math.min(raw, MAX_HULL_PUSH), px = dx / d * o * k * alpha, py = dy / d * o * k * alpha;
-      for (const s of AP.members.get(a.id)) add(s, -px, -py);
-      for (const s of AP.members.get(b.id)) add(s, px, py);
-    }
-    const cap = MAX_HULL_PUSH * k * alpha;
-    for (const [s, [x, y]] of acc) { const m = Math.hypot(x, y), f = m > cap ? cap / m : 1; s.vx += x * f; s.vy += y * f; }
-  };
-}
-function layerTarget(d) {
-  const radii = base().layerRadii;
-  if (!radii || d.ext) return null;
-  const rs = (NODE_AREAS.get(d.idx) || []).map((a) => radii[a.name]).filter((r) => r != null);
-  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
-}
-function layerTaggedCount() { const B = base(); return B.layerRadii ? simNodes.filter((s) => layerTarget(s) != null).length : 0; }
-
 /** P3 edit → reheat the running simulation (the cost the band's badge names). */
 function reheat() {
-  if (base().bonds && (live().params.bondDiffStr > 0) !== bondLinks.some((l) => l.bond === 'diff')) rebuild();   // the cross-area tier is only built while its strength is above 0
   applyStyles(); applyForces();
   if (sim) sim.alpha(Math.max(sim.alpha(), 0.35)).restart();
   for (const f of inhReg) f();
@@ -1249,31 +966,9 @@ function placeTip(ev) {
 function showTip(s, ev) {
   if (!s) { tip.style.display = 'none'; return; }
   const n = s.node;
-  const areas = s.ext || !live().includeAreas ? null : (NODE_AREAS.get(s.idx) || []).map((a) => a.name);
   fill(tip, h('div', null, n.name), h('div', { class: 't2' }, s.ext ? 'external · ' + n.file : n.type + ' · ' + n.file + ':' + (n.line + 1)),
-    s.ext ? null : h('div', { class: 't2' }, 'refs in ' + n.refsIn + ' · out ' + n.refsOut + ' · degree ' + s.deg),
-    areas ? h('div', { class: 't2' }, 'area · ' + (areas.length ? areas.join(', ') : 'none')) : null);
+    s.ext ? null : h('div', { class: 't2' }, 'refs in ' + n.refsIn + ' · out ' + n.refsOut + ' · degree ' + s.deg));
   placeTip(ev);
-}
-function showAreaTip(a, ev) {
-  const parent = a.parent ? AREA_BY_ID.get(a.parent) : null, kids = AREA_KIDS.get(a.id) || [];
-  fill(tip, h('div', null, a.name),
-    h('div', { class: 't2' }, 'area · ' + (parent ? 'child of ' + parent.name : 'root area') + (kids.length ? ' · ' + kids.length + ' sub-area' + (kids.length === 1 ? '' : 's') : '')),
-    h('div', { class: 't2' }, (areaCountMap.get(a.id) || 0) + ' nodes in view · ' + AREA_ALL.get(a.id).size + ' in snapshot'));
-  placeTip(ev);
-}
-/** innermost visible area whose hull contains the point (fewest members wins when areas nest or overlap) */
-function areaAt(x, y) {
-  if (!live().includeAreas) return null;
-  let best = null, bestN = Infinity;
-  for (const a of AREAS) {
-    if (!disp.areaVis.get(a.id)) continue;
-    const g = areaHull(a); if (!g) continue;
-    const inside = g.points ? d3.polygonContains(g.points, [x, y]) : Math.hypot(x - g.cx, y - g.cy) <= g.r;
-    const n = AREA_ALL.get(a.id).size;
-    if (inside && n < bestN) { best = a; bestN = n; }
-  }
-  return best;
 }
 function setHover(s) {
   if (s === hover) return;
@@ -1281,17 +976,17 @@ function setHover(s) {
   if (s) { neighbors = new Set([s]); for (const l of links) { if (l.source === s) neighbors.add(l.target); else if (l.target === s) neighbors.add(l.source); } }
   draw();
 }
-function setHoverArea(a) { if (a !== hoverArea) { hoverArea = a; draw(); } }
+function setHoverOv(o) { if (o !== hoverOv) { hoverOv = o; draw(); } }
 canvas.addEventListener('mousemove', (ev) => {
   const r = canvas.getBoundingClientRect();
   const p = T.invert([ev.clientX - r.left, ev.clientY - r.top]);
-  const s = nodeAt(p[0], p[1]), a = s ? null : (base().directory ? fileAt(p[0], p[1]) : areaAt(p[0], p[1]));
-  setHover(s); setHoverArea(a);
-  if (s) showTip(s, ev); else if (a) (a.file ? showFileTip(a, ev) : showAreaTip(a, ev)); else showTip(null);
+  const s = nodeAt(p[0], p[1]), o = s || !base().directory ? null : fileAt(p[0], p[1]);
+  setHover(s); setHoverOv(o);
+  if (s) showTip(s, ev); else if (o) showFileTip(o, ev); else showTip(null);
 });
-canvas.addEventListener('mouseleave', () => { setHover(null); setHoverArea(null); showTip(null); });
+canvas.addEventListener('mouseleave', () => { setHover(null); setHoverOv(null); showTip(null); });
 
-// zoom / pan only — nodes, edges and areas are never moved by the cursor (no node dragging)
+// zoom / pan only — nodes, edges and overlays are never moved by the cursor (no node dragging)
 const zoom = d3.zoom().scaleExtent([0.03, 12]).on('zoom', (ev) => { T = ev.transform; if (ev.sourceEvent) userMoved = true; draw(); });
 d3.select(canvas).call(zoom);
 
@@ -1318,7 +1013,7 @@ new ResizeObserver(resize).observe(stage);
 
 // ── drawing ────────────────────────────────────────────────────────────────────────────────────
 function hexToRgb(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex); const n = m ? parseInt(m[1], 16) : 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-function hashToColor(str) {                       // lib/areas/color.ts hashToColor
+function hashToColor(str) {                       // lib/analysis/color.ts hashToColor
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); hash = hash & hash; }
   const hue = Math.abs(hash % 360), sat = 60 + Math.abs((hash >> 8) % 20), lit = 40 + Math.abs((hash >> 16) % 15);
@@ -1326,7 +1021,7 @@ function hashToColor(str) {                       // lib/areas/color.ts hashToCo
   const f = (n) => { const k = (n + hue / 30) % 12; const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * c).toString(16).padStart(2, '0'); };
   return '#' + f(0) + f(8) + f(4);
 }
-function borderOf(hex) {                          // lib/areas/color.ts deriveBorderColor: lightness × 0.65
+function borderOf(hex) {                          // lib/analysis/color.ts deriveBorderColor: lightness × 0.65
   const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
   const mx = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0), d = mx - mn;
   let hh = 0, ss = 0, ll = (mx + mn) / 2;
@@ -1338,51 +1033,12 @@ function borderOf(hex) {                          // lib/areas/color.ts deriveBo
   const x = (v) => Math.round(Math.max(0, Math.min(255, v * 255))).toString(16).padStart(2, '0');
   return '#' + x(r) + x(g) + x(b);
 }
-const areaColor = (a) => a.color || hashToColor(a.id);
-
-function areaHull(a) {                            // lib/areas/renderer.ts computeAreaHull
-  const pts = [];
-  for (const i of AREA_ALL.get(a.id)) { const s = simByIdx.get(i); if (s && s.x != null) pts.push(s); }
-  if (!pts.length) return null;
-  const PAD = 55;
-  if (pts.length === 1) return { cx: pts[0].x, cy: pts[0].y, r: pts[0].r + PAD };
-  if (pts.length === 2) { const [p, q] = pts; return { cx: (p.x + q.x) / 2, cy: (p.y + q.y) / 2, r: Math.hypot(p.x - q.x, p.y - q.y) / 2 + Math.max(p.r, q.r) + PAD }; }
-  const hull = d3.polygonHull(pts.map((s) => [s.x, s.y]));
-  if (!hull) return null;
-  let cx = 0, cy = 0; for (const [x, y] of hull) { cx += x; cy += y; } cx /= hull.length; cy /= hull.length;
-  return { points: hull.map(([x, y]) => { const dx = x - cx, dy = y - cy, dist = Math.hypot(dx, dy); if (!dist) return [x, y]; const sc = (dist + PAD) / dist; return [cx + dx * sc, cy + dy * sc]; }) };
-}
-function drawAreas(c, light) {
-  if (!live().includeAreas) return;
-  for (const a of AREAS) {
-    if (!disp.areaVis.get(a.id)) continue;
-    const hull = areaHull(a); if (!hull) continue;
-    const fill = areaColor(a), border = borderOf(fill);
-    c.save(); c.beginPath();
-    if (hull.points) { c.moveTo(hull.points[0][0], hull.points[0][1]); for (let i = 1; i < hull.points.length; i++) c.lineTo(hull.points[i][0], hull.points[i][1]); c.closePath(); }
-    else c.arc(hull.cx, hull.cy, hull.r, 0, 2 * Math.PI);
-    const hot = a === hoverArea;
-    c.fillStyle = fill; c.globalAlpha = hot ? 0.16 : 0.08; c.fill();
-    c.globalAlpha = hot ? 0.65 : 0.3; c.strokeStyle = border; c.lineWidth = 2.5; c.stroke();
-    c.globalAlpha = 1;
-    // pill label
-    let lx, ly;
-    if (hull.points) { let sx = 0, my = Infinity; for (const [x, y] of hull.points) { sx += x; if (y < my) my = y; } lx = sx / hull.points.length; ly = my - 14; } else { lx = hull.cx; ly = hull.cy - hull.r - 14; }
-    c.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
-    const tw = c.measureText(a.name).width, pw = tw + 20, ph = 25, px = lx - pw / 2, py = ly - ph / 2;
-    c.beginPath(); c.roundRect ? c.roundRect(px, py, pw, ph, 8) : c.rect(px, py, pw, ph);
-    c.fillStyle = fill; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1;
-    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(a.name, lx, ly + 1);
-    c.restore();
-  }
-}
 function draw() {
   const c = ctx, light = disp.canvas === 'light', P = live().params, B = base();
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
   c.clearRect(0, 0, W, H);
   c.save();
   c.translate(T.x, T.y); c.scale(T.k, T.k);
-  drawAreas(c, light);
   drawFileOverlays(c);
 
   // directory links: only the tiers switched to "shown" (hidden tiers still pull in the layout)
@@ -1469,9 +1125,8 @@ function onTick() {
 function renderHud() {
   const L = live();
   const classes = simNodes.reduce((n, s) => n + (s.node.type === 'CLASS' ? 1 : 0), 0);
-  const areas = L.includeAreas ? AREA_ROOTS.length : 0;
   fill($('#hud'), 
-    h('div', { id: 'hudCounts' }, 'nodes ' + simNodes.length + ' · edges ' + links.length + (bondLinks.length ? ' · bonds ' + bondLinks.length : '') + (hubNodes.length ? ' · hubs ' + hubNodes.length : '') + ' · classes ' + classes + (base().directory ? ' · file overlays ' + FILE_OVS.filter((o) => o.vis).length : ' · areas ' + areas)),
+    h('div', { id: 'hudCounts' }, 'nodes ' + simNodes.length + ' · edges ' + links.length + (bondLinks.length ? ' · bonds ' + bondLinks.length : '') + (hubNodes.length ? ' · hubs ' + hubNodes.length : '') + ' · classes ' + classes + (base().directory ? ' · file overlays ' + FILE_OVS.filter((o) => o.vis).length : '')),
     h('div', { class: 'sim', id: 'hudSim' }, ''),
     base().directory ? h('div', { class: 'sim', id: 'hudDir', title: 'folder tightness = how far files sit from their folder hub, in file radii (median over folders with ≥3 files; 1 = one radius out). sibling overlap = share of sibling file circles that overlap.' }, '') : null);
   updateSimHud();
@@ -1566,8 +1221,7 @@ function renderPreset() {
         : h('span', null, 'cycle the code-defined view configs · seeds the P1 default on-set · + forks a new preset')));
 }
 function selectPreset(id) {
-  curId = id; disp.drawOff = new Set(); disp.solo = null;
-  for (const a of AREAS) disp.areaVis.set(a.id, true);
+  curId = id; disp.drawOff = new Set();
   ui.tab = 'nodes';
   rebuild(true); renderAll(); pulse('p1');
 }
@@ -1600,7 +1254,6 @@ function renderP1() {
   fill($('#p1'), 
     h('div', { class: 'hd p1t' }, h('span', { class: 'num' }, 'P1'), 'available data', h('span', { class: 'cost build', title: 'a change here re-filters the working set and re-runs the layout' }, 'rebuild')),
     h('div', { class: 'sub' }, 'categories'),
-    cbRow({ label: 'area data', checked: L.includeAreas, disabled: !!B.noAreas, count: B.noAreas ? 'not used here' : AREAS.length, title: B.noAreas ? 'this preset organizes by file / folder structure and ignores area data' : 'include area records (overlay tree, area cluster force)', onChange: (v) => { L.includeAreas = v; change(); } }),
     cbRow({ label: 'exclude tests', checked: L.excludeTests, disabled: TEST_NODES === 0, count: TEST_NODES ? TEST_NODES + ' test' : 'none in snapshot',
       title: TEST_NODES ? 'drop nodes that live in test files' : 'the snapshot has no test-file nodes (tsconfig excludes __tests__) — nothing to toggle', onChange: (v) => { L.excludeTests = v; change(); } }),
     cbRow({ label: 'include external edges', checked: L.includeExternal, count: fmtN(extEdgeCount(L)) + ' ext', title: 'data scope: internal edges only, or also edges to targets outside the repo (drawn as hollow stubs; bench-only preview)', onChange: (v) => { L.includeExternal = v; change(); } }),
@@ -1621,48 +1274,11 @@ function renderP1() {
 function roleDot(t) { const P = live().params; return P['color_' + t] || (DATA_TYPES.has(t) && P.dataColor) || (base().id === 'dataflow' ? P.processingColor : P.color_other || OTHER_COLOR); }
 
 /* ── P2 · display (redraw) ───────────────────────────────────────────────────────────────────── */
-let areaCountMap = new Map();
-function computeAreaCounts() {
-  areaCountMap = new Map();
-  for (const a of AREAS) { let n = 0; for (const i of AREA_ALL.get(a.id)) if (simByIdx.has(i)) n++; areaCountMap.set(a.id, n); }
-}
-function areaState(a) {
-  const ids = [a.id, ...AREA_DESC.get(a.id)];
-  const on = ids.filter((id) => disp.areaVis.get(id)).length;
-  return on === ids.length ? 'on' : on === 0 ? 'off' : 'mixed';
-}
-function toggleArea(a) {            // parent-eye rollup cascade
-  const target = areaState(a) !== 'on';
-  for (const id of [a.id, ...AREA_DESC.get(a.id)]) disp.areaVis.set(id, target);
-  disp.solo = null; redraw();
-}
-function soloArea(a) {
-  if (disp.solo === a.id) { for (const x of AREAS) disp.areaVis.set(x.id, true); disp.solo = null; }
-  else { const keep = new Set([a.id, ...AREA_DESC.get(a.id)]); for (const x of AREAS) disp.areaVis.set(x.id, keep.has(x.id)); disp.solo = a.id; }
-  redraw();
-}
-function areaRows(a, depth, out) {
-  const kids = AREA_KIDS.get(a.id) || [], st = areaState(a), collapsed = ui.areaCollapsed.has(a.id);
-  const cb = h('input', { type: 'checkbox', checked: st === 'on', 'aria-checked': st === 'mixed' ? 'mixed' : null, onchange: () => toggleArea(a) });
-  cb.indeterminate = st === 'mixed';
-  out.push(h('div', { class: 'arow' + (st === 'off' ? ' off' : ''), style: { paddingLeft: depth * 13 + 'px' } },
-    kids.length ? h('span', { class: 'chev', onclick: () => { collapsed ? ui.areaCollapsed.delete(a.id) : ui.areaCollapsed.add(a.id); renderP2(); } }, collapsed ? '▸' : '▾') : h('span', { class: 'chev' }, ''),
-    h('label', { class: 'r', title: (st === 'on' ? 'hide ' : 'show ') + a.name + (kids.length ? ' and its sub-areas' : '') },
-      cb, h('span', { class: 'cb' }),
-      h('span', { class: 'sw', style: { background: areaColor(a) } }),
-      h('span', { class: 'nm' }, a.name),
-      h('span', { class: 'cnt', title: 'nodes of this area in the working set' }, areaCountMap.get(a.id) || 0)),
-    h('button', { class: 'solo' + (disp.solo === a.id ? ' active' : ''), title: 'view only this area (click again to restore)', onclick: () => soloArea(a) }, disp.solo === a.id ? 'solo ✓' : 'solo')));
-  if (!collapsed) for (const k of kids) areaRows(k, depth + 1, out);
-}
 function renderP2() {
   const L = live(), B = base();
   const kindsInSet = [...new Set(links.map((l) => l.e.kind))];
-  const rows = []; for (const r of AREA_ROOTS) areaRows(r, 0, rows);
-  const areasOn = AREAS.filter((a) => disp.areaVis.get(a.id)).length;
-  const setAreas = (on) => { for (const a of AREAS) disp.areaVis.set(a.id, on); disp.solo = null; redraw(); };
   const seg = (opts, val, on) => h('span', { class: 'seg' }, opts.map((o) => h('button', { class: val === o ? 'on' : '', onclick: () => on(o) }, o)));
-  const forces = ['link', 'charge', 'collide', 'center'].concat(B.tiered ? ['gravity (forceX/Y)'] : [], L.includeAreas ? ['anchorRepel', 'clusterPull', 'areaAttract', 'parentPull', 'crossAreaPull', 'areaHullCollision'] : [], B.directory ? ['directory hubs (IN_FILE · IN_FOLDER · IN_PARENT)', 'hubCenter', 'folder physics (files → folder gravity, sibling separation)'] : [], B.layerRadii ? ['layerRadial (' + layerTaggedCount() + ' tagged)'] : []);
+  const forces = ['link', 'charge', 'collide', 'center'].concat(B.tiered ? ['gravity (forceX/Y)'] : [], B.directory ? ['directory hubs (IN_FILE · IN_FOLDER · IN_PARENT)', 'hubCenter', 'folder physics (files → folder gravity, sibling separation)'] : []);
   fill($('#p2'), 
     h('div', { class: 'hd p2t' }, h('span', { class: 'num' }, 'P2'), 'display', h('span', { class: 'cost draw', title: 'display only — redraws without touching the simulation' }, 'redraw')),
     cbRow({ label: 'show edges', checked: disp.showEdges, onChange: (v) => { disp.showEdges = v; redraw(); } }),
@@ -1672,13 +1288,7 @@ function renderP2() {
       h('div', { class: 'foldact' }, h('span', null, 'hidden kinds still pull in the layout')),
       kindsInSet.map((k) => cbRow({ label: k, checked: !disp.drawOff.has(k), count: fmtN(links.filter((l) => l.e.kind === k).length), onChange: (v) => { if (v) disp.drawOff.delete(k); else disp.drawOff.add(k); redraw(); } }))]),
     ...(B.directory ? dirOverlayControls() : []),
-    ...(B.directory ? [] : L.includeAreas ? (rows.length
-      ? fold('areaOverlay', 'area overlay', areasOn + ' / ' + AREAS.length + ' on', [
-        h('div', { class: 'foldact' }, h('button', { onclick: () => setAreas(true) }, 'all'), h('button', { onclick: () => setAreas(false) }, 'none')),
-        h('div', { class: 'tree' }, rows)])
-      : [h('div', { class: 'forces' }, 'no areas in this snapshot')])
-      : [h('div', { class: 'forces' }, 'area overlay: area data is off — enable it in P1 (rebuild)')]),
-    lockRow('p2', 'forces in play', [forces.join(' · '), 'area forces are a port of lib/areas/forces.ts (anchors outside many-body; hull push clamped per node; repel size factor capped) · not simulated: areaPin (no pinnedZones in the snapshot)', 'which forces run is a code decision — magnitudes are tuned in P3'], 'RepoGraph.tsx'));
+    lockRow('p2', 'forces in play', [forces.join(' · '), 'which forces run is a code decision — magnitudes are tuned in P3'], 'RepoGraph.tsx'));
 }
 
 /** P2 controls for the Vanilla (directory) file overlays — display only: each change recomputes the shapes and redraws, the simulation is left alone */
@@ -1711,7 +1321,7 @@ function dirOverlayControls() {
 /* ── P3 · controllable variables (reheat) ────────────────────────────────────────────────────── */
 function visibleDefs(tab) {
   const L = live(), P = L.params, B = base();
-  return PARAM_DEFS.filter((d) => d.tab === tab && d.key in B.defaults && isPresent(d) && (!d.when || d.when(P)) && (!d.needsAreas || L.includeAreas));
+  return PARAM_DEFS.filter((d) => d.tab === tab && d.key in B.defaults && isPresent(d) && (!d.when || d.when(P)));
 }
 function resetKeys(keys) {
   const dflt = cur().defaults.params, P = live().params;
@@ -1749,34 +1359,6 @@ function control(d) {
     h('span', { class: 'seg' }, d.options.map((o) => h('button', { class: v === o ? 'on' : '', onclick: () => { P[d.key] = o; renderP3(); reheat(); } }, o))), h('span', { class: 'vv' }, ''));
 }
 
-/** per-area tier: one card per overridden area, each field falls back to the area default, then the global value */
-const OVR_FIELDS = [
-  { f: 'dist', label: 'distance', def: 'edgeDistance', from: ['areaEdgeDistance', 'edgeDistance'] },
-  { f: 'str', label: 'strength', def: 'edgeStrength', from: ['areaEdgeStrength', 'edgeStrength'] },
-  { f: 'charge', label: 'charge', def: 'charge', from: ['areaCharge', 'charge'] },
-  { f: 'pad', label: 'collide pad', def: 'collisionPadding', from: ['areaCollisionPadding', 'collisionPadding'] },
-  { f: 'gravity', label: 'gravity', def: 'gravity', from: ['areaGravity', 'gravity'] },
-];
-function areaOverrideEditor() {
-  const ov = live().areaOver, ids = Object.keys(ov).filter((id) => AREA_BY_ID.has(id));
-  const avail = AREAS.filter((a) => !(a.id in ov));
-  const add = h('select', { class: 'ovadd', 'aria-label': 'add a per-area override', onchange: (e) => { if (e.target.value) { ov[e.target.value] = {}; renderP3(); } } },
-    h('option', { value: '' }, '+ override an area…'), avail.map((a) => h('option', { value: a.id }, a.name + ' (' + AREA_ALL.get(a.id).size + ')')));
-  return [
-    h('div', { class: 'grphd' }, 'per-area overrides', ids.length ? h('button', { class: 'rst', title: 'remove every per-area override', onclick: () => { live().areaOver = {}; renderP3(); reheat(); } }, 'clear all') : null),
-    h('div', { class: 'forces' }, 'beats the area default; the edge-kind and node-role tiers still beat it. Nested areas: the smallest area with an override wins.'),
-    ids.map((id) => {
-      const a = AREA_BY_ID.get(id);
-      return h('div', { class: 'ovc' },
-        h('div', { class: 'oh' }, h('span', { class: 'sw', style: { background: areaColor(a) } }), h('span', { class: 'nm', title: a.name }, a.name), h('span', { class: 'cnt' }, AREA_ALL.get(id).size + ' nodes'),
-          h('button', { class: 'clr', title: 'remove this override', 'aria-label': 'remove override for ' + a.name, onclick: () => { delete live().areaOver[id]; renderP3(); reheat(); } }, '×')),
-        OVR_FIELDS.map((F) => { const D = PARAM_DEFS.find((x) => x.key === F.def);
-          return numSlider({ label: F.label, title: 'per-area override — ' + F.def + ' for ' + a.name, aria: F.label + ' override for ' + a.name, min: D.min, max: D.max, step: D.step,
-            get: () => { const o = live().areaOver[id]; return o ? o[F.f] : null; }, inherit: () => inheritedOf({ from: F.from, min: D.min }),
-            set: (x) => { (live().areaOver[id] || (live().areaOver[id] = {}))[F.f] = x; }, clear: () => { const o = live().areaOver[id]; if (o) delete o[F.f]; } }); }));
-    }),
-    avail.length ? add : null];
-}
 function renderP3() {
   const B = base(); inhReg.length = 0;
   const tabDefs = TABS.map((t) => ({ t, n: visibleDefs(t).length })).filter((x) => x.n > 0);
@@ -1787,10 +1369,9 @@ function renderP3() {
   fill($('#p3'), 
     h('div', { class: 'hd p3t' }, h('span', { class: 'num' }, 'P3'), 'tune', h('span', { class: 'cost heat', title: 'a change here nudges the running simulation' }, 'reheat')),
     h('div', { class: 'tabs', role: 'tablist' }, tabDefs.map(({ t }) => h('div', { class: 'tab' + (t === ui.tab ? ' act' : ''), role: 'tab', tabindex: 0, 'aria-selected': t === ui.tab ? 'true' : 'false', onclick: () => { ui.tab = t; renderP3(); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { ui.tab = t; renderP3(); } } }, t))),
-    B.tiered && (ui.tab === 'edges' || ui.tab === 'forces') ? h('div', { class: 'forces' }, 'tiers, most specific wins: kind / role → per-area override → area default → global. dimmed = inheriting; × clears an override.') : null,
+    B.tiered && (ui.tab === 'edges' || ui.tab === 'forces') ? h('div', { class: 'forces' }, 'tiers, most specific wins: kind / role → global. dimmed = inheriting; × clears an override.') : null,
     groups.map((g) => [h('div', { class: 'grphd' }, g.sub, h('button', { class: 'rst', title: 'reset this group to the preset defaults', onclick: () => resetKeys(g.items.map((d) => d.key)) }, 'reset')), g.items.map(control)]),
-    B.tiered && ui.tab === 'areas' && live().includeAreas ? areaOverrideEditor() : null,
-    lockRow('p3', 'groups & bounds from code', ['groups (nodes · edges · forces · areas · color) and min/max bounds are code-defined (PARAM_DEFS)', 'defaults + the config each control maps to: ' + B.ref, 'hover a control to see the RepoGraphConfig field it maps to'], 'graph-config.ts'));
+    lockRow('p3', 'groups & bounds from code', ['groups (nodes · edges · forces · color) and min/max bounds are code-defined (PARAM_DEFS)', 'defaults + the config each control maps to: ' + B.ref, 'hover a control to see the RepoGraphConfig field it maps to'], 'graph-config.ts'));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1809,9 +1390,8 @@ function paramKeys() {   // every key the preset owns, in registry order (indepe
 function emitValue() {
   const P = cur(), L = P.live, B = base();
   const params = {}; for (const k of paramKeys()) params[k] = L.params[k];
-  const v = { preset: P.label, base: B.id, filters: { nodeTypes: sorted(L.nodeTypes), edgeKinds: sorted(L.edgeKinds), includeExternal: L.includeExternal, excludeTests: L.excludeTests, includeAreas: L.includeAreas }, params };
+  const v = { preset: P.label, base: B.id, filters: { nodeTypes: sorted(L.nodeTypes), edgeKinds: sorted(L.edgeKinds), includeExternal: L.includeExternal, excludeTests: L.excludeTests }, params };
   if (B.directory) v.overlay = disp.dirOv.on ? Object.assign({}, disp.dirOv) : null;
-  if (B.tiered) v.areaOverrides = Object.fromEntries(Object.entries(L.areaOver || {}).filter(([id, o]) => AREA_BY_ID.has(id) && Object.keys(o).length).map(([id, o]) => [id, Object.assign({}, o)]));
   return v;
 }
 function flatPreview() {
@@ -1853,15 +1433,12 @@ function emitTuning() {
     fmap('filters.edgeKinds', 'filters.edge (EdgeKind set predicate)'),
     fmap('filters.includeExternal', 'filters.edge (!edge.isExternal when false; RepoGraph drops edges to non-candidate nodes anyway)'),
     fmap('filters.excludeTests', 'RepoGraph hideTestFiles prop (not in RepoGraphConfig)'),
-    fmap('filters.includeAreas', 'area store (not in RepoGraphConfig)'),
   ].concat(mapLines);
-  if (B.tiered) lines.push(mapLine('areaOverrides', 'bench-only per-area tier: { <areaId>: { dist, str, charge, pad, gravity } } — no RepoGraphConfig field'));
   lines.push('//', '// "view config (TS)" renders this same value through the mapping as a create…ViewConfig-shaped function.', '');
   lines.push('export const tuning = ' + litObj(v, 0) + ';', '');
   return lines.join('\n');
 }
 
-const areaForcesLines = (p, pad) => ['areaCluster', 'areaAttract', 'areaParent', 'anchorRepel', 'crossAreaPull', 'areaHullCollision'].map((k) => pad + k + ': ' + num(p[k]) + ',');
 function emitViewConfig() {
   const P = cur(), L = P.live, B = base(), p = L.params;
   const name = pascal(P.label) + (P.forked ? '' : 'Tuned');
@@ -1918,7 +1495,6 @@ function emitViewConfig() {
       '    edge: createEdgeForcer({',
       forcer,
       '    }),',
-      ...areaForcesLines(p, '    '),
       '  },',
       sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
       '});',
@@ -1953,7 +1529,6 @@ function emitViewConfig() {
       '    forces: {',
       '      node: (node: AnalysisNode) => ({ ...base.forces.node(node), charge: ' + num(p.charge) + ' }),',
       '      edge: () => ({ distance: ' + num(p.edgeDistance) + ', strength: ' + num(p.edgeStrength) + ' }),',
-      ...areaForcesLines(p, '      '),
       '    },',
       sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
       '  });',
@@ -1964,17 +1539,15 @@ function emitViewConfig() {
   } else if (B.id === 'playground') {
     header.push("import { " + (p.edgeStyle === 'gradient' ? '' : 'DEFAULT_EDGE_STYLE, ') + "DEFAULT_NODE_FORCES, DEFAULT_NODE_STYLE, DEFAULT_REPO_GRAPH_CONFIG, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
     const mapBlock = (name, type, keys, pre, enumName) => { const set = keys.filter((k) => p[pre + k] != null); return 'const ' + name + ': Partial<Record<' + type + ', number>> = ' + (set.length ? '{\n' + set.map((k) => '  [' + enumName + '.' + k + ']: ' + num(p[pre + k]) + ',').join('\n') + '\n}' : '{}') + ';'; };
-    const bench = {}; for (const k of ['areaEdgeDistance', 'areaEdgeStrength', 'areaCharge', 'areaCollisionPadding', 'gravity', 'areaGravity']) if (p[k] != null && (k === 'gravity' ? p[k] !== 0 : true)) bench[k] = p[k];
+    const bench = {}; if (p.gravity) bench.gravity = p.gravity;
     for (const pre of ['collisionPadding_', 'gravity_']) for (const t of TIER_ROLES) if (p[pre + t] != null) bench[pre + t] = p[pre + t];
-    const ovs = emitValue().areaOverrides;
-    if (Object.keys(ovs).length) bench.areaOverrides = ovs;
     body = [
       'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
       mapBlock('KIND_DISTANCE', 'EdgeKind', ALL_KINDS, 'dist_', 'EdgeKind'),
       mapBlock('KIND_STRENGTH', 'EdgeKind', ALL_KINDS, 'str_', 'EdgeKind'),
       mapBlock('ROLE_CHARGE', 'SyntaxType', TIER_ROLES, 'charge_', 'SyntaxType'),
       '',
-      '// Bench-only tiers: RepoGraphConfig has no field for these (forces.node() / forces.edge() never see areas; collision and gravity are not per-node).',
+      '// Bench-only tiers: RepoGraphConfig has no field for these (collision and gravity are not per-node).',
       '// Kept so the tuning survives a paste; wire them in when the app grows the tier.',
       'export const ' + snake(P.label) + '_BENCH_ONLY_TIERS = ' + litObj(bench, 0) + ';',
       '',
@@ -2001,7 +1574,6 @@ function emitViewConfig() {
       '      distance: KIND_DISTANCE[edge.kind] ?? ' + num(p.edgeDistance) + ',',
       '      strength: KIND_STRENGTH[edge.kind] ?? ' + num(p.edgeStrength) + ',',
       '    }),',
-      ...areaForcesLines(p, '    '),
       '  },',
       sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
       '});',
@@ -2075,10 +1647,7 @@ function emitViewConfig() {
       '    bonds: {',
       '      classMember: { distance: ' + num(p.bondClassDist) + ', strength: ' + num(p.bondClassStr) + ' },',
       '      sameFile: { distance: ' + num(p.bondFileDist) + ', strength: ' + num(p.bondFileStr) + ' },',
-      '      sameArea: { distance: ' + num(p.bondAreaDist) + ', strength: ' + num(p.bondAreaStr) + ' },',
-      '      diffArea: { distance: ' + num(p.bondDiffDist) + ', strength: ' + num(p.bondDiffStr) + ' },',
       '    },',
-      ...areaForcesLines(p, '    '),
       '  },',
       sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
       '});',
@@ -2122,7 +1691,6 @@ function emitViewConfig() {
       '        distance: ' + num(p.edgeDistance) + ',',
       '        strength: Math.max(0.05, ' + num(p.edgeStrengthBase) + ' / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1)),',
       '      }),',
-      ...areaForcesLines(p, '      '),
       '    },',
       sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
       '  });',
@@ -2161,9 +1729,8 @@ function renderEmit() {
 }
 function resetAll() {
   const P = cur(); P.live = cloneLive(P.defaults);
-  disp.showEdges = true; disp.labels = 'preset'; disp.drawOff = new Set(); disp.solo = null;
+  disp.showEdges = true; disp.labels = 'preset'; disp.drawOff = new Set();
   disp.dirOv = Object.assign({}, DIR_OV_DEFAULTS);
-  for (const a of AREAS) disp.areaVis.set(a.id, true);
   rebuild(true); renderAll(true); pulse('p1'); pulse('p3');
 }
 
@@ -2174,7 +1741,7 @@ function renderNotes() {
   if (!ui.notesOpen) return;
   const m = SNAP.metadata || {};
   fill(el, 
-    h('header', null, 'bench notes', h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'snapshot ' + (m.repoName || '?') + '@' + (m.commit || '?') + ' · ' + fmtN(N) + ' nodes · ' + fmtN(EDGES.length) + ' edges · ' + AREAS.length + ' areas'),
+    h('header', null, 'bench notes', h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'snapshot ' + (m.repoName || '?') + '@' + (m.commit || '?') + ' · ' + fmtN(N) + ' nodes · ' + fmtN(EDGES.length) + ' edges'),
       h('button', { class: 'x', 'aria-label': 'close', onclick: () => { ui.notesOpen = false; renderNotes(); } }, '✕')),
     (() => { const b = h('div', { class: 'body' }); b.append($('#NOTES').content.cloneNode(true)); return b; })());
 }
@@ -2184,7 +1751,7 @@ $('#fitBtn').addEventListener('click', () => fitView(true));
 /* ═══════════════════════════════════════════════════════════════════════════
    8 · go
    ═══════════════════════════════════════════════════════════════════════════ */
-window.__bench = { get bondLinks() { return bondLinks; }, presets, cur, live, base, emitTuning, emitViewConfig, emitValue, selectPreset, forkPreset, rebuild, get simNodes() { return simNodes; }, get links() { return links; }, get sim() { return sim; }, SNAP, PARAM_DEFS, BASES, scaledValue, METRICS, disp, areaState, toggleArea };
+window.__bench = { get bondLinks() { return bondLinks; }, presets, cur, live, base, emitTuning, emitViewConfig, emitValue, selectPreset, forkPreset, rebuild, get simNodes() { return simNodes; }, get links() { return links; }, get sim() { return sim; }, SNAP, PARAM_DEFS, BASES, scaledValue, METRICS, disp };
 resize();
 rebuild(true);
 renderAll();

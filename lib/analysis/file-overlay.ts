@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { hashToColor, deriveBorderColor } from '@/lib/areas/color';
+import { hashToColor, deriveBorderColor } from '@/lib/analysis/color';
 
 /** Number of angles in an overlay's radial profile. */
 export const OVERLAY_ANGLES = 72;

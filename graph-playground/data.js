@@ -6,7 +6,7 @@
  *   version:  1,
  *   metadata: { repoName, repoPath, commit, generatedAt, language, tool, analysisDurationMs },
  *   nodes:    [{ id, name, type, file, line, exported, test, xfile, refsIn, refsOut }],
- *             id       unique SCIP symbol (areas reference it)
+ *             id       unique SCIP symbol
  *             type     SyntaxType string (FUNCTION, METHOD, CLASS, VARIABLE, ...)
  *             test     node lives in a test file
  *             xfile    referenced from / references another file (hasCrossFileReference)
@@ -16,11 +16,9 @@
  *             from     index into nodes
  *             to       index into nodes, or into externals when external is true
  *   externals: [{ name, pkg }]       targets outside the repo (display name, package)
- *   areas:    [{ id, name, parent, color, contains }]
- *             parent   area id or null;  color CSS hex or null;  contains = node indices
  * }
  *
- * A replacement snapshot only has to provide those five keys; the bench derives every
+ * A replacement snapshot only has to provide those keys; the bench derives every
  * count, toggle and tree from them.
  */
 
@@ -2480,8 +2478,5 @@ window.GRAPH_SNAPSHOT = {
     {"name":"local 4","pkg":"unknown"},
     {"name":"local 23","pkg":"unknown"},
     {"name":"IntrinsicElementsmain","pkg":"@types/react"}
-  ],
-  "areas": [
-
   ]
 };

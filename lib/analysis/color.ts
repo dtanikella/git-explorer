@@ -1,5 +1,3 @@
-import type { Area } from './types';
-
 /**
  * Deterministic color from a string id.
  * Generates HSL with good saturation and lightness for overlay visibility.
@@ -21,15 +19,6 @@ export function hashToColor(str: string): string {
     return Math.round(255 * color).toString(16).padStart(2, '0');
   };
   return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-/**
- * Returns the effective color for an area:
- * - If the area has a manually-set color, use that.
- * - Otherwise fall back to the hash-derived default.
- */
-export function getAreaColor(area: Area): string {
-  return area.color ?? hashToColor(area.id);
 }
 
 /**

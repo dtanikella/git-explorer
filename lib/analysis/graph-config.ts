@@ -90,10 +90,6 @@ export interface StructuralBonds {
   classMember: EdgeForces;
   /** spring between any two nodes declared in the same file; omit to leave file cohesion to {@link DirectoryHubsConfig} */
   sameFile?: EdgeForces;
-  /** spring between any two nodes that share a direct area; needs the `nodeAreas` argument of {@link buildStructuralBonds} */
-  sameArea?: EdgeForces;
-  /** spring between any two area-tagged nodes that share no direct area; a long `distance` pushes areas apart. Skipped at strength 0 */
-  diffArea?: EdgeForces;
 }
 
 /**
@@ -210,14 +206,6 @@ export interface RepoGraphConfig {
   forces: {
     node: NodeForcer;
     edge: EdgeForcer;
-    areaCluster: number;
-    areaAttract: number;
-    areaParent: number;
-    anchorRepel: number;
-    areaPin: number;
-    crossAreaPull: number;
-    areaHullCollision: number;
-    layerRadii?: Record<string, number>;
     /** optional class-member / same-file springs added on top of the analysis edges */
     bonds?: StructuralBonds;
     /** optional file and folder hubs; each member is pulled toward its file, each file toward its folder */
@@ -266,16 +254,6 @@ export const DEFAULT_NODE_FORCES: NodeForces = {
 export const DEFAULT_EDGE_FORCES: EdgeForces = {
   distance: 80,
   strength: 0.5,
-};
-
-export const DEFAULT_AREA_FORCES = {
-  areaCluster: 0.3,
-  areaAttract: 0.15,
-  areaParent: 0.5,
-  anchorRepel: 4000,
-  areaPin: 0.5,
-  crossAreaPull: 0.25,
-  areaHullCollision: 0.5,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
@@ -328,7 +306,6 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   forces: {
     node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
     edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
-    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -370,7 +347,6 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
       [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
       [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
     }),
-    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -673,18 +649,6 @@ const DATA_FLOW_NODE_TYPES = new Set<SyntaxType>([
   ...DATA_FLOW_DATA_TYPES,
 ]);
 
-// Target radii (simulation units, from canvas center) for the three manually-assigned
-// Area names a node can be tagged with in the Data Flow view: `storage` (DB/persistence-adjacent
-// types) pulled toward the center, `ux` (UI-facing types) pulled toward the outer ring, `api`
-// (shared contracts) in between. Untagged nodes are unaffected — see RepoGraph.tsx's `layerRadial`
-// force, which only applies nonzero strength to nodes whose area membership resolves to one of
-// these keys.
-export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
-  storage: 100,
-  api: 260,
-  ux: 420,
-};
-
 /**
  * Builds a {@link RepoGraphConfig} tailored for the "Data Flow" view.
  *
@@ -692,8 +656,7 @@ export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
  * Shows both processing nodes (functions, methods, classes) and data nodes
  * (interfaces, type aliases) connected by any non-IMPORTS edge. Data-type
  * nodes are sized by their usage count from processing-type callers and
- * rendered with labels. The config assigns radial layer strengths for
- * area-tagged nodes (storage, api, ux) via the `layerRadii` force option.
+ * rendered with labels.
  *
  * @param edges - All analysis edges; used to compute per-target usage counts.
  * @param nodes - All analysis nodes; used to build the symbol-to-kind index.
@@ -758,7 +721,6 @@ export function createDataFlowViewConfig(
           0.35 / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1),
         ),
       }),
-      layerRadii: DATA_FLOW_LAYER_RADII,
     },
   });
 }
@@ -774,30 +736,15 @@ const VANILLA_NODE_TYPES = new Set<SyntaxType>([
 
 /**
  * Vanilla bond tiers, strongest first: a class hugs its members (20px), a file's nodes stay
- * close (50px), an area's nodes stay loosely together (120px), everything else is held only
- * by a weak 400px analysis edge. The cross-area spring (300px) is off at strength 0: it links every
- * pair of area-tagged nodes in different areas, so raise it deliberately.
+ * close (50px), everything else is held only by a weak 400px analysis edge.
  */
 export const VANILLA_BONDS: StructuralBonds = {
   classMember: { distance: 20, strength: 1 },
   sameFile: { distance: 50, strength: 0.6 },
-  sameArea: { distance: 120, strength: 0.3 },
-  diffArea: { distance: 300, strength: 0 },
 };
 
 /** Standard analysis edges in the Vanilla view: long and weak. */
 export const VANILLA_EDGE_FORCES: EdgeForces = { distance: 400, strength: 0.05 };
-
-/** Vanilla has no area-to-area forces; only the node-to-own-area `areaCluster` pull remains. */
-export const VANILLA_AREA_FORCES = {
-  ...DEFAULT_AREA_FORCES,
-  areaAttract: 0,
-  areaParent: 0,
-  anchorRepel: 0,
-  areaPin: 0,
-  crossAreaPull: 0,
-  areaHullCollision: 0,
-};
 
 /**
  * Owner symbol of a class member, or null when the symbol is not a member.
@@ -827,20 +774,15 @@ export interface BondLink {
  * @remarks
  * A pair gets at most one bond, at its strongest tier: a class and its member get
  * `classMember` even though they share a file. Nodes are matched by `scipSymbol`;
- * a member whose owner is not in `nodes` only receives same-file bonds. `sameArea` bonds
- * the remaining pairs that share at least one direct area; it is skipped unless both
- * `bonds.sameArea` and `nodeAreas` are given. `diffArea` bonds every other pair of
- * area-tagged nodes that share no area (quadratic in the tagged nodes), and is skipped at strength 0.
+ * a member whose owner is not in `nodes` only receives same-file bonds.
  *
  * @param nodes - The nodes present in the simulation.
  * @param bonds - The tier forces to apply.
- * @param nodeAreas - Direct area ids per `scipSymbol`; nodes absent from the map belong to no area.
  * @returns One {@link BondLink} per bonded pair.
  */
 export function buildStructuralBonds(
   nodes: AnalysisNode[],
   bonds: StructuralBonds,
-  nodeAreas?: ReadonlyMap<string, readonly string[]>,
 ): BondLink[] {
   const present = new Set(nodes.map((n) => n.scipSymbol));
   const links: BondLink[] = [];
@@ -852,7 +794,6 @@ export function buildStructuralBonds(
       links.push({ source: owner, target: n.scipSymbol, ...bonds.classMember });
     }
   }
-  const bonded = new Set(classPairs);
   const byFile = new Map<string, AnalysisNode[]>();
   if (bonds.sameFile) for (const n of nodes) {
     const group = byFile.get(n.filePath);
@@ -864,37 +805,6 @@ export function buildStructuralBonds(
         const a = group[i].scipSymbol, b = group[j].scipSymbol;
         if (classPairs.has(`${a}\u0000${b}`) || classPairs.has(`${b}\u0000${a}`)) continue;
         links.push({ source: a, target: b, ...bonds.sameFile! });
-        bonded.add(`${a}\u0000${b}`);
-      }
-    }
-  }
-  if (bonds.sameArea && nodeAreas) {
-    const byArea = new Map<string, string[]>();
-    for (const n of nodes) {
-      for (const id of nodeAreas.get(n.scipSymbol) ?? []) {
-        const group = byArea.get(id);
-        if (group) group.push(n.scipSymbol); else byArea.set(id, [n.scipSymbol]);
-      }
-    }
-    for (const group of byArea.values()) {
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          const a = group[i], b = group[j];
-          if (bonded.has(`${a}\u0000${b}`) || bonded.has(`${b}\u0000${a}`)) continue;
-          links.push({ source: a, target: b, ...bonds.sameArea });
-          bonded.add(`${a}\u0000${b}`);
-        }
-      }
-    }
-  }
-  if (nodeAreas && bonds.diffArea && bonds.diffArea.strength > 0) {
-    const tagged = nodes.filter((n) => (nodeAreas.get(n.scipSymbol) ?? []).length > 0);
-    for (let i = 0; i < tagged.length; i++) {
-      const ai = nodeAreas.get(tagged[i].scipSymbol)!;
-      for (let j = i + 1; j < tagged.length; j++) {
-        const aj = nodeAreas.get(tagged[j].scipSymbol)!;
-        if (ai.some((id) => aj.includes(id))) continue;
-        links.push({ source: tagged[i].scipSymbol, target: tagged[j].scipSymbol, ...bonds.diffArea });
       }
     }
   }
@@ -906,8 +816,7 @@ export function buildStructuralBonds(
  *
  * @remarks
  * Node-to-node forces are tiered: class↔member is the strongest and shortest bond,
- * nodes in one file are strongly bonded at a longer length, nodes sharing an area are
- * loosely bonded, and every other analysis edge is a weak 400px spring. There are no area-to-area forces.
+ * nodes in one file are strongly bonded at a longer length, and every other analysis edge is a weak 400px spring.
  * Like the other views, only nodes touched by an included edge are rendered.
  *
  * @see {@link VANILLA_BONDS}
@@ -920,7 +829,6 @@ export const VANILLA_CONFIG: RepoGraphConfig = mergeConfigs(DEFAULT_REPO_GRAPH_C
   },
   forces: {
     edge: (): EdgeForces => ({ ...VANILLA_EDGE_FORCES }),
-    ...VANILLA_AREA_FORCES,
     bonds: VANILLA_BONDS,
   },
 });
@@ -952,12 +860,12 @@ export const VANILLA_DIRECTORY: DirectoryHubsConfig = {
 };
 
 /**
- * The "Vanilla (directory)" view: Vanilla with file and folder structure in place of areas.
+ * The "Vanilla (directory)" view: Vanilla with file and folder structure in place of pairwise file bonds.
  *
  * @remarks
  * Same node set, call edges and class↔member bond as {@link VANILLA_CONFIG}. Nodes of a file are
  * held together by a hidden file hub rather than pairwise bonds, files by their folder's hub, and
- * folders by their parent's (see {@link VANILLA_DIRECTORY}). Every area force is zero, so area data is ignored.
+ * folders by their parent's (see {@link VANILLA_DIRECTORY}).
  *
  * @see {@link buildDirectoryHubs}
  */
@@ -965,7 +873,6 @@ export const VANILLA_DIRECTORY_CONFIG: RepoGraphConfig = {
   ...VANILLA_CONFIG,
   forces: {
     ...VANILLA_CONFIG.forces,
-    areaCluster: 0,
     bonds: { classMember: VANILLA_BONDS.classMember },
     directory: VANILLA_DIRECTORY,
   },
@@ -1017,14 +924,6 @@ export function mergeConfigs(
       result.forces = {
         node: override.forces.node ?? result.forces.node,
         edge: override.forces.edge ?? result.forces.edge,
-        areaCluster: override.forces.areaCluster ?? result.forces.areaCluster,
-        areaAttract: override.forces.areaAttract ?? result.forces.areaAttract,
-        areaParent: override.forces.areaParent ?? result.forces.areaParent,
-        anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
-        areaPin: override.forces.areaPin ?? result.forces.areaPin,
-        crossAreaPull: override.forces.crossAreaPull ?? result.forces.crossAreaPull,
-        areaHullCollision: override.forces.areaHullCollision ?? result.forces.areaHullCollision,
-        layerRadii: override.forces.layerRadii ?? result.forces.layerRadii,
         bonds: override.forces.bonds
           ? { ...result.forces.bonds, ...override.forces.bonds } as StructuralBonds
           : result.forces.bonds,

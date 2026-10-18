@@ -2,7 +2,6 @@ import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { SelectionProvider, useSelection } from '@/app/contexts/SelectionContext';
-import { AreaProvider } from '@/app/contexts/AreaContext';
 import ExpansionGroups from '@/app/components/selection/ExpansionGroups';
 import SelectionTree from '@/app/components/selection/SelectionTree';
 import { buildFileTree } from '@/lib/selection/trees';
@@ -41,18 +40,15 @@ function ActiveIds() {
 
 function Harness() {
   return (
-    <AreaProvider areas={[]} repoPath="">
-      <SelectionProvider nodes={nodes} edges={edges} visibleNodeIds={visible} areas={[]}>
-        <SelectionTree
-          tree={buildFileTree(nodes)}
-          mode="file"
-          expanded={new Set(['dir:src', 'file:src/b.ts'])}
-          onToggleExpand={() => {}}
-        />
-        <ExpansionGroups nodes={nodes} />
-        <ActiveIds />
-      </SelectionProvider>
-    </AreaProvider>
+    <SelectionProvider nodes={nodes} edges={edges} visibleNodeIds={visible}>
+      <SelectionTree
+        tree={buildFileTree(nodes)}
+        expanded={new Set(['dir:src', 'file:src/b.ts'])}
+        onToggleExpand={() => {}}
+      />
+      <ExpansionGroups nodes={nodes} />
+      <ActiveIds />
+    </SelectionProvider>
   );
 }
 
