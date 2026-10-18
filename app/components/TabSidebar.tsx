@@ -1,6 +1,6 @@
 'use client';
 
-export type TabId = 'graph' | 'stats' | 'diff';
+export type TabId = 'default' | 'graph' | 'stats' | 'diff';
 
 interface TabSidebarProps {
   activeTab: TabId;
@@ -11,7 +11,7 @@ interface TabSidebarProps {
  * Sidebar navigation for switching between the main views.
  *
  * @remarks
- * Provides a vertical tab list for Graph, Stats, and Diff views.
+ * Provides a vertical tab list for DefaultView, Graph, Stats, and Diff views.
  * The active tab is visually highlighted.
  *
  * @param activeTab - The currently active tab ID.
@@ -19,6 +19,17 @@ interface TabSidebarProps {
  */
 export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    {
+      id: 'default',
+      label: 'DefaultView',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="10" cy="10" r="1.5" />
+          <circle cx="10" cy="10" r="4.5" />
+          <circle cx="10" cy="10" r="8" />
+        </svg>
+      ),
+    },
     {
       id: 'graph',
       label: 'Graph',

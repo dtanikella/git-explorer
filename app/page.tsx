@@ -20,6 +20,7 @@ import {
 } from '@/lib/analysis/graph-config';
 import type { RepoGraphConfig } from '@/lib/analysis/graph-config';
 import type { AnalysisEdge, AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
+import DefaultView from './components/default-view/DefaultView';
 import CompareBar from './components/diff/CompareBar';
 import DiffStatePanel from './components/diff/DiffStatePanel';
 import { useDiff } from './components/diff/useDiff';
@@ -75,7 +76,7 @@ function SelectionBridge({ toggleRef, pendingId, onPendingConsumed }: {
 export default function HomePage() {
   const [repoPath, setRepoPath] = useState<string>('');
   const [hideTestFiles, setHideTestFiles] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>('graph');
+  const [activeTab, setActiveTab] = useState<TabId>('default');
   const [topN, setTopN] = useState(20);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
@@ -269,6 +270,8 @@ export default function HomePage() {
               <div className="w-full h-full flex items-center justify-center text-gray-400 border border-dashed border-gray-300 rounded-lg">
                 Select a repository to visualize
               </div>
+            ) : activeTab === 'default' ? (
+              <DefaultView analysisData={analysisData} loading={loading} error={error} />
             ) : activeTab === 'diff' ? (
               <div className="h-full min-w-0 flex flex-col gap-2">
                 <CompareBar diffState={diffState} />
