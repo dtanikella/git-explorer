@@ -77,6 +77,13 @@ jest.mock('@/app/components/RepositorySelector', () => {
   };
 });
 
+// Mock DefaultView to avoid d3 ESM imports in the test environment
+jest.mock('@/app/components/default-view/DefaultView', () => {
+  return function MockDefaultView() {
+    return <div data-testid="default-view" />;
+  };
+});
+
 // Mock RepoGraph to avoid d3/DOM issues in test environment
 jest.mock('@/app/components/repo-graph/RepoGraph', () => {
   return function MockRepoGraph(props: Record<string, unknown>) {
@@ -208,6 +215,7 @@ describe('Homepage', () => {
   it('renders tools and filters toolbar after selecting a repo', async () => {
     render(<Home />);
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
     await waitFor(() => expect(screen.getByTestId('repo-graph')).toBeInTheDocument());
     expect(screen.getByRole('checkbox', { name: /hide test files/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /view/i })).toBeEnabled();
@@ -220,6 +228,7 @@ describe('Homepage', () => {
     render(<Home />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
 
     expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
     await waitFor(() => expect(lastRepoGraphProps?.analysisData).toEqual({ nodes: [], edges: [] }));
@@ -294,6 +303,7 @@ describe('Homepage', () => {
 
     render(<Home />);
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
 
     await waitFor(() => expect(lastSelectionProviderProps?.value).toBeDefined());
 
@@ -332,6 +342,7 @@ describe('Homepage', () => {
 
     render(<Home />);
     fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
     await waitFor(() => expect(screen.getByTestId('repo-graph')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Stats' }));

@@ -56,6 +56,13 @@ jest.mock('@/app/components/RepositorySelector', () => {
   };
 });
 
+// Mock DefaultView to avoid d3 ESM imports in the test environment
+jest.mock('@/app/components/default-view/DefaultView', () => {
+  return function MockDefaultView() {
+    return <div data-testid="default-view" />;
+  };
+});
+
 jest.mock('@/app/components/repo-graph/RepoGraph', () => {
   return function MockRepoGraph() {
     return <div data-testid="repo-graph">Graph View</div>;
@@ -113,12 +120,15 @@ describe('View Switching Integration', () => {
     const selectButton = screen.getByRole('button', { name: /select repository/i });
     fireEvent.click(selectButton);
 
+    // The app opens on the default tab, so move to the graph tab first
+    fireEvent.click(screen.getByRole('button', { name: /graph tab/i }));
+
     // Wait for data to load
     await waitFor(() => {
       expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
     });
 
-    // Should show graph tab by default
+    // Should show the graph tab
     expect(screen.getByRole('combobox')).toBeInTheDocument();
     expect(screen.queryByTestId('stats-toolbar')).not.toBeInTheDocument();
 
@@ -149,6 +159,7 @@ describe('View Switching Integration', () => {
     render(<Home />);
 
     fireEvent.click(screen.getByRole('button', { name: /select repository/i }));
+    fireEvent.click(screen.getByRole('button', { name: /graph tab/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId('repo-graph')).toBeInTheDocument();
