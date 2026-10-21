@@ -3,38 +3,31 @@
  *
  * @remarks
  * Same-file, callers and callees relations are computed per *source*: a node,
- * an area (sub-areas count as part of it) or a folder/file path. The
+ * or a folder/file path. The
  * whole-selection toggles apply each relation to every selected source, and
  * a row's own toggles apply it to that row alone, whether or not the row is
  * selected. Nodes already in the selection are never offered as candidates.
- * Area membership itself is handled by the selection state derivation, not
- * here.
  *
  * @see `app/contexts/SelectionContext` for state integration.
  */
 
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { EdgeKind } from '@/lib/analysis/types';
-import type { Area } from '@/lib/areas/types';
-import { getAreaMemberIds } from './stats';
 
 // --- Types ---
 
 export type ExpansionType = 'same-file' | 'callers' | 'callees';
 
-/** Identifies what an expansion applies to: `n:<node>`, `a:<area>` or `h:<folder or file path>`. */
+/** Identifies what an expansion applies to: `n:<node>` or `h:<folder or file path>`. */
 export type SourceKey = string;
 
 export const nodeSourceKey = (nodeId: string): SourceKey => `n:${nodeId}`;
-export const areaSourceKey = (areaId: string): SourceKey => `a:${areaId}`;
 export const pathSourceKey = (path: string): SourceKey => `h:${path}`;
 
 export interface ExpansionSource {
   key: SourceKey;
-  kind: 'node' | 'area' | 'path';
+  kind: 'node' | 'path';
   label: string;
-  /** For area sources: the area id, for coloring. */
-  areaId?: string;
   /** Every node the source covers. */
   nodeIds: string[];
 }
@@ -61,11 +54,9 @@ export interface ExpansionGroup {
 
 export interface ExpansionInput {
   selectedNodeIds: Set<string>;
-  selectedAreaIds: Set<string>;
   nodes: AnalysisNode[];
   edges: AnalysisEdge[];
   visibleNodeIds: Set<string>;
-  areas: Area[];
   /** Relations whose whole-selection toggle is on. */
   wholeEnabled: ReadonlySet<ExpansionType>;
   /** Relations switched on per row. */
@@ -101,13 +92,12 @@ const inFolder = (filePath: string, path: string) =>
  */
 export function computeExpansionGroups(input: ExpansionInput): Map<ExpansionType, ExpansionGroup> {
   const {
-    selectedNodeIds, selectedAreaIds, nodes, edges, visibleNodeIds, areas,
+    selectedNodeIds, nodes, edges, visibleNodeIds,
     wholeEnabled, rowExpansions, disabledIds, focusKey,
   } = input;
 
   if (
     selectedNodeIds.size === 0 &&
-    selectedAreaIds.size === 0 &&
     rowExpansions.size === 0 &&
     focusKey === null
   ) {
@@ -116,8 +106,6 @@ export function computeExpansionGroups(input: ExpansionInput): Map<ExpansionType
 
   const nodesBySymbol = new Map<string, AnalysisNode>();
   for (const n of nodes) nodesBySymbol.set(n.scipSymbol, n);
-  const areasById = new Map(areas.map((a) => [a.id, a]));
-  const areaMembers = getAreaMemberIds(areas);
 
   // Edge indexes so each source only walks its own edges
   const callersOf = new Map<string, string[]>();
@@ -137,11 +125,6 @@ export function computeExpansionGroups(input: ExpansionInput): Map<ExpansionType
     let source: ExpansionSource | null = null;
     if (key.startsWith('n:')) {
       source = { key, kind: 'node', label: nodesBySymbol.get(value)?.name ?? value, nodeIds: [value] };
-    } else if (key.startsWith('a:')) {
-      const area = areasById.get(value);
-      if (area) {
-        source = { key, kind: 'area', label: area.name, areaId: area.id, nodeIds: [...(areaMembers.get(value) ?? [])] };
-      }
     } else if (key.startsWith('h:')) {
       source = {
         key,
@@ -181,19 +164,7 @@ export function computeExpansionGroups(input: ExpansionInput): Map<ExpansionType
     return found.size > 0 ? { source, nodeIds: [...found] } : null;
   }
 
-  // The selected sources: each checked area, plus each selected node no checked area covers
-  const checkedAreas = [...selectedAreaIds].filter((id) => {
-    for (let p = areasById.get(id)?.parent; p; p = areasById.get(p)?.parent) {
-      if (selectedAreaIds.has(p)) return false;
-    }
-    return areasById.has(id);
-  });
-  const covered = new Set<string>();
-  for (const id of checkedAreas) for (const m of areaMembers.get(id) ?? []) covered.add(m);
-  const selectedKeys: SourceKey[] = [
-    ...checkedAreas.map(areaSourceKey),
-    ...[...selectedNodeIds].filter((id) => !covered.has(id)).map(nodeSourceKey),
-  ];
+  const selectedKeys: SourceKey[] = [...selectedNodeIds].map(nodeSourceKey);
 
   const result = new Map<ExpansionType, ExpansionGroup>();
   for (const type of EXPANSION_TYPES) {

@@ -3,13 +3,11 @@ import {
   computeActiveNodeIds,
   collectRelationIds,
   nodeSourceKey,
-  areaSourceKey,
   pathSourceKey,
 } from '@/lib/selection/candidates';
 import type { ExpansionInput, ExpansionType, SourceKey } from '@/lib/selection/candidates';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
-import type { Area } from '@/lib/areas/types';
 
 function makeNode(sym: string, name: string, filePath: string): AnalysisNode {
   return {
@@ -54,20 +52,6 @@ function makeEdge(
   };
 }
 
-function makeArea(id: string, name: string, contains: string[], parent: string | null = null, children: string[] = []): Area {
-  return {
-    id,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    name,
-    type: 'business_domain',
-    contains,
-    parent,
-    children,
-    clusterStrength: 0,
-  };
-}
-
 const nodes: AnalysisNode[] = [
   makeNode('sym:a', 'funcA', 'src/a.ts'),
   makeNode('sym:b', 'funcB', 'src/a.ts'),
@@ -84,20 +68,12 @@ const edges: AnalysisEdge[] = [
 
 const visibleNodeIds = new Set(['sym:a', 'sym:b', 'sym:c', 'sym:d', 'sym:e']);
 
-const areas: Area[] = [
-  makeArea('area-1', 'Area 1', ['sym:a', 'sym:b']),
-  makeArea('area-2', 'Area 2', ['sym:c']),
-  makeArea('area-parent', 'Parent', [], null, ['area-1']),
-];
-
 function run(over: Partial<ExpansionInput> = {}) {
   return computeExpansionGroups({
     selectedNodeIds: new Set(),
-    selectedAreaIds: new Set(),
     nodes,
     edges,
     visibleNodeIds,
-    areas,
     wholeEnabled: new Set<ExpansionType>(),
     rowExpansions: new Map<SourceKey, Set<ExpansionType>>(),
     disabledIds: new Map(),
@@ -154,18 +130,6 @@ describe('computeExpansionGroups', () => {
     expect(ids(on.get('same-file')!.active)).toEqual(['sym:b']);
   });
 
-  it('treats a checked area as one source, with callers from outside it', () => {
-    const result = run({
-      selectedNodeIds: new Set(['sym:a', 'sym:b']),
-      selectedAreaIds: new Set(['area-1']),
-      edges: [makeEdge(EdgeKind.CALLS, 'sym:a', 'sym:b'), makeEdge(EdgeKind.CALLS, 'sym:c', 'sym:a')],
-    });
-    const callers = result.get('callers')!.available;
-    expect(callers).toHaveLength(1);
-    expect(callers[0].source.key).toBe(areaSourceKey('area-1'));
-    expect(callers[0].nodeIds).toEqual(['sym:c']);
-  });
-
   describe('per-row expansions', () => {
     const rows = (key: SourceKey, ...types: ExpansionType[]) => new Map([[key, new Set(types)]]);
 
@@ -173,15 +137,6 @@ describe('computeExpansionGroups', () => {
       const result = run({ rowExpansions: rows(nodeSourceKey('sym:c'), 'callers') });
       expect(ids(result.get('callers')!.active)).toEqual(['sym:a']);
       expect(result.get('callees')!.active).toHaveLength(0);
-    });
-
-    it('expands an area, counting sub-areas as part of it', () => {
-      const parentAreas = [
-        makeArea('parent', 'Parent', [], null, ['kid']),
-        makeArea('kid', 'Kid', ['sym:c'], 'parent'),
-      ];
-      const result = run({ areas: parentAreas, rowExpansions: rows(areaSourceKey('parent'), 'callees') });
-      expect(ids(result.get('callees')!.active)).toEqual(['sym:d']);
     });
 
     it('expands a folder: every node in it, callers of it, callees by it', () => {
@@ -238,7 +193,7 @@ describe('computeExpansionGroups', () => {
     });
 
     it('ignores unknown sources', () => {
-      const result = run({ rowExpansions: rows(areaSourceKey('missing'), 'callers') });
+      const result = run({ rowExpansions: rows(nodeSourceKey('missing'), 'callers') });
       expect(result.get('callers')!.active).toHaveLength(0);
     });
   });

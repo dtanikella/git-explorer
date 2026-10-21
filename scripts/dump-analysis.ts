@@ -10,7 +10,6 @@
  *   npx tsx scripts/dump-analysis.ts [repoPath] [outFile]
  *
  * Defaults: `repoPath` = current directory, `outFile` = graph-playground/data.js.
- * Areas are read from `<repoPath>/.git-explorer/areas.json` when present.
  *
  * Test files are indexed too (the app's tsconfig excludes `__tests__`, so a temporary
  * tsconfig without that exclusion is used) and flagged per node, which is what the
@@ -29,14 +28,6 @@ import { analyzeTsRepo } from '../app/services/analysis/ts/controller';
 import { saveCachedIndex } from '../lib/scip/cache';
 import type { AnalysisEdge, AnalysisNode } from '../lib/analysis/types';
 
-interface AreaRecord {
-  id: string;
-  name: string;
-  parent: string | null;
-  color?: string;
-  contains: string[];
-}
-
 const SNAPSHOT_VERSION = 1;
 
 const CONTRACT_HEADER = `/*
@@ -47,7 +38,7 @@ const CONTRACT_HEADER = `/*
  *   version:  ${SNAPSHOT_VERSION},
  *   metadata: { repoName, repoPath, commit, generatedAt, language, tool, analysisDurationMs },
  *   nodes:    [{ id, name, type, file, line, exported, test, xfile, refsIn, refsOut }],
- *             id       unique SCIP symbol (areas reference it)
+ *             id       unique SCIP symbol
  *             type     SyntaxType string (FUNCTION, METHOD, CLASS, VARIABLE, ...)
  *             test     node lives in a test file
  *             xfile    referenced from / references another file (hasCrossFileReference)
@@ -57,11 +48,9 @@ const CONTRACT_HEADER = `/*
  *             from     index into nodes
  *             to       index into nodes, or into externals when external is true
  *   externals: [{ name, pkg }]       targets outside the repo (display name, package)
- *   areas:    [{ id, name, parent, color, contains }]
- *             parent   area id or null;  color CSS hex or null;  contains = node indices
  * }
  *
- * A replacement snapshot only has to provide those five keys; the bench derives every
+ * A replacement snapshot only has to provide those keys; the bench derives every
  * count, toggle and tree from them.
  */
 `;
@@ -77,21 +66,6 @@ function hasCrossFileReference(node: AnalysisNode): boolean {
     node.referencedAt.some((ref) => ref.filePath !== node.filePath) ||
     node.outboundRefs.some((ref) => ref.filePath !== node.filePath)
   );
-}
-
-function readAreas(repoPath: string, indexOf: Map<string, number>): AreaRecord[] {
-  const file = path.join(repoPath, '.git-explorer', 'areas.json');
-  if (!fs.existsSync(file)) return [];
-  const parsed = JSON.parse(fs.readFileSync(file, 'utf-8')) as {
-    areas?: Array<{ id: string; name: string; parent: string | null; color?: string; contains: string[] }>;
-  };
-  return (parsed.areas ?? []).map((a) => ({
-    id: a.id,
-    name: a.name,
-    parent: a.parent ?? null,
-    color: a.color,
-    contains: a.contains.filter((s) => indexOf.has(s)),
-  }));
 }
 
 /**
@@ -194,14 +168,6 @@ async function main(): Promise<void> {
     edges.push({ kind: e.kind, from, to, external: false });
   }
 
-  const areas = readAreas(repoPath, nodeIndex).map((a) => ({
-    id: a.id,
-    name: a.name,
-    parent: a.parent,
-    color: a.color ?? null,
-    contains: a.contains.map((s) => nodeIndex.get(s) as number),
-  }));
-
   let commit = 'unknown';
   try {
     commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repoPath }).toString().trim();
@@ -232,9 +198,6 @@ async function main(): Promise<void> {
     '  ],',
     '  "externals": [',
     externals.map((x) => `    ${line(x)}`).join(',\n'),
-    '  ],',
-    '  "areas": [',
-    areas.map((a) => `    ${line(a)}`).join(',\n'),
     '  ]',
     '};',
     '',
@@ -249,7 +212,7 @@ async function main(): Promise<void> {
   console.log(`  nodes ${nodes.length}`, count(nodes.map((n) => n.type)));
   console.log(`  edges ${edges.length}`, count(edges.map((e) => e.kind)));
   console.log(`  internal ${edges.filter((e) => !e.external).length} / external ${edges.filter((e) => e.external).length} (${externals.length} external targets)`);
-  console.log(`  areas ${areas.length}${skipped ? `  (skipped ${skipped} edges with unresolved endpoints)` : ''}`);
+  if (skipped) console.log(`  (skipped ${skipped} edges with unresolved endpoints)`);
 }
 
 main().catch((err) => {

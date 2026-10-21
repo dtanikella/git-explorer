@@ -2,19 +2,16 @@
 
 import { useState, useCallback } from 'react';
 import { useSelection } from '@/app/contexts/SelectionContext';
-import { useAreaStore } from '@/app/contexts/AreaContext';
 import type { AnalysisNode } from '@/lib/analysis/types';
 import type { TreeNode } from '@/lib/selection/trees';
 import { useCopyFeedback } from './useCopyFeedback';
 import { TreeIconButton, LockIcon, UnlockIcon, CopyIcon, CheckIcon, FilterIcon } from './TreeIconButton';
-import { nodeSourceKey, areaSourceKey, pathSourceKey } from '@/lib/selection/candidates';
+import { nodeSourceKey, pathSourceKey } from '@/lib/selection/candidates';
 import type { SourceKey } from '@/lib/selection/candidates';
 
 interface SelectionTreeProps {
   /** The root tree node to render. */
   tree: TreeNode;
-  /** Mode: area-tree or file-tree. */
-  mode: 'area' | 'file';
   /** The set of currently expanded node ids. */
   expanded: Set<string>;
   /** Callback to toggle expansion of a node. */
@@ -26,19 +23,16 @@ interface SelectionTreeProps {
  * shift-range selection, padlock controls, and copy buttons.
  *
  * @remarks
- * Integrated with {@link useSelection} for all selection state and
- * {@link useAreaStore} for area display data.
+ * Integrated with {@link useSelection} for all selection state.
  */
-export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: SelectionTreeProps) {
+export default function SelectionTree({ tree, expanded, onToggleExpand }: SelectionTreeProps) {
   const { state, toggleNode, toggleNodes, toggleLock, toggleFocus } = useSelection();
-  const { runtimeState } = useAreaStore();
 
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
   const { copiedKey: copiedId, copy } = useCopyFeedback();
 
   /**
    * Computes the tri-state of a node: 'checked', 'indeterminate', or 'unchecked'.
-   * For area nodes: checks against selectedNodeIds for all descendant members.
    * For file nodes: checks against selectedNodeIds for all file members.
    */
   const getCheckState = useCallback(
@@ -234,7 +228,6 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
     const hasChildren = node.children && node.children.length > 0;
     const hasMembers = collectAllMembers(node).length > 0;
     const isExpandable = !!hasChildren || !!(node.members && node.members.length > 0);
-    const areaColor = node.areaId ? runtimeState.get(node.areaId)?.color : undefined;
 
     return (
       <div key={node.id}>
@@ -289,29 +282,11 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
             }}
             onClick={(e) => handleNodeCheck(node.id, e)}
           >
-            {areaColor ? (
-              <span
-                style={{
-                  display: 'inline-block',
-                  background: `${areaColor}26`,
-                  color: areaColor,
-                  fontSize: 10,
-                  padding: '2px 8px',
-                  borderRadius: 9,
-                  fontWeight: 500,
-                }}
-              >
-                {node.name}
-              </span>
-            ) : (
-              node.name
-            )}
+            {node.name}
           </span>
 
           {/* Per-row expansion filter */}
-          {renderFilterButton(
-            node.areaId ? areaSourceKey(node.areaId) : node.path ? pathSourceKey(node.path) : null,
-          )}
+          {renderFilterButton(node.path ? pathSourceKey(node.path) : null)}
 
           {/* Padlock */}
           {hasMembers && (
@@ -340,8 +315,7 @@ export default function SelectionTree({ tree, mode, expanded, onToggleExpand }: 
         {isExpanded && (
           <>
             {node.children?.map((child) => renderNode(child, depth + 1))}
-            {mode === 'area' && node.members?.map((m) => renderMemberNode(m, depth + 1))}
-            {mode === 'file' && node.members?.map((m) => renderMemberNode(m, depth + 1))}
+            {node.members?.map((m) => renderMemberNode(m, depth + 1))}
           </>
         )}
       </div>

@@ -130,18 +130,6 @@
   .lock li{margin:0;}
   .lock .more{color:var(--dim);}
 
-  /* area overlay tree */
-  .tree{max-height:128px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
-  .tree::-webkit-scrollbar{width:6px;} .tree::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
-  .arow{display:flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 0;min-height:21px;}
-  .arow .chev{width:11px;text-align:center;color:var(--muted);font-size:10px;cursor:pointer;flex:0 0 auto;}
-  .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto;}
-  .arow .r{flex:1 1 auto;min-width:0;padding:0;}
-  .arow .nm{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .arow.off .nm{color:var(--dim);}
-  .solo{display:none;font-size:9px;color:var(--accent);cursor:pointer;background:none;border:0;padding:0 0 0 4px;}
-  .arow:hover .solo,.arow .solo.active{display:inline;}
-  .arow .solo.active{color:var(--ok);}
   .forces{font:9.5px ui-monospace,monospace;color:var(--muted);line-height:1.55;margin-top:2px;}
 
   /* P3: tabs, sliders */
@@ -153,6 +141,10 @@
   .grphd:first-of-type{margin-top:0;}
   .rst{margin-left:auto;font-size:9px;color:var(--accent);text-transform:none;letter-spacing:0;cursor:pointer;background:none;border:0;padding:0;}
   .sl{display:grid;grid-template-columns:66px 1fr 44px;gap:7px;align-items:center;padding:2px 0;}
+  .sl.nul{grid-template-columns:66px 1fr 44px 14px;}
+  .sl.inh .lb,.sl.inh .vv{opacity:.5;font-style:italic;} .sl.inh input[type=range]{opacity:.45;}
+  .sl.inh .clr{visibility:hidden;}
+  .clr{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;} .clr:hover{color:var(--text);}
   .sl .lb{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .sl .vv{font:9.5px ui-monospace,monospace;color:var(--muted);text-align:right;}
   .sl .bd{font:8.5px ui-monospace,monospace;color:var(--dim);grid-column:2;margin-top:-3px;}
@@ -246,9 +238,18 @@
   <pre>{ version, metadata: { repoName, commit, generatedAt, … },
   nodes:     [{ id, name, type, file, line, exported, test, xfile, refsIn, refsOut }],
   edges:     [{ kind, from, to, external }],   // from → nodes[]; to → nodes[] (or externals[] when external)
-  externals: [{ name, pkg }],
-  areas:     [{ id, name, parent, color, contains: [node index…] }] }</pre>
+  externals: [{ name, pkg }] }</pre>
   <p>Produce it with <code>npx tsx scripts/dump-analysis.ts [repoPath] [outFile]</code> (same SCIP + tree-sitter pipeline as the app). Swap it by regenerating, or by dropping in any <code>data.js</code> with those keys; every count, toggle and tree in the bench is derived from the snapshot.</p>
+
+  <h4>Decision 4 · Playground preset &amp; tiers</h4>
+  <p><b>Playground</b> is a fourth, bench-only preset: the union of the three code presets' node types and edge kinds. Its tunables resolve through tiers, most specific first: <b>edge kind / node role → global</b>. A dimmed slider is inheriting the global value; <b>×</b> clears an override. Tiers cover edge distance and strength, charge, collision padding and gravity (a per-node pull to the center — <code>centerStrength</code> itself stays <code>d3.forceCenter</code>, global only).</p>
+  <p>The app has one global collision padding and no per-node gravity. The emit therefore carries kind and role charge, distance and strength into the <code>RepoGraphConfig</code>, and puts the rest in a <code>…_BENCH_ONLY_TIERS</code> const.</p>
+
+  <h4>Decision 5 · Vanilla (directory)</h4>
+  <p><b>Vanilla (directory)</b> is Vanilla with file and folder structure in place of pairwise file bonds. Every node is tied to a hidden <b>file hub</b> (<code>IN_FILE</code>), every file hub to its <b>folder hub</b> (<code>IN_FOLDER</code>), and every folder hub to its parent folder's hub (<code>IN_PARENT</code>, direct parent only). Each tier has its own distance, strength and edge style; the links are simulated but drawn only when a tier is switched to <i>shown</i>. Hubs are anchors: near-invisible by default (opacity 0, no charge, no collision) and never hoverable, selectable or counted as nodes.</p>
+  <p>Hubs replace the pairwise <code>sameFile</code> bond (n&sup2; links for a big file) with one link per node; the class &harr; member bond is kept. The hub builder is <code>lib/analysis/directory-hubs.ts</code>; this bench keeps a copy of it, so it can drift.</p>
+  <p><b>File overlays.</b> Each file with at least a few nodes gets one overlay centered on its hub: a circle whose radius is a percentile of node distance, molded with smooth bulges to reach every node outside it, so by default (<i>mold reach</i> &infin;) the outline hugs all of the file's nodes. Lower <i>circle covers</i>, <i>padding</i> and <i>mold smooth</i> to tighten it. Overlays are display-only (P2) and never feed the simulation. Because d3's link force leaves a hub with hundreds of springs nearly immobile, hubs drift off their own members; the <i>center on members</i> force (P3, forces tab) pulls each hub to its members' centroid, and is <code>forces.directory.hubCenter</code> in the app. The overlay settings are <code>forces.directory.overlay</code>; the app computes and draws them in <code>lib/analysis/file-overlay.ts</code>, a port of this bench's code that can drift.</p>
+  <p><b>Folder physics</b> (bench-only for now). Files organize around their immediate folder with two forces that act on a whole file at once: <i>files &rarr; folder</i> nudges every node of a file toward its folder hub, and <i>sibling separation</i> treats sibling files as circles and pushes overlapping ones apart, leaving the <i>sibling gap</i>. Springs between hubs can't do this: d3 splits a link's pull by link count, so a file hub with hundreds of springs never moves, and long-range node repulsion overwhelms a weak spring. <i>repel reach</i> caps the many-body force's distance, so far-away files stop pushing each other out; it changes the whole layout, and 3000 means unlimited. Only files pack, not sub-folders.</p>
 
   <h4>Shipping</h4>
   <p>The bench is one file plus <code>data.js</code>. The app serves it at <code>/graph-playground/index.html</code> (static, via <code>public/</code>) and links to it from the graph toolbar; opening the file directly works the same.</p>
@@ -294,7 +295,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 /* ═══════════════════════════════════════════════════════════════════════════
    1 · snapshot → indexes (derived once; the snapshot never changes while tuning)
    ═══════════════════════════════════════════════════════════════════════════ */
-const NODES = SNAP.nodes, EDGES = SNAP.edges, EXTS = SNAP.externals || [], AREAS = SNAP.areas || [];
+const NODES = SNAP.nodes, EDGES = SNAP.edges, EXTS = SNAP.externals || [];
 const N = NODES.length;
 NODES.forEach((n, i) => { n.idx = i; });
 
@@ -331,29 +332,6 @@ const KINDS_PRESENT = [...new Set(EDGES.map((e) => e.kind))].sort((a, b) => (KIN
 const kindCounts = (L, k) => { const c = KIND_CNT[L.excludeTests ? 'src' : 'all']; return { int: c.int[k] || 0, ext: c.ext[k] || 0 }; };
 const extEdgeCount = (L) => Object.values(KIND_CNT[L.excludeTests ? 'src' : 'all'].ext).reduce((a, b) => a + b, 0);
 
-// areas: tree + transitive membership (an area's nodes = its own + every descendant's)
-const AREA_BY_ID = new Map(AREAS.map((a) => [a.id, a]));
-const AREA_KIDS = new Map(AREAS.map((a) => [a.id, []]));
-for (const a of AREAS) if (a.parent && AREA_KIDS.has(a.parent)) AREA_KIDS.get(a.parent).push(a);
-const AREA_ROOTS = AREAS.filter((a) => !a.parent || !AREA_BY_ID.has(a.parent));
-const AREA_ALL = new Map();      // id → Set(node idx), transitive
-const NODE_AREAS = new Map();    // node idx → direct areas
-const AREA_DESC = new Map();     // id → [descendant ids]
-function collectArea(a, seen) {
-  if (AREA_ALL.has(a.id)) return AREA_ALL.get(a.id);
-  const set = new Set(a.contains), desc = [];
-  seen.add(a.id);
-  for (const k of AREA_KIDS.get(a.id) || []) {
-    if (seen.has(k.id)) continue;
-    for (const i of collectArea(k, seen)) set.add(i);
-    desc.push(k.id, ...AREA_DESC.get(k.id));
-  }
-  AREA_ALL.set(a.id, set); AREA_DESC.set(a.id, desc);
-  return set;
-}
-for (const a of AREAS) collectArea(a, new Set());
-for (const a of AREAS) for (const i of a.contains) { if (!NODE_AREAS.has(i)) NODE_AREAS.set(i, []); NODE_AREAS.get(i).push(a); }
-
 /* ═══════════════════════════════════════════════════════════════════════════
    2 · CODE HALF — policy mirrored from lib/analysis/graph-config.ts (shown as locked rows)
        Nothing here is a control; the live half (P1 on-sets, P3 magnitudes) is edited on the rail.
@@ -367,10 +345,17 @@ const ROLE_COLORS = { FUNCTION: '#3b82f6', METHOD: '#60a5fa', CLASS: '#8b5cf6', 
 const OTHER_COLOR = '#6b7280';                    // DEFAULT_NODE_STYLE.color
 const EXTERNAL_COLOR = '#9ca3af';                 // bench-only stub styling for external targets
 const ALL_KINDS = ['CALLS', 'EXTENDS', 'IMPLEMENTS', 'INSTANTIATES', 'IMPORTS', 'USES_TYPE'];
-const SIM_DEFAULTS = { centerStrength: 0.1, collisionPadding: 10, alphaDecay: 0.0228, velocityDecay: 0.4, areaCluster: 0.3 };
+const SIM_DEFAULTS = { centerStrength: 0.1, collisionPadding: 10, alphaDecay: 0.0228, velocityDecay: 0.4 };
+// Playground tiers — every value resolves most-specific-first: kind / role → global.  null = inherit.
+const TIER_ROLES = ['FUNCTION', 'METHOD', 'CONSTRUCTOR', 'CLASS', 'INTERFACE', 'TYPE_ALIAS'];
+const TIER_INHERIT = (() => {
+  const o = {};
+  for (const k of ALL_KINDS) { o['dist_' + k] = null; o['str_' + k] = null; }
+  for (const t of TIER_ROLES) { o['charge_' + t] = null; o['collisionPadding_' + t] = null; o['gravity_' + t] = null; }
+  return o;
+})();
 const ROLE_PARAMS = { color_FUNCTION: ROLE_COLORS.FUNCTION, color_METHOD: ROLE_COLORS.METHOD, color_CLASS: ROLE_COLORS.CLASS,
   color_INTERFACE: ROLE_COLORS.INTERFACE, color_TYPE_ALIAS: ROLE_COLORS.TYPE_ALIAS, color_MODULE: ROLE_COLORS.MODULE, color_other: OTHER_COLOR };
-const DATA_FLOW_LAYER_RADII = { storage: 100, api: 260, ux: 420 };
 
 // One entry per code-defined view preset. `defaults` doubles as the list of tunables the preset exposes.
 const BASES = {
@@ -430,7 +415,6 @@ const BASES = {
     nodeTypes: ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS'],
     edgeKinds: ALL_KINDS.filter((k) => k !== 'IMPORTS'),
     metric: 'processing→data USES_TYPE count',
-    layerRadii: DATA_FLOW_LAYER_RADII,
     defaults: Object.assign({
       processingRadius: 6, nodeRadiusMin: 12, nodeRadiusMax: 30, nodeOpacity: 1,
       edgeDistance: 90, edgeStrengthBase: 0.35,
@@ -444,7 +428,6 @@ const BASES = {
       'data nodes (INTERFACE, TYPE_ALIAS): labeled, radius = scaledValue(usage count, min, max)',
       'processing nodes: fixed radius, no label',
       'forces.edge strength = max(0.05, base / √usage(target))',
-      'forces.layerRadii = { storage: 100, api: 260, ux: 420 } — areas of those names only',
     ],
     nodeGate: () => true,
     radius: (n, P) => (DATA_TYPES.has(n.type) ? scaledValue(metrics().usage[n.idx], P.nodeRadiusMin, P.nodeRadiusMax) : P.processingRadius),
@@ -454,7 +437,94 @@ const BASES = {
     link: (e, P, ctx) => ({ distance: P.edgeDistance, strength: Math.max(0.05, P.edgeStrengthBase / Math.sqrt(ctx.toUsage(e) || 1)) }),
   },
 };
-const BASE_ORDER = ['internal', 'modules', 'dataflow'];   // switcher cycle order
+BASES.playground = {
+  id: 'playground', label: 'Playground', ref: 'bench-only preset', tiered: true,
+  nodeTypes: TIER_ROLES,
+  edgeKinds: ALL_KINDS,
+  metric: 'outboundRefs.length',
+  defaults: Object.assign({
+    nodeRadiusMin: 3, nodeRadiusMax: 30, nodeOpacity: 1,
+    edgeDistance: 80, edgeStrength: 0.5,
+    edgeWidth: 1.5, edgeOpacity: 0.6, edgeStyle: 'gradient', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',
+    charge: -400, chargeInbound: 0, gravity: 0,
+  }, SIM_DEFAULTS, ROLE_PARAMS, TIER_INHERIT),
+  policy: [
+    'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS | INTERFACE | TYPE_ALIAS',
+    'filters.edge = every kind, !edge.isExternal',
+    'style.node radius = scaledValue(outboundRefs.length, min, max)  ·  data nodes (INTERFACE, TYPE_ALIAS) labeled',
+    'tier order (most specific wins): edge kind / node role → global',
+    'gravity = per-node pull to the canvas center (d3.forceX/forceY); centerStrength stays d3.forceCenter (global only)',
+  ],
+  nodeGate: () => true,
+  radius: (n, P) => scaledValue(n.refsOut, P.nodeRadiusMin, P.nodeRadiusMax),
+  color: (n, P) => P['color_' + n.type] || P.color_other,
+  nodeLabel: (n) => DATA_TYPES.has(n.type),
+  charge: (n, P, c, s) => c.tier.node(s, 'charge', 'charge_') - scaledValue(n.refsIn, 0, P.chargeInbound),
+  pad: (n, P, c, s) => c.tier.node(s, 'collisionPadding', 'collisionPadding_'),
+  gravity: (n, P, c, s) => c.tier.node(s, 'gravity', 'gravity_'),
+  link: (e, P, c, l) => ({ distance: c.tier.edge(l, 'edgeDistance', 'dist_'), strength: c.tier.edge(l, 'edgeStrength', 'str_') }),
+};
+BASES.vanilla = {
+  id: 'vanilla', label: 'Vanilla', ref: 'VANILLA_CONFIG', bonds: true,
+  nodeTypes: ['FUNCTION', 'METHOD', 'CONSTRUCTOR', 'CLASS'],
+  edgeKinds: ALL_KINDS,
+  metric: 'outboundRefs.length',
+  defaults: Object.assign({
+    nodeRadiusMin: 6, nodeRadiusMax: 6, nodeOpacity: 1,            // DEFAULT_NODE_STYLE: fixed radius 6 (min = max ⇒ scaledValue returns min)
+    edgeDistance: 400, edgeStrength: 0.05,
+    bondClassDist: 20, bondClassStr: 1, bondFileDist: 50, bondFileStr: 0.6, 
+    edgeWidth: 1, edgeOpacity: 0.6, edgeStyle: 'solid', edgeColor: '#9ca3af', gradientFrom: '#d1d5db', gradientTo: '#000000',   // DEFAULT_EDGE_STYLE
+    charge: -400,
+  }, SIM_DEFAULTS, ROLE_PARAMS),
+  policy: [
+    'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS',
+    'filters.edge = every kind, !edge.isExternal — each one a weak, long spring (the "everything else" tier)',
+    'forces.bonds.classMember = a class ↔ each of its members (SCIP owner prefix): strongest, shortest (≤ 20px)',
+    'forces.bonds.sameFile = any two nodes declared in one file, unless already class ↔ member: strong, 50px',
+    'bond links are simulated, never drawn; a pair gets one bond at its strongest tier',
+    'style.node = DEFAULT_NODE_STYLE (radius 6, opacity 1); style.edge = DEFAULT_EDGE_STYLE (solid #9ca3af, 1px, 0.6); role colors as the other views',
+    'radius is bench-tunable: min = max = 6 reproduces the code; a spread sizes nodes by outboundRefs.length',
+  ],
+  nodeGate: () => true,
+  radius: (n, P) => scaledValue(n.refsOut, P.nodeRadiusMin, P.nodeRadiusMax),
+  color: (n, P) => P['color_' + n.type] || P.color_other,
+  nodeLabel: () => false,
+  charge: (n, P) => P.charge,
+  link: (e, P) => ({ distance: P.edgeDistance, strength: P.edgeStrength }),
+};
+// Vanilla (directory): Vanilla's node set, call edges and class bond, with file / folder hubs in place of pairwise file bonds (lib/analysis/directory-hubs.ts).
+// Hubs are invisible anchors: node → file hub (IN_FILE), file hub → folder hub (IN_FOLDER), folder hub → parent folder hub (IN_PARENT).
+const DIR_DEFAULTS = {
+  dirFileDist: 20, dirFileStr: 1, dirFolderDist: 80, dirFolderStr: 0.6, dirParentDist: 160, dirParentStr: 0.3,
+  dirFileLink: 'hidden', dirFolderLink: 'hidden', dirParentLink: 'hidden',
+  dirFileColor: '#9ca3af', dirFolderColor: '#6b7280', dirParentColor: '#6b7280',
+  dirFileWidth: 1, dirFolderWidth: 1.5, dirParentWidth: 2,
+  dirFileOpacity: 0.3, dirFolderOpacity: 0.4, dirParentOpacity: 0.5,
+  hubFileCharge: 0, hubFolderCharge: 0, hubFileRadius: 3, hubFolderRadius: 5, hubFileOpacity: 0, hubFolderOpacity: 0,
+  hubFileColor: '#9ca3af', hubFolderColor: '#6b7280',
+  hubCenter: 0.5,
+  folderPull: 0.3, folderSep: 2, folderGap: 30, repelReach: 3000,
+};
+const DIR_TIERS = [['File', 'node → file', 'IN_FILE'], ['Folder', 'file → folder', 'IN_FOLDER'], ['Parent', 'folder → parent folder', 'IN_PARENT']];
+BASES.vanillaDirectory = Object.assign({}, BASES.vanilla, {
+  id: 'vanillaDirectory', label: 'Vanilla (directory)', ref: 'VANILLA_DIRECTORY_CONFIG', directory: true,
+  defaults: (() => {
+    const d = Object.assign({}, BASES.vanilla.defaults);
+    for (const k of ['bondFileDist', 'bondFileStr']) delete d[k];
+    return Object.assign(d, DIR_DEFAULTS);
+  })(),
+  policy: [
+    'filters.node = FUNCTION | METHOD | CONSTRUCTOR | CLASS',
+    'filters.edge = every kind, !edge.isExternal — each one a weak, long spring (the "everything else" tier)',
+    'forces.bonds.classMember = a class ↔ each of its members (SCIP owner prefix): strongest, shortest (≤ 20px); no pairwise same-file bonds',
+    'forces.directory.tiers.IN_FILE = every node ↔ the hub of the file it is declared in (a star, not n² pairs)',
+    'forces.directory.tiers.IN_FOLDER = every file hub ↔ the hub of its folder; IN_PARENT = every folder hub ↔ its parent folder hub (direct parent only; the root folder has none)',
+    'hubs are anchors: simulated, never selectable, searchable or hoverable; opacity 0 hides them, charge 0 leaves them out of the many-body force, no collision',
+    'directory links are simulated and, by default, not drawn; each tier has its own style, switched on in the edges tab',
+    'style.node = DEFAULT_NODE_STYLE (radius 6, opacity 1); style.edge = DEFAULT_EDGE_STYLE (solid #9ca3af, 1px, 0.6); role colors as the other views',
+  ],
+});
+const BASE_ORDER = ['vanilla', 'vanillaDirectory', 'internal', 'modules', 'dataflow', 'playground'];   // switcher cycle order
 
 // ── P3 registry: code-defined groups (tabs → subgroups) and bounds ─────────────────────────────
 const TABS = ['nodes', 'edges', 'forces', 'color'];
@@ -471,7 +541,6 @@ const MAP_DESC = {
   charge: 'forces.node().charge', chargeInbound: 'forces.node().charge −= scaledValue(referencedAt.length, 0, MAX)',
   centerStrength: 'simulation.centerStrength', collisionPadding: 'simulation.collisionPadding',
   alphaDecay: 'simulation.alphaDecay', velocityDecay: 'simulation.velocityDecay',
-  areaCluster: 'forces.areaCluster  (bench: centroid-pull approximation)',
   dataColor: 'style.node().color (data nodes)', processingColor: 'style.node().color (processing nodes)',
 };
 const PARAM_DEFS = [];
@@ -480,22 +549,53 @@ def({ key: 'nodeRadiusMin', tab: 'nodes', sub: 'node size', label: 'min r', min:
 def({ key: 'nodeRadiusMax', tab: 'nodes', sub: 'node size', label: 'max r', min: 6, max: 80, step: 1 });
 def({ key: 'processingRadius', tab: 'nodes', sub: 'node size', label: 'processing', min: 2, max: 20, step: 1 });
 def({ key: 'nodeOpacity', tab: 'nodes', sub: 'node style', label: 'opacity', min: 0.1, max: 1, step: 0.05 });
-for (const k of ALL_KINDS) {
-  def({ key: 'dist_' + k, tab: 'edges', sub: 'link · ' + k, label: 'distance', min: 20, max: 400, step: 5, kind: k });
-  def({ key: 'str_' + k, tab: 'edges', sub: 'link · ' + k, label: 'strength', min: 0, max: 1, step: 0.05, kind: k });
+def({ key: 'edgeDistance', tab: 'edges', sub: 'link force', tsub: 'link · global', label: 'distance', min: 20, max: 400, step: 5 });
+def({ key: 'edgeStrength', tab: 'edges', sub: 'link force', tsub: 'link · global', label: 'strength', min: 0, max: 1, step: 0.05 });
+def({ key: 'bondClassDist', tab: 'edges', sub: 'bond · class ↔ member', label: 'distance', min: 5, max: 100, step: 1, map: 'forces.bonds.classMember.distance' });
+def({ key: 'bondClassStr', tab: 'edges', sub: 'bond · class ↔ member', label: 'strength', min: 0, max: 1, step: 0.05, map: 'forces.bonds.classMember.strength' });
+def({ key: 'bondFileDist', tab: 'edges', sub: 'bond · same file', label: 'distance', min: 5, max: 200, step: 5, map: 'forces.bonds.sameFile.distance' });
+def({ key: 'bondFileStr', tab: 'edges', sub: 'bond · same file', label: 'strength', min: 0, max: 1, step: 0.05, map: 'forces.bonds.sameFile.strength' });
+for (const [k, label, kind] of DIR_TIERS) {
+  const sub = 'directory · ' + label, at = 'forces.directory.tiers.' + kind, shown = (P) => P['dir' + k + 'Link'] === 'shown';
+  def({ key: 'dir' + k + 'Dist', tab: 'edges', sub, label: 'distance', min: 5, max: 400, step: 5, map: at + '.distance' });
+  def({ key: 'dir' + k + 'Str', tab: 'edges', sub, label: 'strength', min: 0, max: 1, step: 0.05, map: at + '.strength' });
+  def({ key: 'dir' + k + 'Link', tab: 'edges', sub, label: 'drawn', type: 'enum', options: ['hidden', 'shown'], map: at + '.style (null ⇔ "hidden")' });
+  def({ key: 'dir' + k + 'Color', tab: 'edges', sub, label: 'color', type: 'color', when: shown, map: at + '.style.color' });
+  def({ key: 'dir' + k + 'Width', tab: 'edges', sub, label: 'width', min: 0.5, max: 6, step: 0.5, when: shown, map: at + '.style.width' });
+  def({ key: 'dir' + k + 'Opacity', tab: 'edges', sub, label: 'opacity', min: 0.05, max: 1, step: 0.05, when: shown, map: at + '.style.opacity' });
 }
-def({ key: 'edgeDistance', tab: 'edges', sub: 'link force', label: 'distance', min: 20, max: 400, step: 5 });
-def({ key: 'edgeStrength', tab: 'edges', sub: 'link force', label: 'strength', min: 0, max: 1, step: 0.05 });
+def({ key: 'hubCenter', tab: 'forces', sub: 'directory hubs', label: 'center on members', min: 0, max: 1, step: 0.05,
+  map: 'forces.directory.hubCenter — each hub is pulled to the centroid of what it holds (d3 leaves a hub with hundreds of springs nearly immobile, so it drifts off its own members)' });
+const FOLDER_PHYS = 'bench-only folder physics (no RepoGraphConfig field yet): ';
+def({ key: 'folderPull', tab: 'forces', sub: 'folder physics', label: 'files → folder', min: 0, max: 1, step: 0.05, map: FOLDER_PHYS + 'each file (all of its nodes) is nudged toward its immediate folder hub, in proportion to the distance from the file centroid' });
+def({ key: 'folderSep', tab: 'forces', sub: 'folder physics', label: 'sibling separation', min: 0, max: 4, step: 0.1, map: FOLDER_PHYS + 'sibling files in one folder are circles (centroid + p90 node distance); overlapping circles are pushed apart, the lighter file moving more' });
+def({ key: 'folderGap', tab: 'forces', sub: 'folder physics', label: 'sibling gap', min: 0, max: 200, step: 5, map: FOLDER_PHYS + 'extra clearance kept between sibling file circles' });
+def({ key: 'repelReach', tab: 'forces', sub: 'folder physics', label: 'repel reach', min: 200, max: 3000, step: 100, map: FOLDER_PHYS + 'd3.forceManyBody().distanceMax — nodes farther apart than this stop repelling; 3000 = unlimited. Changes the whole layout, not just folders' });
+for (const [k, kind] of [['File', 'FILE'], ['Folder', 'FOLDER']]) {
+  const at = 'forces.directory.hubs.' + kind, lc = k.toLowerCase();
+  def({ key: 'hub' + k + 'Charge', tab: 'forces', sub: 'directory hubs', label: lc + ' charge', min: -1500, max: 0, step: 10, map: at + '.charge' });
+  def({ key: 'hub' + k + 'Radius', tab: 'nodes', sub: 'directory hubs', label: lc + ' r', min: 1, max: 30, step: 1, map: at + '.radius' });
+  def({ key: 'hub' + k + 'Opacity', tab: 'nodes', sub: 'directory hubs', label: lc + ' opacity', min: 0, max: 1, step: 0.05, map: at + '.opacity  (0 = invisible anchor)' });
+  def({ key: 'hub' + k + 'Color', tab: 'color', sub: 'directory hubs', label: lc, type: 'color', map: at + '.color' });
+}
+for (const k of ALL_KINDS) {
+  def({ key: 'dist_' + k, tab: 'edges', sub: 'link · ' + k, label: 'distance', min: 20, max: 400, step: 5, kind: k, nullable: true, from: ['edgeDistance'] });
+  def({ key: 'str_' + k, tab: 'edges', sub: 'link · ' + k, label: 'strength', min: 0, max: 1, step: 0.05, kind: k, nullable: true, from: ['edgeStrength'] });
+}
 def({ key: 'edgeStrengthBase', tab: 'edges', sub: 'link force', label: 'str base', min: 0.05, max: 1, step: 0.01 });
 def({ key: 'edgeWidth', tab: 'edges', sub: 'edge style', label: 'width', min: 0.5, max: 4, step: 0.1 });
 def({ key: 'edgeOpacity', tab: 'edges', sub: 'edge style', label: 'opacity', min: 0.05, max: 1, step: 0.05 });
-def({ key: 'charge', tab: 'forces', sub: 'repulsion', label: 'charge', min: -1500, max: 0, step: 10 });
-def({ key: 'chargeInbound', tab: 'forces', sub: 'repulsion', label: '+inbound', min: 0, max: 3000, step: 50 });
-def({ key: 'centerStrength', tab: 'forces', sub: 'centering & collision', label: 'center', min: 0, max: 1, step: 0.01 });
-def({ key: 'collisionPadding', tab: 'forces', sub: 'centering & collision', label: 'collide pad', min: 0, max: 40, step: 1 });
+const roleLabel = (t) => t.toLowerCase().replace('_', ' ');
+def({ key: 'charge', tab: 'forces', sub: 'repulsion', tsub: 'repulsion · global', label: 'charge', min: -1500, max: 0, step: 10 });
+def({ key: 'chargeInbound', tab: 'forces', sub: 'repulsion', tsub: 'repulsion · global', label: '+inbound', min: 0, max: 3000, step: 50 });
+for (const t of TIER_ROLES) def({ key: 'charge_' + t, tab: 'forces', sub: 'repulsion · by role', label: roleLabel(t), min: -1500, max: 0, step: 10, nodeType: t, nullable: true, from: ['charge'], family: 'charge_<SyntaxType>', map: 'forces.node().charge by node.syntaxType, else the tier above' });
+def({ key: 'centerStrength', tab: 'forces', sub: 'centering & collision', tsub: 'centering · translate (global only)', label: 'center', min: 0, max: 1, step: 0.01 });
+def({ key: 'collisionPadding', tab: 'forces', sub: 'centering & collision', tsub: 'collision · global', label: 'collide pad', min: 0, max: 40, step: 1 });
+for (const t of TIER_ROLES) def({ key: 'collisionPadding_' + t, tab: 'forces', sub: 'collision · by role', label: roleLabel(t), min: 0, max: 40, step: 1, nodeType: t, nullable: true, from: ['collisionPadding'], family: 'collisionPadding_<SyntaxType>', map: 'bench-only tier: RepoGraph uses one simulation.collisionPadding' });
+def({ key: 'gravity', tab: 'forces', sub: 'gravity', tsub: 'gravity · global (pull to center)', label: 'gravity', min: 0, max: 0.5, step: 0.005, map: 'bench-only: per-node d3.forceX/forceY toward the center — no RepoGraphConfig field' });
+for (const t of TIER_ROLES) def({ key: 'gravity_' + t, tab: 'forces', sub: 'gravity · by role', label: roleLabel(t), min: 0, max: 0.5, step: 0.005, nodeType: t, nullable: true, from: ['gravity'], family: 'gravity_<SyntaxType>', map: 'bench-only tier: per-node pull to the center by node.syntaxType' });
 def({ key: 'alphaDecay', tab: 'forces', sub: 'cooling', label: 'α decay', min: 0.001, max: 0.1, step: 0.001 });
 def({ key: 'velocityDecay', tab: 'forces', sub: 'cooling', label: 'v decay', min: 0.05, max: 0.9, step: 0.05 });
-def({ key: 'areaCluster', tab: 'forces', sub: 'areas', label: 'cluster', min: 0, max: 1, step: 0.05 });
 for (const t of ['FUNCTION', 'METHOD', 'CLASS', 'INTERFACE', 'TYPE_ALIAS']) def({ key: 'color_' + t, tab: 'color', sub: 'node colors', label: t.toLowerCase(), type: 'color', nodeType: t });
 def({ key: 'color_other', tab: 'color', sub: 'node colors', label: 'other', type: 'color' });
 def({ key: 'dataColor', tab: 'color', sub: 'node colors', label: 'data', type: 'color' });
@@ -505,9 +605,9 @@ def({ key: 'edgeColor', tab: 'color', sub: 'edge colors', label: 'color', type: 
 def({ key: 'gradientFrom', tab: 'color', sub: 'edge colors', label: 'from', type: 'color', when: (P) => P.edgeStyle === 'gradient' });
 def({ key: 'gradientTo', tab: 'color', sub: 'edge colors', label: 'to', type: 'color', when: (P) => P.edgeStyle === 'gradient' });
 for (const d of PARAM_DEFS) {
-  d.map = d.kind ? (d.key.startsWith('dist_') ? 'forces.edge(' + d.kind + ').distance' : 'forces.edge(' + d.kind + ').strength')
+  d.map = d.map || (d.kind ? (d.key.startsWith('dist_') ? 'forces.edge(' + d.kind + ').distance' : 'forces.edge(' + d.kind + ').strength')
     : d.key.startsWith('color_') ? 'style.node().color (' + (d.nodeType || 'other types') + ')'
-    : MAP_DESC[d.key] || d.key;
+    : MAP_DESC[d.key] || d.key);
 }
 const isPresent = (d) => (d.kind ? KINDS_PRESENT.includes(d.kind) : d.nodeType ? TYPES_PRESENT.includes(d.nodeType) : true);
 
@@ -515,24 +615,25 @@ const isPresent = (d) => (d.kind ? KINDS_PRESENT.includes(d.kind) : d.nodeType ?
    3 · state — presets own P1 + P3; P2 is bench-only display state
    ═══════════════════════════════════════════════════════════════════════════ */
 function cloneLive(l) {
-  return { nodeTypes: new Set(l.nodeTypes), edgeKinds: new Set(l.edgeKinds), includeAreas: l.includeAreas,
-    excludeTests: l.excludeTests, includeExternal: l.includeExternal, params: Object.assign({}, l.params) };
+  return { nodeTypes: new Set(l.nodeTypes), edgeKinds: new Set(l.edgeKinds), excludeTests: l.excludeTests, includeExternal: l.includeExternal, params: Object.assign({}, l.params) };
 }
 function codePreset(b) {
-  const d = { nodeTypes: new Set(b.nodeTypes), edgeKinds: new Set(b.edgeKinds), includeAreas: true, excludeTests: true, includeExternal: false, params: Object.assign({}, b.defaults) };
+  const d = { nodeTypes: new Set(b.nodeTypes), edgeKinds: new Set(b.edgeKinds), excludeTests: true, includeExternal: false, params: Object.assign({}, b.defaults) };
   return { id: b.id, label: b.label, base: b.id, forked: false, defaults: d, live: cloneLive(d) };
 }
 const presets = BASE_ORDER.map((id) => codePreset(BASES[id]));
-let curId = 'modules';                      // the app's default view
+let curId = 'vanilla';                      // the bench's default view (the app's default is still modules)
 let forkSeq = 0;
 const cur = () => presets.find((p) => p.id === curId);
 const live = () => cur().live;
 const base = () => BASES[cur().base];
 
-const ui = { fold: { nodeTypes: false, edgeKinds: false, edgesDrawn: false, areaOverlay: false }, tab: 'nodes', areaCollapsed: new Set(), lockOpen: {}, emitTab: 'tuning', emitOpen: false, notesOpen: false };
+const ui = { fold: { nodeTypes: false, edgeKinds: false, edgesDrawn: false, dirOverlay: true }, tab: 'nodes', lockOpen: {}, emitTab: 'tuning', emitOpen: false, notesOpen: false };
+const DIR_OV_DEFAULTS = { on: true, labels: true, pct: 0.3, pad: 6, reach: 10, smooth: 10, minMem: 3, fill: 0.12, stroke: 0.4 };   // = DEFAULT_FILE_OVERLAY in lib/analysis/file-overlay.ts (reach 10 = ∞)
 const disp = {                              // P2 — display only; never touches the working set or the physics
   showEdges: true, labels: 'preset', canvas: 'dark', drawOff: new Set(),
-  areaVis: new Map(AREAS.map((a) => [a.id, true])), solo: null,
+  // Vanilla (directory) file overlays: a circle around the file hub, molded to include its nodes (see computeFileOverlays)
+  dirOv: Object.assign({}, DIR_OV_DEFAULTS),
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -541,16 +642,210 @@ const disp = {                              // P2 — display only; never touche
 const stage = $('#stage'), canvas = $('#cv'), ctx = canvas.getContext('2d');
 let W = 800, H = 600, DPR = window.devicePixelRatio || 1;
 let T = d3.zoomIdentity;
-let sim = null, simNodes = [], links = [], simByIdx = new Map(), hover = null, hoverArea = null, neighbors = null;
+let sim = null, simNodes = [], links = [], bondLinks = [], simByIdx = new Map(), hover = null, hoverOv = null, neighbors = null;
 const POS = new Map();                      // key → {x, y}: carried across rebuilds so toggling doesn't scramble the layout
 let lastBuildMs = 0, tickCount = 0, userMoved = false, pendingFit = false;   // pendingFit: refit once after a rebuild, never after a reheat
 
-function nodeCtx() { const m = metrics(); return { toUsage: (e) => (e.external ? 0 : m.usage[e.to]) }; }
+function nodeCtx() { const m = metrics(); return { toUsage: (e) => (e.external ? 0 : m.usage[e.to]), tier: makeTier() }; }
+
+/** Playground tiers. Node: role → global. Edge: kind → global. null / undefined = inherit. */
+function makeTier() {
+  const P = live().params;
+  const has = (v) => v != null;
+  return {
+    node(s, gKey, rKey) { const r = P[rKey + s.node.type]; return has(r) ? r : P[gKey]; },
+    edge(l, gKey, kKey) { const k = P[kKey + l.e.kind]; return has(k) ? k : P[gKey]; },
+  };
+}
+
+/** Vanilla bonds (lib/analysis/graph-config.ts buildStructuralBonds): class ↔ member by SCIP owner prefix, then same-file pairs not already bonded. Not drawn. */
+function buildBondLinks() {
+  const real = simNodes.filter((s) => !s.ext), bySym = new Map(real.map((s) => [s.node.id, s])), out = [], done = new Set();
+  for (const s of real) {
+    const i = s.node.id.lastIndexOf('#'), owner = i >= 0 && i < s.node.id.length - 1 ? bySym.get(s.node.id.slice(0, i + 1)) : null;
+    if (owner) { out.push({ source: owner, target: s, bond: 'class' }); done.add(owner.key + '|' + s.key); }
+  }
+  if (base().directory) return out;               // Vanilla (directory): file cohesion comes from the hubs, not pairwise bonds
+  const byFile = new Map();
+  for (const s of real) { const g = byFile.get(s.node.file); if (g) g.push(s); else byFile.set(s.node.file, [s]); }
+  for (const g of byFile.values()) for (let a = 0; a < g.length; a++) for (let b = a + 1; b < g.length; b++) {
+    if (done.has(g[a].key + '|' + g[b].key) || done.has(g[b].key + '|' + g[a].key)) continue;
+    out.push({ source: g[a], target: g[b], bond: 'file' }); done.add(g[a].key + '|' + g[b].key);
+  }
+  return out;
+}
+
+/** Directory hubs (lib/analysis/directory-hubs.ts buildDirectoryHubs): one hub per file and per folder up to the root, one link per containment.
+ *  Hubs are separate from simNodes, so hover, fit, counts and search never see them; d3 simulates them alongside. */
+let hubNodes = [], hubLinks = [];
+function buildHubs() {
+  hubNodes = []; hubLinks = [];
+  const real = simNodes.filter((s) => !s.ext), byKey = new Map();
+  const hub = (key, hubKind, name) => {
+    let x = byKey.get(key);
+    if (!x) { x = { hub: true, hubKind, key, name, idx: -1, r: 0, fill: '#888', alpha: 0, charge: 0, pad: 0, grav: 0 }; const p = POS.get(key); if (p && p.x != null) { x.x = p.x; x.y = p.y; } byKey.set(key, x); hubNodes.push(x); }
+    return x;
+  };
+  const parentOf = (path) => { const i = path.lastIndexOf('/'); return i < 0 ? '' : path.slice(0, i); };
+  const folders = new Set();
+  const addFolder = (path) => {
+    for (let q = path; !folders.has(q); q = parentOf(q)) {
+      folders.add(q);
+      const f = hub('d:' + q, 'FOLDER', q === '' ? '/' : q.slice(q.lastIndexOf('/') + 1));
+      if (q === '') break;
+      hubLinks.push({ source: f, target: hub('d:' + parentOf(q), 'FOLDER', ''), dkind: 'IN_PARENT' });
+    }
+  };
+  const files = new Set();
+  for (const s of real) {
+    const path = s.node.file, f = hub('f:' + path, 'FILE', path.slice(path.lastIndexOf('/') + 1));
+    if (!files.has(path)) { files.add(path); const dir = parentOf(path); hubLinks.push({ source: f, target: hub('d:' + dir, 'FOLDER', ''), dkind: 'IN_FOLDER' }); addFolder(dir); }
+    hubLinks.push({ source: s, target: f, dkind: 'IN_FILE' });
+  }
+  // seed hubs that have no carried position at the mean of what they hold, so a first build does not start them at the origin
+  const members = new Map();
+  for (const l of hubLinks) { const a = members.get(l.target); if (a) a.push(l.source); else members.set(l.target, [l.source]); }
+  const seed = (x) => {
+    if (x.x != null) return;
+    const kids = (members.get(x) || []).filter((k) => (k.hub ? (seed(k), true) : true) && k.x != null);
+    if (kids.length) { x.x = d3.mean(kids, (k) => k.x); x.y = d3.mean(kids, (k) => k.y); }
+  };
+  for (const x of hubNodes) seed(x);
+
+  for (const l of hubLinks) if (l.dkind === 'IN_FILE') (l.target.members || (l.target.members = [])).push(l.source);   // a file hub holds its nodes
+
+  for (const l of hubLinks) if (l.dkind === 'IN_FOLDER') { (l.target.files || (l.target.files = [])).push(l.source); l.source.folder = l.target; }   // a folder hub's immediate file hubs (folder physics)
+  // folder hubs hold every node under them (for hubCenter); file hubs already hold their own
+  const folderMem = new Map();
+  for (const x of hubNodes) if (x.hubKind === 'FOLDER') { x.members = []; folderMem.set(x.key, x.members); }
+  for (const s of real) for (let q = parentOf(s.node.file); ; q = parentOf(q)) { folderMem.get('d:' + q).push(s); if (q === '') break; }
+
+  // file overlays: one per file hub
+  FILE_OVS = hubNodes.filter((x) => x.hubKind === 'FILE').map((x) => { const path = x.key.slice(2); return { file: true, key: x.key, path, name: path.slice(path.lastIndexOf('/') + 1), hub: x, mem: x.members, R: null, pts: null, vis: false, cx: 0, cy: 0, r0: 0 }; });
+}
+/** Folder physics (bench-only): files are circles around their immediate folder hub.
+ *  gravity — every node of a file is nudged by (folder hub − file centroid) × pull × alpha, so the file moves as a body (its hub springs keep it together)
+ *  separation — sibling file circles (centroid + p90 node distance) that overlap, with the gap, are pushed apart; the file with fewer nodes moves more
+ *  The link force alone cannot do this: d3 splits a link's pull by link count (a file hub with hundreds of springs never moves) and long-range node repulsion wins. */
+function folderPhysicsForce() {
+  return (alpha) => {
+    const P = live().params; if (!hubNodes.length || (!P.folderPull && !P.folderSep)) return;
+    for (const f of hubNodes) {
+      if (f.hubKind !== 'FILE') continue;
+      const m = f.members; let sx = 0, sy = 0, c = 0;
+      for (const s of m) if (s.x != null) { sx += s.x; sy += s.y; c++; }
+      if (!c) { f.cx = null; continue; }
+      f.cx = sx / c; f.cy = sy / c;
+      const d = m.map((s) => Math.hypot(s.x - f.cx, s.y - f.cy)).sort((a, b) => a - b);
+      f.rad = d[Math.min(d.length - 1, Math.floor(0.9 * d.length))] + (m[0].r || 6);
+    }
+    for (const F of hubNodes) {
+      if (F.hubKind !== 'FOLDER' || F.x == null || !F.files) continue;
+      const fs = F.files.filter((f) => f.cx != null);
+      if (P.folderPull) for (const f of fs) { const dx = (F.x - f.cx) * P.folderPull * alpha, dy = (F.y - f.cy) * P.folderPull * alpha; for (const s of f.members) { s.vx += dx; s.vy += dy; } }
+      if (!P.folderSep) continue;
+      for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) {
+        const a = fs[i], b = fs[j]; let dx = b.cx - a.cx, dy = b.cy - a.cy, d = Math.hypot(dx, dy);
+        const ov = a.rad + b.rad + P.folderGap - d; if (ov <= 0) continue;
+        if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
+        const push = ov * P.folderSep * alpha, ux = dx / d, uy = dy / d, na = a.members.length, nb = b.members.length, wa = nb / (na + nb), wb = na / (na + nb);
+        for (const s of a.members) { s.vx -= ux * push * wa; s.vy -= uy * push * wa; }
+        for (const s of b.members) { s.vx += ux * push * wb; s.vy += uy * push * wb; }
+      }
+    }
+  };
+}
+/** Pulls each hub to the centroid of what it holds, so the hub — and the overlay centered on it — sits in the middle of its own members. */
+function hubCenterForce() {
+  return () => {
+    const k = live().params.hubCenter; if (!k) return;
+    for (const hb of hubNodes) {
+      const m = hb.members; if (!m || !m.length || hb.x == null) continue;
+      let sx = 0, sy = 0, c = 0; for (const s of m) if (s.x != null) { sx += s.x; sy += s.y; c++; }
+      if (c) { hb.vx = (sx / c - hb.x) * k; hb.vy = (sy / c - hb.y) * k; }
+    }
+  };
+}
+
+/* ── file overlays (Vanilla directory): a circle around the file hub, molded to include its nodes ──
+   Polar profile R[k] over OV_K angles around the hub. Base radius = the pct-th percentile of member distance (+ pad). A member outside it raises the profile
+   toward itself with a cosine falloff (smooth° wide); a member beyond reach × base radius is left uncovered (reach ∞ = every node is inside, the default,
+   so the outline hugs the file's nodes). Display only: nothing here feeds the simulation. Port of lib/analysis/file-overlay.ts. */
+let FILE_OVS = [];
+const OV_K = 72, OV_STEP = 2 * Math.PI / OV_K;
+function computeFileOverlays() {
+  if (!base().directory) return;
+  const O = disp.dirOv, reachMax = O.reach >= 10 ? Infinity : O.reach, win = Math.max(O.smooth * Math.PI / 180, 2 * OV_STEP);
+  for (const ov of FILE_OVS) {
+    ov.vis = false;
+    const hub = ov.hub;
+    if (!O.on || hub.x == null) continue;
+    const mem = ov.mem.filter((s) => s.x != null);
+    if (mem.length < O.minMem) continue;
+    const cx = hub.x, cy = hub.y;
+    const ds = mem.map((s) => Math.hypot(s.x - cx, s.y - cy)).sort((a, b) => a - b);
+    const r0 = Math.max(12, ds[Math.min(ds.length - 1, Math.floor(O.pct * ds.length))] + O.pad);
+    const R = new Float64Array(OV_K).fill(r0);
+    const bump = (ang, need, w) => {                  // raise R toward `need` at angle `ang`: flat within one step, cosine falloff out to w
+      const k0 = Math.round(ang / OV_STEP), span = Math.ceil(w / OV_STEP);
+      for (let j = -span; j <= span; j++) {
+        const dl = Math.abs((k0 + j) * OV_STEP - ang);
+        const x = dl <= OV_STEP ? 0 : (dl - OV_STEP) / (w - OV_STEP);
+        if (x >= 1) continue;
+        const v = r0 + (need - r0) * 0.5 * (1 + Math.cos(Math.PI * x)), k = (((k0 + j) % OV_K) + OV_K) % OV_K;
+        if (v > R[k]) R[k] = v;
+      }
+    };
+    for (const s of mem) {
+      const d = Math.hypot(s.x - cx, s.y - cy), need = d + s.r + O.pad;
+      if (need <= r0 || d > reachMax * r0) continue;
+      bump(Math.atan2(s.y - cy, s.x - cx), need, win);
+    }
+    ov.cx = cx; ov.cy = cy; ov.r0 = r0; ov.R = R; ov.vis = true;
+    ov.pts = Array.from(R, (r, k) => [cx + r * Math.cos(k * OV_STEP), cy + r * Math.sin(k * OV_STEP)]);
+  }
+}
+const overlayRadiusAt = (ov, ang) => { const t = ang / OV_STEP, k0 = Math.floor(t), f = t - k0, m = (k) => ((k % OV_K) + OV_K) % OV_K; return ov.R[m(k0)] * (1 - f) + ov.R[m(k0 + 1)] * f; };
+/** the visible file overlay containing the point; where several do, the one with the smallest base radius */
+function fileAt(x, y) {
+  let best = null;
+  for (const ov of FILE_OVS) {
+    if (!ov.vis) continue;
+    const dx = x - ov.cx, dy = y - ov.cy;
+    if (Math.hypot(dx, dy) <= overlayRadiusAt(ov, Math.atan2(dy, dx)) && (!best || ov.r0 < best.r0)) best = ov;
+  }
+  return best;
+}
+function drawFileOverlays(c) {
+  if (!base().directory) return;
+  const O = disp.dirOv, line = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5)).context(c);
+  for (const ov of FILE_OVS) {
+    if (!ov.vis) continue;
+    const fillc = hashToColor(ov.path), hot = ov === hoverOv;
+    c.save(); c.beginPath(); line(ov.pts); c.closePath();
+    c.fillStyle = fillc; c.globalAlpha = hot ? Math.min(1, O.fill * 2) : O.fill; c.fill();
+    c.globalAlpha = hot ? Math.min(1, O.stroke + 0.35) : O.stroke; c.strokeStyle = borderOf(fillc); c.lineWidth = 1.5; c.stroke();
+    c.globalAlpha = 1;
+    if (O.labels) {
+      const lx = ov.cx, ly = ov.cy - ov.R[((Math.round(-Math.PI / 2 / OV_STEP) % OV_K) + OV_K) % OV_K] - 12;
+      c.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+      const pw = c.measureText(ov.name).width + 14, ph = 19;
+      c.beginPath(); c.roundRect ? c.roundRect(lx - pw / 2, ly - ph / 2, pw, ph, 6) : c.rect(lx - pw / 2, ly - ph / 2, pw, ph);
+      c.fillStyle = fillc; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1;
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ov.name, lx, ly + 1);
+    }
+    c.restore();
+  }
+}
+function showFileTip(ov, ev) {
+  fill(tip, h('div', null, ov.path), h('div', { class: 't2' }, 'file · ' + ov.mem.length + ' nodes in view · base radius ' + Math.round(ov.r0)));
+  placeTip(ev);
+}
 
 /** P1 → working set. Re-filters nodes/edges from the snapshot and restarts the layout. */
 function rebuild(fit) {
   const t0 = performance.now();
-  for (const s of simNodes) POS.set(s.key, { x: s.x, y: s.y });
+  for (const s of simNodes.concat(hubNodes)) POS.set(s.key, { x: s.x, y: s.y });
   const L = live(), B = base();
   const ok = new Uint8Array(N);
   for (let i = 0; i < N; i++) {
@@ -580,23 +875,25 @@ function rebuild(fit) {
   simByIdx = new Map(simNodes.filter((s) => !s.ext).map((s) => [s.idx, s]));
   for (const l of links) { l.source.deg++; l.target.deg++; }
 
+  bondLinks = B.bonds ? buildBondLinks() : [];
+  if (B.directory) buildHubs(); else { hubNodes = []; hubLinks = []; }
   if (sim) sim.stop();
-  sim = d3.forceSimulation(simNodes)
-    .force('link', d3.forceLink(links).distance(1).strength(0.5))
+  sim = d3.forceSimulation(simNodes.concat(hubNodes))      // directory hubs are sim nodes too
+    .force('link', d3.forceLink(links.concat(bondLinks, hubLinks)).distance(1).strength(0.5))
     .force('charge', d3.forceManyBody())
     .force('center', d3.forceCenter(W / 2, H / 2))
     .force('collide', d3.forceCollide())
-    .force('areaCluster', clusterForce())
+    .force('hubCenter', hubCenterForce())
+    .force('folderPhysics', folderPhysicsForce())
     .on('tick', onTick)
     .on('end', () => { updateSimHud(); if (pendingFit) { pendingFit = false; fitView(true); } });
-  if (B.layerRadii) sim.force('layerRadial', d3.forceRadial((d) => layerTarget(d) || 0, W / 2, H / 2).strength((d) => (layerTarget(d) == null ? 0 : 0.3)));
+  if (B.tiered) sim.force('gx', d3.forceX(W / 2)).force('gy', d3.forceY(H / 2));
   applyStyles();
   applyForces();
   const carried = simNodes.filter((s) => s.x != null).length / Math.max(1, simNodes.length);
   sim.alpha(carried > 0.8 ? 0.5 : 1).restart();
   lastBuildMs = performance.now() - t0;
   refreshDrawFlags();
-  computeAreaCounts();
   renderHud(); renderLegend();
   pendingFit = !!(fit || !userMoved);
   if (pendingFit) setTimeout(() => { if (pendingFit) fitView(false); }, 450);
@@ -606,11 +903,15 @@ function rebuild(fit) {
 function applyStyles() {
   const B = base(), P = live().params, ctxo = nodeCtx();
   for (const s of simNodes) {
-    if (s.ext) { s.r = 3; s.fill = EXTERNAL_COLOR; s.charge = -30; s.alpha = 0.8; s.label = false; continue; }
-    s.r = B.radius(s.node, P); s.fill = B.color(s.node, P); s.charge = B.charge(s.node, P);
+    if (s.ext) { s.r = 3; s.fill = EXTERNAL_COLOR; s.charge = -30; s.pad = P.collisionPadding; s.grav = 0; s.alpha = 0.8; s.label = false; continue; }
+    s.r = B.radius(s.node, P); s.fill = B.color(s.node, P); s.charge = B.charge(s.node, P, ctxo, s);
+    s.pad = B.pad ? B.pad(s.node, P, ctxo, s) : P.collisionPadding; s.grav = B.gravity ? B.gravity(s.node, P, ctxo, s) : 0;
     s.alpha = P.nodeOpacity; s.label = B.nodeLabel(s.node);
   }
-  for (const l of links) { const f = B.link(l.e, P, ctxo); l.dist = f.distance; l.str = f.strength; }
+  for (const l of links) { const f = B.link(l.e, P, ctxo, l); l.dist = f.distance; l.str = f.strength; }
+  for (const x of hubNodes) { const k = x.hubKind === 'FILE' ? 'File' : 'Folder'; x.r = P['hub' + k + 'Radius']; x.fill = P['hub' + k + 'Color']; x.alpha = P['hub' + k + 'Opacity']; x.charge = P['hub' + k + 'Charge']; }
+  for (const l of hubLinks) { const k = l.dkind === 'IN_FILE' ? 'File' : l.dkind === 'IN_FOLDER' ? 'Folder' : 'Parent'; l.dist = P['dir' + k + 'Dist']; l.str = P['dir' + k + 'Str']; }
+  for (const l of bondLinks) { l.dist = l.bond === 'class' ? P.bondClassDist : P.bondFileDist; l.str = l.bond === 'class' ? P.bondClassStr : P.bondFileStr; }
   legendDirty = true;
 }
 let legendDirty = true;
@@ -620,49 +921,19 @@ function applyForces() {
   if (!sim) return;
   const P = live().params;
   sim.force('link').distance((l) => l.dist).strength((l) => l.str);
-  sim.force('charge').strength((d) => d.charge);
+  sim.force('charge').strength((d) => d.charge || 0);          
   sim.force('center').strength(P.centerStrength);
-  sim.force('collide').radius((d) => d.r + P.collisionPadding);
+  if (P.repelReach != null) sim.force('charge').distanceMax(P.repelReach >= 3000 ? Infinity : P.repelReach);
+  sim.force('collide').radius((d) => (d.hub ? 0 : (d.r || 0) + (d.pad || 0)));   // hubs never collide
+  if (sim.force('gx')) { sim.force('gx').strength((d) => d.grav || 0); sim.force('gy').strength((d) => d.grav || 0); }
   sim.alphaDecay(P.alphaDecay).velocityDecay(P.velocityDecay);
 }
-
-/** Bench approximation of the app's area cluster force: pull each node toward its area's centroid. */
-function clusterForce() {
-  let nodes = [];
-  function force(alpha) {
-    const P = live().params;
-    if (!live().includeAreas || !P.areaCluster) return;
-    const acc = new Map();
-    for (const s of nodes) {
-      const a = s.ext ? null : (NODE_AREAS.get(s.idx) || [])[0];
-      s._area = a;
-      if (!a) continue;
-      let c = acc.get(a.id); if (!c) { c = { x: 0, y: 0, n: 0 }; acc.set(a.id, c); }
-      c.x += s.x; c.y += s.y; c.n++;
-    }
-    const k = P.areaCluster * alpha;
-    for (const s of nodes) {
-      if (!s._area) continue;
-      const c = acc.get(s._area.id);
-      if (c.n < 2) continue;
-      s.vx += (c.x / c.n - s.x) * k; s.vy += (c.y / c.n - s.y) * k;
-    }
-  }
-  force.initialize = (ns) => { nodes = ns; };
-  return force;
-}
-function layerTarget(d) {
-  const radii = base().layerRadii;
-  if (!radii || d.ext) return null;
-  const rs = (NODE_AREAS.get(d.idx) || []).map((a) => radii[a.name]).filter((r) => r != null);
-  return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
-}
-function layerTaggedCount() { const B = base(); return B.layerRadii ? simNodes.filter((s) => layerTarget(s) != null).length : 0; }
 
 /** P3 edit → reheat the running simulation (the cost the band's badge names). */
 function reheat() {
   applyStyles(); applyForces();
   if (sim) sim.alpha(Math.max(sim.alpha(), 0.35)).restart();
+  for (const f of inhReg) f();
   pulse('p3'); renderHud(); renderLegendIfDirty(); renderFooter();
 }
 
@@ -695,31 +966,9 @@ function placeTip(ev) {
 function showTip(s, ev) {
   if (!s) { tip.style.display = 'none'; return; }
   const n = s.node;
-  const areas = s.ext || !live().includeAreas ? null : (NODE_AREAS.get(s.idx) || []).map((a) => a.name);
   fill(tip, h('div', null, n.name), h('div', { class: 't2' }, s.ext ? 'external · ' + n.file : n.type + ' · ' + n.file + ':' + (n.line + 1)),
-    s.ext ? null : h('div', { class: 't2' }, 'refs in ' + n.refsIn + ' · out ' + n.refsOut + ' · degree ' + s.deg),
-    areas ? h('div', { class: 't2' }, 'area · ' + (areas.length ? areas.join(', ') : 'none')) : null);
+    s.ext ? null : h('div', { class: 't2' }, 'refs in ' + n.refsIn + ' · out ' + n.refsOut + ' · degree ' + s.deg));
   placeTip(ev);
-}
-function showAreaTip(a, ev) {
-  const parent = a.parent ? AREA_BY_ID.get(a.parent) : null, kids = AREA_KIDS.get(a.id) || [];
-  fill(tip, h('div', null, a.name),
-    h('div', { class: 't2' }, 'area · ' + (parent ? 'child of ' + parent.name : 'root area') + (kids.length ? ' · ' + kids.length + ' sub-area' + (kids.length === 1 ? '' : 's') : '')),
-    h('div', { class: 't2' }, (areaCountMap.get(a.id) || 0) + ' nodes in view · ' + AREA_ALL.get(a.id).size + ' in snapshot'));
-  placeTip(ev);
-}
-/** innermost visible area whose hull contains the point (fewest members wins when areas nest or overlap) */
-function areaAt(x, y) {
-  if (!live().includeAreas) return null;
-  let best = null, bestN = Infinity;
-  for (const a of AREAS) {
-    if (!disp.areaVis.get(a.id)) continue;
-    const g = areaHull(a); if (!g) continue;
-    const inside = g.points ? d3.polygonContains(g.points, [x, y]) : Math.hypot(x - g.cx, y - g.cy) <= g.r;
-    const n = AREA_ALL.get(a.id).size;
-    if (inside && n < bestN) { best = a; bestN = n; }
-  }
-  return best;
 }
 function setHover(s) {
   if (s === hover) return;
@@ -727,17 +976,17 @@ function setHover(s) {
   if (s) { neighbors = new Set([s]); for (const l of links) { if (l.source === s) neighbors.add(l.target); else if (l.target === s) neighbors.add(l.source); } }
   draw();
 }
-function setHoverArea(a) { if (a !== hoverArea) { hoverArea = a; draw(); } }
+function setHoverOv(o) { if (o !== hoverOv) { hoverOv = o; draw(); } }
 canvas.addEventListener('mousemove', (ev) => {
   const r = canvas.getBoundingClientRect();
   const p = T.invert([ev.clientX - r.left, ev.clientY - r.top]);
-  const s = nodeAt(p[0], p[1]), a = s ? null : areaAt(p[0], p[1]);
-  setHover(s); setHoverArea(a);
-  if (s) showTip(s, ev); else if (a) showAreaTip(a, ev); else showTip(null);
+  const s = nodeAt(p[0], p[1]), o = s || !base().directory ? null : fileAt(p[0], p[1]);
+  setHover(s); setHoverOv(o);
+  if (s) showTip(s, ev); else if (o) showFileTip(o, ev); else showTip(null);
 });
-canvas.addEventListener('mouseleave', () => { setHover(null); setHoverArea(null); showTip(null); });
+canvas.addEventListener('mouseleave', () => { setHover(null); setHoverOv(null); showTip(null); });
 
-// zoom / pan only — nodes, edges and areas are never moved by the cursor (no node dragging)
+// zoom / pan only — nodes, edges and overlays are never moved by the cursor (no node dragging)
 const zoom = d3.zoom().scaleExtent([0.03, 12]).on('zoom', (ev) => { T = ev.transform; if (ev.sourceEvent) userMoved = true; draw(); });
 d3.select(canvas).call(zoom);
 
@@ -757,14 +1006,14 @@ function resize() {
   const r = stage.getBoundingClientRect();
   W = Math.max(200, r.width); H = Math.max(200, r.height); DPR = window.devicePixelRatio || 1;
   canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
-  if (sim) { sim.force('center').x(W / 2).y(H / 2); }
+  if (sim) { sim.force('center').x(W / 2).y(H / 2); if (sim.force('gx')) { sim.force('gx').x(W / 2); sim.force('gy').y(H / 2); } }
   draw();
 }
 new ResizeObserver(resize).observe(stage);
 
 // ── drawing ────────────────────────────────────────────────────────────────────────────────────
 function hexToRgb(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex); const n = m ? parseInt(m[1], 16) : 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-function hashToColor(str) {                       // lib/areas/color.ts hashToColor
+function hashToColor(str) {                       // lib/analysis/color.ts hashToColor
   let hash = 0;
   for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); hash = hash & hash; }
   const hue = Math.abs(hash % 360), sat = 60 + Math.abs((hash >> 8) % 20), lit = 40 + Math.abs((hash >> 16) % 15);
@@ -772,7 +1021,7 @@ function hashToColor(str) {                       // lib/areas/color.ts hashToCo
   const f = (n) => { const k = (n + hue / 30) % 12; const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * c).toString(16).padStart(2, '0'); };
   return '#' + f(0) + f(8) + f(4);
 }
-function borderOf(hex) {                          // lib/areas/color.ts deriveBorderColor: lightness × 0.65
+function borderOf(hex) {                          // lib/analysis/color.ts deriveBorderColor: lightness × 0.65
   const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
   const mx = Math.max(r0, g0, b0), mn = Math.min(r0, g0, b0), d = mx - mn;
   let hh = 0, ss = 0, ll = (mx + mn) / 2;
@@ -784,51 +1033,23 @@ function borderOf(hex) {                          // lib/areas/color.ts deriveBo
   const x = (v) => Math.round(Math.max(0, Math.min(255, v * 255))).toString(16).padStart(2, '0');
   return '#' + x(r) + x(g) + x(b);
 }
-const areaColor = (a) => a.color || hashToColor(a.id);
-
-function areaHull(a) {                            // lib/areas/renderer.ts computeAreaHull
-  const pts = [];
-  for (const i of AREA_ALL.get(a.id)) { const s = simByIdx.get(i); if (s && s.x != null) pts.push(s); }
-  if (!pts.length) return null;
-  const PAD = 55;
-  if (pts.length === 1) return { cx: pts[0].x, cy: pts[0].y, r: pts[0].r + PAD };
-  if (pts.length === 2) { const [p, q] = pts; return { cx: (p.x + q.x) / 2, cy: (p.y + q.y) / 2, r: Math.hypot(p.x - q.x, p.y - q.y) / 2 + Math.max(p.r, q.r) + PAD }; }
-  const hull = d3.polygonHull(pts.map((s) => [s.x, s.y]));
-  if (!hull) return null;
-  let cx = 0, cy = 0; for (const [x, y] of hull) { cx += x; cy += y; } cx /= hull.length; cy /= hull.length;
-  return { points: hull.map(([x, y]) => { const dx = x - cx, dy = y - cy, dist = Math.hypot(dx, dy); if (!dist) return [x, y]; const sc = (dist + PAD) / dist; return [cx + dx * sc, cy + dy * sc]; }) };
-}
-function drawAreas(c, light) {
-  if (!live().includeAreas) return;
-  for (const a of AREAS) {
-    if (!disp.areaVis.get(a.id)) continue;
-    const hull = areaHull(a); if (!hull) continue;
-    const fill = areaColor(a), border = borderOf(fill);
-    c.save(); c.beginPath();
-    if (hull.points) { c.moveTo(hull.points[0][0], hull.points[0][1]); for (let i = 1; i < hull.points.length; i++) c.lineTo(hull.points[i][0], hull.points[i][1]); c.closePath(); }
-    else c.arc(hull.cx, hull.cy, hull.r, 0, 2 * Math.PI);
-    const hot = a === hoverArea;
-    c.fillStyle = fill; c.globalAlpha = hot ? 0.16 : 0.08; c.fill();
-    c.globalAlpha = hot ? 0.65 : 0.3; c.strokeStyle = border; c.lineWidth = 2.5; c.stroke();
-    c.globalAlpha = 1;
-    // pill label
-    let lx, ly;
-    if (hull.points) { let sx = 0, my = Infinity; for (const [x, y] of hull.points) { sx += x; if (y < my) my = y; } lx = sx / hull.points.length; ly = my - 14; } else { lx = hull.cx; ly = hull.cy - hull.r - 14; }
-    c.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
-    const tw = c.measureText(a.name).width, pw = tw + 20, ph = 25, px = lx - pw / 2, py = ly - ph / 2;
-    c.beginPath(); c.roundRect ? c.roundRect(px, py, pw, ph, 8) : c.rect(px, py, pw, ph);
-    c.fillStyle = fill; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1;
-    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(a.name, lx, ly + 1);
-    c.restore();
-  }
-}
 function draw() {
   const c = ctx, light = disp.canvas === 'light', P = live().params, B = base();
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
   c.clearRect(0, 0, W, H);
   c.save();
   c.translate(T.x, T.y); c.scale(T.k, T.k);
-  drawAreas(c, light);
+  drawFileOverlays(c);
+
+  // directory links: only the tiers switched to "shown" (hidden tiers still pull in the layout)
+  for (const [k, , kind] of DIR_TIERS) {
+    if (P['dir' + k + 'Link'] !== 'shown') continue;
+    c.strokeStyle = P['dir' + k + 'Color']; c.lineWidth = P['dir' + k + 'Width']; c.globalAlpha = P['dir' + k + 'Opacity'];
+    c.beginPath();
+    for (const l of hubLinks) if (l.dkind === kind && l.source.x != null && l.target.x != null) { c.moveTo(l.source.x, l.source.y); c.lineTo(l.target.x, l.target.y); }
+    c.stroke();
+  }
+  c.globalAlpha = 1;
 
   // edges (uniform style → one batched path; gradient → per edge, capped for speed)
   const gradient = P.edgeStyle === 'gradient';
@@ -868,6 +1089,12 @@ function draw() {
     else { c.fillStyle = s.fill; c.fill(); c.globalAlpha = faded ? 0.25 : 1; c.strokeStyle = stroke; c.lineWidth = 1; c.stroke(); }
   }
   c.globalAlpha = 1;
+  // directory hubs: skipped while fully transparent (the default)
+  for (const x of hubNodes) {
+    if (x.x == null || !(x.alpha > 0)) continue;
+    c.beginPath(); c.arc(x.x, x.y, x.r, 0, 2 * Math.PI); c.fillStyle = x.fill; c.globalAlpha = x.alpha; c.fill();
+  }
+  c.globalAlpha = 1;
   // labels
   if (disp.labels !== 'none') {
     c.font = '10px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
@@ -887,6 +1114,7 @@ function draw() {
   c.restore();
 }
 function onTick() {
+  computeFileOverlays();
   draw();
   if (++tickCount % 6 === 0) updateSimHud();
 }
@@ -897,15 +1125,34 @@ function onTick() {
 function renderHud() {
   const L = live();
   const classes = simNodes.reduce((n, s) => n + (s.node.type === 'CLASS' ? 1 : 0), 0);
-  const areas = L.includeAreas ? AREA_ROOTS.length : 0;
   fill($('#hud'), 
-    h('div', { id: 'hudCounts' }, 'nodes ' + simNodes.length + ' · edges ' + links.length + ' · classes ' + classes + ' · areas ' + areas),
-    h('div', { class: 'sim', id: 'hudSim' }, ''));
+    h('div', { id: 'hudCounts' }, 'nodes ' + simNodes.length + ' · edges ' + links.length + (bondLinks.length ? ' · bonds ' + bondLinks.length : '') + (hubNodes.length ? ' · hubs ' + hubNodes.length : '') + ' · classes ' + classes + (base().directory ? ' · file overlays ' + FILE_OVS.filter((o) => o.vis).length : '')),
+    h('div', { class: 'sim', id: 'hudSim' }, ''),
+    base().directory ? h('div', { class: 'sim', id: 'hudDir', title: 'folder tightness = how far files sit from their folder hub, in file radii (median over folders with ≥3 files; 1 = one radius out). sibling overlap = share of sibling file circles that overlap.' }, '') : null);
   updateSimHud();
   const g = $('#ghost');
   if (!simNodes.length) { g.style.display = 'flex'; g.textContent = 'working set is empty — turn a node type and an edge kind on in P1'; } else g.style.display = 'none';
 }
+/** folder-physics readout: file circles = centroid + p90 node distance; tightness = median over folders with ≥3 files of mean(file distance to folder hub) / mean(file radius) */
+function dirStats() {
+  const files = hubNodes.filter((h) => h.hubKind === 'FILE' && h.members.length >= 3).map((f) => {
+    const m = f.members.filter((s) => s.x != null); if (!m.length) return null;
+    const cx = d3.mean(m, (s) => s.x), cy = d3.mean(m, (s) => s.y), d = m.map((s) => Math.hypot(s.x - cx, s.y - cy)).sort((a, b) => a - b);
+    return { f, cx, cy, r: d[Math.floor(0.9 * d.length)] };
+  }).filter(Boolean);
+  const byFolder = new Map(); for (const c of files) { const F = c.f.folder; if (F) (byFolder.get(F) || byFolder.set(F, []).get(F)).push(c); }
+  let pairs = 0, over = 0; const ratios = [];
+  for (const [F, g] of byFolder) {
+    if (F.x == null) continue;
+    for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) { pairs++; if (g[i].r + g[j].r > Math.hypot(g[i].cx - g[j].cx, g[i].cy - g[j].cy)) over++; }
+    if (g.length >= 3) ratios.push(d3.mean(g, (c) => Math.hypot(c.cx - F.x, c.cy - F.y)) / Math.max(1, d3.mean(g, (c) => c.r)));
+  }
+  return { tight: ratios.length ? d3.median(ratios) : null, overlap: pairs ? over / pairs : null };
+}
 function updateSimHud() {
+  const hd = $('#hudDir');
+  if (hd && base().directory) { const st = dirStats(); hd.textContent = 'folder tightness ' + (st.tight == null ? '–' : st.tight.toFixed(2) + ' r') + ' · sibling overlap ' + (st.overlap == null ? '–' : Math.round(st.overlap * 100) + '%'); }
+  const hc = $('#hudCounts'); if (hc && base().directory) hc.textContent = hc.textContent.replace(/file overlays \d+/, 'file overlays ' + FILE_OVS.filter((o) => o.vis).length);
   const el = $('#hudSim'); if (!el || !sim) return;
   const a = sim.alpha(), hot = a > sim.alphaMin();
   el.textContent = hot ? 'α ' + a.toFixed(3) + ' · running' : 'α settled · rebuild ' + lastBuildMs.toFixed(0) + ' ms';
@@ -974,8 +1221,7 @@ function renderPreset() {
         : h('span', null, 'cycle the code-defined view configs · seeds the P1 default on-set · + forks a new preset')));
 }
 function selectPreset(id) {
-  curId = id; disp.drawOff = new Set(); disp.solo = null;
-  for (const a of AREAS) disp.areaVis.set(a.id, true);
+  curId = id; disp.drawOff = new Set();
   ui.tab = 'nodes';
   rebuild(true); renderAll(); pulse('p1');
 }
@@ -1008,7 +1254,6 @@ function renderP1() {
   fill($('#p1'), 
     h('div', { class: 'hd p1t' }, h('span', { class: 'num' }, 'P1'), 'available data', h('span', { class: 'cost build', title: 'a change here re-filters the working set and re-runs the layout' }, 'rebuild')),
     h('div', { class: 'sub' }, 'categories'),
-    cbRow({ label: 'area data', checked: L.includeAreas, count: AREAS.length, title: 'include area records (overlay tree, area cluster force)', onChange: (v) => { L.includeAreas = v; change(); } }),
     cbRow({ label: 'exclude tests', checked: L.excludeTests, disabled: TEST_NODES === 0, count: TEST_NODES ? TEST_NODES + ' test' : 'none in snapshot',
       title: TEST_NODES ? 'drop nodes that live in test files' : 'the snapshot has no test-file nodes (tsconfig excludes __tests__) — nothing to toggle', onChange: (v) => { L.excludeTests = v; change(); } }),
     cbRow({ label: 'include external edges', checked: L.includeExternal, count: fmtN(extEdgeCount(L)) + ' ext', title: 'data scope: internal edges only, or also edges to targets outside the repo (drawn as hollow stubs; bench-only preview)', onChange: (v) => { L.includeExternal = v; change(); } }),
@@ -1029,48 +1274,11 @@ function renderP1() {
 function roleDot(t) { const P = live().params; return P['color_' + t] || (DATA_TYPES.has(t) && P.dataColor) || (base().id === 'dataflow' ? P.processingColor : P.color_other || OTHER_COLOR); }
 
 /* ── P2 · display (redraw) ───────────────────────────────────────────────────────────────────── */
-let areaCountMap = new Map();
-function computeAreaCounts() {
-  areaCountMap = new Map();
-  for (const a of AREAS) { let n = 0; for (const i of AREA_ALL.get(a.id)) if (simByIdx.has(i)) n++; areaCountMap.set(a.id, n); }
-}
-function areaState(a) {
-  const ids = [a.id, ...AREA_DESC.get(a.id)];
-  const on = ids.filter((id) => disp.areaVis.get(id)).length;
-  return on === ids.length ? 'on' : on === 0 ? 'off' : 'mixed';
-}
-function toggleArea(a) {            // parent-eye rollup cascade
-  const target = areaState(a) !== 'on';
-  for (const id of [a.id, ...AREA_DESC.get(a.id)]) disp.areaVis.set(id, target);
-  disp.solo = null; redraw();
-}
-function soloArea(a) {
-  if (disp.solo === a.id) { for (const x of AREAS) disp.areaVis.set(x.id, true); disp.solo = null; }
-  else { const keep = new Set([a.id, ...AREA_DESC.get(a.id)]); for (const x of AREAS) disp.areaVis.set(x.id, keep.has(x.id)); disp.solo = a.id; }
-  redraw();
-}
-function areaRows(a, depth, out) {
-  const kids = AREA_KIDS.get(a.id) || [], st = areaState(a), collapsed = ui.areaCollapsed.has(a.id);
-  const cb = h('input', { type: 'checkbox', checked: st === 'on', 'aria-checked': st === 'mixed' ? 'mixed' : null, onchange: () => toggleArea(a) });
-  cb.indeterminate = st === 'mixed';
-  out.push(h('div', { class: 'arow' + (st === 'off' ? ' off' : ''), style: { paddingLeft: depth * 13 + 'px' } },
-    kids.length ? h('span', { class: 'chev', onclick: () => { collapsed ? ui.areaCollapsed.delete(a.id) : ui.areaCollapsed.add(a.id); renderP2(); } }, collapsed ? '▸' : '▾') : h('span', { class: 'chev' }, ''),
-    h('label', { class: 'r', title: (st === 'on' ? 'hide ' : 'show ') + a.name + (kids.length ? ' and its sub-areas' : '') },
-      cb, h('span', { class: 'cb' }),
-      h('span', { class: 'sw', style: { background: areaColor(a) } }),
-      h('span', { class: 'nm' }, a.name),
-      h('span', { class: 'cnt', title: 'nodes of this area in the working set' }, areaCountMap.get(a.id) || 0)),
-    h('button', { class: 'solo' + (disp.solo === a.id ? ' active' : ''), title: 'view only this area (click again to restore)', onclick: () => soloArea(a) }, disp.solo === a.id ? 'solo ✓' : 'solo')));
-  if (!collapsed) for (const k of kids) areaRows(k, depth + 1, out);
-}
 function renderP2() {
   const L = live(), B = base();
   const kindsInSet = [...new Set(links.map((l) => l.e.kind))];
-  const rows = []; for (const r of AREA_ROOTS) areaRows(r, 0, rows);
-  const areasOn = AREAS.filter((a) => disp.areaVis.get(a.id)).length;
-  const setAreas = (on) => { for (const a of AREAS) disp.areaVis.set(a.id, on); disp.solo = null; redraw(); };
   const seg = (opts, val, on) => h('span', { class: 'seg' }, opts.map((o) => h('button', { class: val === o ? 'on' : '', onclick: () => on(o) }, o)));
-  const forces = ['link', 'charge', 'collide', 'center'].concat(L.includeAreas && L.params.areaCluster ? ['areaCluster≈'] : [], B.layerRadii ? ['layerRadial (' + layerTaggedCount() + ' tagged)'] : []);
+  const forces = ['link', 'charge', 'collide', 'center'].concat(B.tiered ? ['gravity (forceX/Y)'] : [], B.directory ? ['directory hubs (IN_FILE · IN_FOLDER · IN_PARENT)', 'hubCenter', 'folder physics (files → folder gravity, sibling separation)'] : []);
   fill($('#p2'), 
     h('div', { class: 'hd p2t' }, h('span', { class: 'num' }, 'P2'), 'display', h('span', { class: 'cost draw', title: 'display only — redraws without touching the simulation' }, 'redraw')),
     cbRow({ label: 'show edges', checked: disp.showEdges, onChange: (v) => { disp.showEdges = v; redraw(); } }),
@@ -1079,18 +1287,40 @@ function renderP2() {
     ...fold('edgesDrawn', 'edges drawn', kindsInSet.filter((k) => !disp.drawOff.has(k)).length + ' / ' + kindsInSet.length + ' kinds', [
       h('div', { class: 'foldact' }, h('span', null, 'hidden kinds still pull in the layout')),
       kindsInSet.map((k) => cbRow({ label: k, checked: !disp.drawOff.has(k), count: fmtN(links.filter((l) => l.e.kind === k).length), onChange: (v) => { if (v) disp.drawOff.delete(k); else disp.drawOff.add(k); redraw(); } }))]),
-    ...(L.includeAreas ? (rows.length
-      ? fold('areaOverlay', 'area overlay', areasOn + ' / ' + AREAS.length + ' on', [
-        h('div', { class: 'foldact' }, h('button', { onclick: () => setAreas(true) }, 'all'), h('button', { onclick: () => setAreas(false) }, 'none')),
-        h('div', { class: 'tree' }, rows)])
-      : [h('div', { class: 'forces' }, 'no areas in this snapshot')])
-      : [h('div', { class: 'forces' }, 'area overlay: area data is off — enable it in P1 (rebuild)')]),
-    lockRow('p2', 'forces in play', [forces.join(' · '), 'not simulated in the bench: areaAttract · areaParent · anchorRepel · areaPin · crossAreaPull · areaHullCollision', 'which forces run is a code decision — magnitudes are tuned in P3'], 'RepoGraph.tsx'));
+    ...(B.directory ? dirOverlayControls() : []),
+    lockRow('p2', 'forces in play', [forces.join(' · '), 'which forces run is a code decision — magnitudes are tuned in P3'], 'RepoGraph.tsx'));
+}
+
+/** P2 controls for the Vanilla (directory) file overlays — display only: each change recomputes the shapes and redraws, the simulation is left alone */
+function dirOverlayControls() {
+  const O = disp.dirOv, apply = () => { computeFileOverlays(); redraw('quiet'); updateSimHud(); };
+  const slider = (key, label, min, max, step, fmt, title) => {
+    const out = h('span', { class: 'vv' }, fmt(O[key]));
+    return h('div', { class: 'sl', title },
+      h('span', { class: 'lb' }, label),
+      h('input', { type: 'range', min, max, step, value: O[key], 'aria-label': label, oninput: (e) => { O[key] = parseFloat(e.target.value); out.textContent = fmt(O[key]); apply(); } }),
+      out, h('span', { class: 'bd' }, min + '–' + max));
+  };
+  const f0 = (v) => String(v), pct = (v) => Math.round(v * 100) + '%';
+  return fold('dirOverlay', 'file overlay', O.on ? FILE_OVS.length + ' files' : 'off', [
+    cbRow({ label: 'show overlay', checked: O.on, onChange: (v) => { O.on = v; renderP2(); apply(); } }),
+    cbRow({ label: 'file labels', checked: O.labels, onChange: (v) => { O.labels = v; redraw('quiet'); } }),
+    h('div', { class: 'sub' }, 'which files'),
+    slider('minMem', 'min nodes', 1, 100, 1, f0, 'hide files holding fewer nodes than this'),
+    h('div', { class: 'sub' }, 'shape — lower values hug the nodes tighter'),
+    slider('pct', 'circle covers', 0.3, 1, 0.05, pct, 'base radius = this percentile of node distance from the file hub; the mold then reaches every node outside it'),
+    slider('pad', 'padding', 0, 60, 2, f0, 'margin between a node and the outline'),
+    slider('smooth', 'mold smooth', 5, 90, 5, (v) => v + '°', 'angular width of the bulge toward each outlying node'),
+    slider('reach', 'mold reach', 1, 10, 0.5, (v) => (v >= 10 ? '∞' : v + '×'), 'nodes farther than reach × the base radius are left outside the overlay; ∞ puts every node inside'),
+    h('div', { class: 'sub' }, 'style'),
+    slider('fill', 'fill opacity', 0, 0.5, 0.01, (v) => v.toFixed(2), 'overlay fill'),
+    slider('stroke', 'line opacity', 0, 1, 0.05, (v) => v.toFixed(2), 'overlay outline'),
+    h('div', { class: 'forces' }, 'centered on the file hub, so it matches the physics anchor · never feeds the simulation')]);
 }
 
 /* ── P3 · controllable variables (reheat) ────────────────────────────────────────────────────── */
 function visibleDefs(tab) {
-  const P = live().params, B = base();
+  const L = live(), P = L.params, B = base();
   return PARAM_DEFS.filter((d) => d.tab === tab && d.key in B.defaults && isPresent(d) && (!d.when || d.when(P)));
 }
 function resetKeys(keys) {
@@ -1098,13 +1328,27 @@ function resetKeys(keys) {
   for (const k of keys) P[k] = dflt[k];
   renderP3(); reheat();
 }
+const inhReg = [];     // sync callbacks of the nullable sliders on screen — a change to one tier refreshes the inherited values shown by the tiers below it
+function inheritedOf(d) { const P = live().params; for (const k of d.from || []) if (P[k] != null) return P[k]; return d.min; }
+/** range slider; `clear` makes it a tier slider — dimmed while it inherits, × returns it to inheriting */
+function numSlider(o) {
+  const shown = () => (o.get() == null ? o.inherit() : o.get());
+  const out = h('span', { class: 'vv' }, fmtV(shown(), o.step));
+  const input = h('input', { type: 'range', min: o.min, max: o.max, step: o.step, value: shown(), 'aria-label': o.aria,
+    oninput: (e) => { o.set(parseFloat(e.target.value)); reheat(); } });
+  const row = h('div', { class: 'sl' + (o.clear ? ' nul' : '') + (o.get() == null ? ' inh' : ''), title: o.title },
+    h('span', { class: 'lb' }, o.label), input, out,
+    o.clear ? h('button', { class: 'clr', title: 'clear — inherit from the tier above', 'aria-label': 'clear ' + o.label, onclick: () => { o.clear(); reheat(); } }, '×') : null,
+    h('span', { class: 'bd' }, o.min + '–' + o.max));
+  if (o.clear) inhReg.push(() => { row.classList.toggle('inh', o.get() == null); const v = shown(); input.value = v; out.textContent = fmtV(v, o.step); });
+  return row;
+}
 function control(d) {
   const P = live().params, v = P[d.key];
   if (d.type === 'num') {
-    const out = h('span', { class: 'vv' }, fmtV(v, d.step));
-    const input = h('input', { type: 'range', min: d.min, max: d.max, step: d.step, value: v, 'aria-label': d.label + ' (' + d.map + ')',
-      oninput: (e) => { P[d.key] = parseFloat(e.target.value); out.textContent = fmtV(P[d.key], d.step); reheat(); } });
-    return h('div', { class: 'sl', title: d.map }, h('span', { class: 'lb' }, d.label), input, out, h('span', { class: 'bd' }, d.min + '–' + d.max));
+    return numSlider({ label: d.label, title: d.map, aria: d.label + ' (' + d.map + ')', min: d.min, max: d.max, step: d.step,
+      get: () => live().params[d.key], inherit: () => inheritedOf(d), set: (x) => { live().params[d.key] = x; },
+      clear: d.nullable ? () => { live().params[d.key] = null; } : null });
   }
   if (d.type === 'color') {
     const out = h('span', { class: 'vv' }, v);
@@ -1114,16 +1358,20 @@ function control(d) {
   return h('div', { class: 'sl', title: d.map }, h('span', { class: 'lb' }, d.label),
     h('span', { class: 'seg' }, d.options.map((o) => h('button', { class: v === o ? 'on' : '', onclick: () => { P[d.key] = o; renderP3(); reheat(); } }, o))), h('span', { class: 'vv' }, ''));
 }
+
 function renderP3() {
+  const B = base(); inhReg.length = 0;
   const tabDefs = TABS.map((t) => ({ t, n: visibleDefs(t).length })).filter((x) => x.n > 0);
   if (!tabDefs.some((x) => x.t === ui.tab)) ui.tab = tabDefs[0] ? tabDefs[0].t : 'nodes';
   const defs = visibleDefs(ui.tab);
-  const groups = []; for (const d of defs) { let g = groups.find((x) => x.sub === d.sub); if (!g) groups.push(g = { sub: d.sub, items: [] }); g.items.push(d); }
+  const subOf = (d) => (B.tiered && d.tsub) || d.sub;
+  const groups = []; for (const d of defs) { const sub = subOf(d); let g = groups.find((x) => x.sub === sub); if (!g) groups.push(g = { sub, items: [] }); g.items.push(d); }
   fill($('#p3'), 
     h('div', { class: 'hd p3t' }, h('span', { class: 'num' }, 'P3'), 'tune', h('span', { class: 'cost heat', title: 'a change here nudges the running simulation' }, 'reheat')),
     h('div', { class: 'tabs', role: 'tablist' }, tabDefs.map(({ t }) => h('div', { class: 'tab' + (t === ui.tab ? ' act' : ''), role: 'tab', tabindex: 0, 'aria-selected': t === ui.tab ? 'true' : 'false', onclick: () => { ui.tab = t; renderP3(); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { ui.tab = t; renderP3(); } } }, t))),
+    B.tiered && (ui.tab === 'edges' || ui.tab === 'forces') ? h('div', { class: 'forces' }, 'tiers, most specific wins: kind / role → global. dimmed = inheriting; × clears an override.') : null,
     groups.map((g) => [h('div', { class: 'grphd' }, g.sub, h('button', { class: 'rst', title: 'reset this group to the preset defaults', onclick: () => resetKeys(g.items.map((d) => d.key)) }, 'reset')), g.items.map(control)]),
-    lockRow('p3', 'groups & bounds from code', ['groups (nodes · edges · forces · color) and min/max bounds are code-defined (PARAM_DEFS)', 'defaults + the config each control maps to: ' + base().ref, 'hover a control to see the RepoGraphConfig field it maps to'], 'graph-config.ts'));
+    lockRow('p3', 'groups & bounds from code', ['groups (nodes · edges · forces · color) and min/max bounds are code-defined (PARAM_DEFS)', 'defaults + the config each control maps to: ' + B.ref, 'hover a control to see the RepoGraphConfig field it maps to'], 'graph-config.ts'));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1142,15 +1390,19 @@ function paramKeys() {   // every key the preset owns, in registry order (indepe
 function emitValue() {
   const P = cur(), L = P.live, B = base();
   const params = {}; for (const k of paramKeys()) params[k] = L.params[k];
-  return { preset: P.label, base: B.id, filters: { nodeTypes: sorted(L.nodeTypes), edgeKinds: sorted(L.edgeKinds), includeExternal: L.includeExternal, excludeTests: L.excludeTests, includeAreas: L.includeAreas }, params };
+  const v = { preset: P.label, base: B.id, filters: { nodeTypes: sorted(L.nodeTypes), edgeKinds: sorted(L.edgeKinds), includeExternal: L.includeExternal, excludeTests: L.excludeTests }, params };
+  if (B.directory) v.overlay = disp.dirOv.on ? Object.assign({}, disp.dirOv) : null;
+  return v;
 }
 function flatPreview() {
   const p = emitValue().params, ks = Object.keys(p);
-  return '{ ' + ks.slice(0, 5).map((k) => k + ': ' + (typeof p[k] === 'number' ? num(p[k]) : q(p[k]))).join(', ') + (ks.length > 5 ? ', …' : '') + ' }';
+  return '{ ' + ks.filter((k) => p[k] != null).slice(0, 5).map((k) => k + ': ' + (typeof p[k] === 'number' ? num(p[k]) : q(p[k]))).join(', ') + (ks.length > 5 ? ', …' : '') + ' }';
 }
 function litObj(o, ind) {
   const pad = ' '.repeat(ind), pad2 = ' '.repeat(ind + 2);
-  return '{\n' + Object.entries(o).map(([k, v]) => pad2 + k + ': ' + (Array.isArray(v) ? list(v) : v && typeof v === 'object' ? litObj(v, ind + 2) : typeof v === 'number' ? num(v) : typeof v === 'boolean' ? String(v) : q(v)) + ',').join('\n') + '\n' + pad + '}';
+  if (!Object.keys(o).length) return '{}';
+  const key = (k) => (/^[A-Za-z_$][\w$]*$/.test(k) ? k : q(k));
+  return '{\n' + Object.entries(o).map(([k, v]) => pad2 + key(k) + ': ' + (v == null ? 'null' : Array.isArray(v) ? list(v) : typeof v === 'object' ? litObj(v, ind + 2) : typeof v === 'number' ? num(v) : typeof v === 'boolean' ? String(v) : q(v)) + ',').join('\n') + '\n' + pad + '}';
 }
 function emitTuning() {
   const P = cur(), B = base(), v = emitValue();
@@ -1163,6 +1415,7 @@ function emitTuning() {
     if (d.key.startsWith('dist_')) { if (d.kind === 'CALLS') mapLines.push(mapLine('dist_<KIND> / str_<KIND>', 'forces.edge(<KIND>).distance / .strength  (createEdgeForcer)')); continue; }
     if (d.key === 'color_FUNCTION') { mapLines.push(mapLine('color_<SyntaxType> / color_other', 'style.node().color by node.syntaxType, else color_other')); continue; }
     if (d.key === 'color_CLASS') continue;
+    if (d.family) { if (!mapLines.some((l) => l.includes('params.' + d.family))) mapLines.push(mapLine(d.family, d.map)); continue; }
     mapLines.push(mapLine(d.key, d.map.replace('<metric>', B.metric)));
   }
   const fmap = (name, to) => '//   ' + name + ' '.repeat(Math.max(1, 24 - name.length)) + '→ ' + to;
@@ -1173,14 +1426,13 @@ function emitTuning() {
     '// This value is the LIVE HALF of a view config: the magnitudes you tuned + the P1 on-sets.',
     '// The CODE HALF is lib/analysis/graph-config.ts — the policy (filter predicates, role→color, the edge-force',
     '// model, the tunable groups) — plus the bounds in the bench\'s PARAM_DEFS. Base preset: ' + B.ref + '.',
-    '// P2 display toggles are bench-only inspection and are not emitted.',
+    '// P2 display toggles are bench-only inspection and are not emitted — except the file overlay settings, which the view config carries as forces.directory.overlay.',
     '//',
     '// field → RepoGraphConfig',
     fmap('filters.nodeTypes', 'filters.node (SyntaxType set predicate)'),
     fmap('filters.edgeKinds', 'filters.edge (EdgeKind set predicate)'),
     fmap('filters.includeExternal', 'filters.edge (!edge.isExternal when false; RepoGraph drops edges to non-candidate nodes anyway)'),
     fmap('filters.excludeTests', 'RepoGraph hideTestFiles prop (not in RepoGraphConfig)'),
-    fmap('filters.includeAreas', 'area store (not in RepoGraphConfig)'),
   ].concat(mapLines);
   lines.push('//', '// "view config (TS)" renders this same value through the mapping as a create…ViewConfig-shaped function.', '');
   lines.push('export const tuning = ' + litObj(v, 0) + ';', '');
@@ -1243,7 +1495,6 @@ function emitViewConfig() {
       '    edge: createEdgeForcer({',
       forcer,
       '    }),',
-      '    areaCluster: ' + num(p.areaCluster) + ',',
       '  },',
       sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
       '});',
@@ -1278,7 +1529,6 @@ function emitViewConfig() {
       '    forces: {',
       '      node: (node: AnalysisNode) => ({ ...base.forces.node(node), charge: ' + num(p.charge) + ' }),',
       '      edge: () => ({ distance: ' + num(p.edgeDistance) + ', strength: ' + num(p.edgeStrength) + ' }),',
-      '      areaCluster: ' + num(p.areaCluster) + ',',
       '    },',
       sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
       '  });',
@@ -1286,6 +1536,123 @@ function emitViewConfig() {
       '',
     ];
     if (p.edgeStyle !== 'gradient') header.splice(header.length - 1, 1, "import { DEFAULT_EDGE_STYLE, DEFAULT_NODE_STYLE, createModulesViewConfig, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+  } else if (B.id === 'playground') {
+    header.push("import { " + (p.edgeStyle === 'gradient' ? '' : 'DEFAULT_EDGE_STYLE, ') + "DEFAULT_NODE_FORCES, DEFAULT_NODE_STYLE, DEFAULT_REPO_GRAPH_CONFIG, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    const mapBlock = (name, type, keys, pre, enumName) => { const set = keys.filter((k) => p[pre + k] != null); return 'const ' + name + ': Partial<Record<' + type + ', number>> = ' + (set.length ? '{\n' + set.map((k) => '  [' + enumName + '.' + k + ']: ' + num(p[pre + k]) + ',').join('\n') + '\n}' : '{}') + ';'; };
+    const bench = {}; if (p.gravity) bench.gravity = p.gravity;
+    for (const pre of ['collisionPadding_', 'gravity_']) for (const t of TIER_ROLES) if (p[pre + t] != null) bench[pre + t] = p[pre + t];
+    body = [
+      'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
+      mapBlock('KIND_DISTANCE', 'EdgeKind', ALL_KINDS, 'dist_', 'EdgeKind'),
+      mapBlock('KIND_STRENGTH', 'EdgeKind', ALL_KINDS, 'str_', 'EdgeKind'),
+      mapBlock('ROLE_CHARGE', 'SyntaxType', TIER_ROLES, 'charge_', 'SyntaxType'),
+      '',
+      '// Bench-only tiers: RepoGraphConfig has no field for these (collision and gravity are not per-node).',
+      '// Kept so the tuning survives a paste; wire them in when the app grows the tier.',
+      'export const ' + snake(P.label) + '_BENCH_ONLY_TIERS = ' + litObj(bench, 0) + ';',
+      '',
+      'export const ' + snake(P.label) + (P.forked ? '' : '_TUNED') + '_CONFIG: RepoGraphConfig = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {',
+      '  filters: {',
+      '    node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType),',
+      '    edge: ' + edgeFilter + ',',
+      '  },',
+      '  style: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_STYLE,',
+      '      color: NODE_COLORS[node.syntaxType] ?? ' + q(p.color_other) + ',',
+      '      radius: scaledValue(node.outboundRefs.length, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '      opacity: ' + num(p.nodeOpacity) + ',',
+      '    }),',
+      '    edge: () => ' + edgeStyle() + ',',
+      '  },',
+      '  forces: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_FORCES,',
+      '      charge: ' + (p.chargeInbound > 0 ? '(ROLE_CHARGE[node.syntaxType] ?? ' + num(p.charge) + ') - scaledValue(node.referencedAt.length, 0, ' + num(p.chargeInbound) + ')' : 'ROLE_CHARGE[node.syntaxType] ?? ' + num(p.charge)) + ',',
+      '    }),',
+      '    edge: (edge: AnalysisEdge) => ({',
+      '      distance: KIND_DISTANCE[edge.kind] ?? ' + num(p.edgeDistance) + ',',
+      '      strength: KIND_STRENGTH[edge.kind] ?? ' + num(p.edgeStrength) + ',',
+      '    }),',
+      '  },',
+      sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
+      '});',
+      '',
+    ];
+  } else if (B.id === 'vanillaDirectory') {
+    header.push("import { " + (p.edgeStyle === 'gradient' ? '' : 'DEFAULT_EDGE_STYLE, ') + "DEFAULT_NODE_STYLE, VANILLA_DIRECTORY_CONFIG, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    const tier = (k, kind) => '        ' + kind + ': { distance: ' + num(p['dir' + k + 'Dist']) + ', strength: ' + num(p['dir' + k + 'Str']) + ', style: ' +
+      (p['dir' + k + 'Link'] === 'shown' ? '{ color: ' + q(p['dir' + k + 'Color']) + ', width: ' + num(p['dir' + k + 'Width']) + ', opacity: ' + num(p['dir' + k + 'Opacity']) + ' }' : 'null') + ' },';
+    const hubStyle = (k, kind) => '        ' + kind + ': { charge: ' + num(p['hub' + k + 'Charge']) + ', radius: ' + num(p['hub' + k + 'Radius']) + ', opacity: ' + num(p['hub' + k + 'Opacity']) + ', color: ' + q(p['hub' + k + 'Color']) + ' },';
+    body = [
+      'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
+      '',
+      'export const ' + snake(P.label) + (P.forked ? '' : '_TUNED') + '_CONFIG: RepoGraphConfig = mergeConfigs(VANILLA_DIRECTORY_CONFIG, {',
+      '  filters: {',
+      '    node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType),',
+      '    edge: ' + edgeFilter + ',',
+      '  },',
+      '  style: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_STYLE,',
+      '      color: NODE_COLORS[node.syntaxType] ?? ' + q(p.color_other) + ',',
+      '      radius: scaledValue(node.outboundRefs.length, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '      opacity: ' + num(p.nodeOpacity) + ',',
+      '    }),',
+      '    edge: () => ' + edgeStyle() + ',',
+      '  },',
+      '  forces: {',
+      '    node: () => ({ charge: ' + num(p.charge) + ', collideRadius: 10, fx: null, fy: null }),',
+      '    edge: () => ({ distance: ' + num(p.edgeDistance) + ', strength: ' + num(p.edgeStrength) + ' }),',
+      '    bonds: { classMember: { distance: ' + num(p.bondClassDist) + ', strength: ' + num(p.bondClassStr) + ' } },',
+      '    // bench-only folder physics (no RepoGraphConfig field yet): folderPull ' + num(p.folderPull) + ', folderSep ' + num(p.folderSep) + ', folderGap ' + num(p.folderGap) + ', repelReach ' + (p.repelReach >= 3000 ? 'Infinity' : num(p.repelReach)),
+      '    directory: {',
+      '      tiers: {',
+      ...DIR_TIERS.map(([k, , kind]) => tier(k, kind)),
+      '      },',
+      '      hubs: {',
+      hubStyle('File', 'FILE'),
+      hubStyle('Folder', 'FOLDER'),
+      '      },',
+      '      hubCenter: ' + num(p.hubCenter) + ',',
+      '      overlay: ' + (disp.dirOv.on ? '{ labels: ' + disp.dirOv.labels + ', percentile: ' + num(disp.dirOv.pct) + ', padding: ' + num(disp.dirOv.pad) + ', reach: ' + (disp.dirOv.reach >= 10 ? 'Infinity' : num(disp.dirOv.reach)) + ', smooth: ' + num(disp.dirOv.smooth) + ', minMembers: ' + num(disp.dirOv.minMem) + ', fillOpacity: ' + num(disp.dirOv.fill) + ', strokeOpacity: ' + num(disp.dirOv.stroke) + ' }' : 'null') + ',',
+      '    },',
+      '  },',
+      sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
+      '});',
+      '',
+    ];
+  } else if (B.id === 'vanilla') {
+    header.push("import { " + (p.edgeStyle === 'gradient' ? '' : 'DEFAULT_EDGE_STYLE, ') + "DEFAULT_NODE_STYLE, VANILLA_CONFIG, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
+    body = [
+      'const NODE_COLORS: Partial<Record<SyntaxType, string>> = ' + roleColors() + ';',
+      '',
+      'export const ' + snake(P.label) + (P.forked ? '' : '_TUNED') + '_CONFIG: RepoGraphConfig = mergeConfigs(VANILLA_CONFIG, {',
+      '  filters: {',
+      '    node: (node: AnalysisNode) => NODE_TYPES.has(node.syntaxType),',
+      '    edge: ' + edgeFilter + ',',
+      '  },',
+      '  style: {',
+      '    node: (node: AnalysisNode) => ({',
+      '      ...DEFAULT_NODE_STYLE,',
+      '      color: NODE_COLORS[node.syntaxType] ?? ' + q(p.color_other) + ',',
+      '      radius: scaledValue(node.outboundRefs.length, ' + num(p.nodeRadiusMin) + ', ' + num(p.nodeRadiusMax) + '),',
+      '      opacity: ' + num(p.nodeOpacity) + ',',
+      '    }),',
+      '    edge: () => ' + edgeStyle() + ',',
+      '  },',
+      '  forces: {',
+      '    node: () => ({ charge: ' + num(p.charge) + ', collideRadius: 10, fx: null, fy: null }),',
+      '    edge: () => ({ distance: ' + num(p.edgeDistance) + ', strength: ' + num(p.edgeStrength) + ' }),',
+      '    bonds: {',
+      '      classMember: { distance: ' + num(p.bondClassDist) + ', strength: ' + num(p.bondClassStr) + ' },',
+      '      sameFile: { distance: ' + num(p.bondFileDist) + ', strength: ' + num(p.bondFileStr) + ' },',
+      '    },',
+      '  },',
+      sim.replace(/^ {4}/, '  ').replace(/\n$/, ''),
+      '});',
+      '',
+    ];
   } else {
     header.push("import { DATA_FLOW_DATA_TYPES, DEFAULT_EDGE_STYLE, DEFAULT_NODE_STYLE, buildSymbolKindMap, countDataNodeUsage, createDataFlowViewConfig, mergeConfigs, scaledValue } from '@/lib/analysis/graph-config';");
     body = [
@@ -1324,7 +1691,6 @@ function emitViewConfig() {
       '        distance: ' + num(p.edgeDistance) + ',',
       '        strength: Math.max(0.05, ' + num(p.edgeStrengthBase) + ' / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1)),',
       '      }),',
-      '      areaCluster: ' + num(p.areaCluster) + ',',
       '    },',
       sim.replace(/^ {4}/, '    ').replace(/\n$/, ''),
       '  });',
@@ -1363,8 +1729,8 @@ function renderEmit() {
 }
 function resetAll() {
   const P = cur(); P.live = cloneLive(P.defaults);
-  disp.showEdges = true; disp.labels = 'preset'; disp.drawOff = new Set(); disp.solo = null;
-  for (const a of AREAS) disp.areaVis.set(a.id, true);
+  disp.showEdges = true; disp.labels = 'preset'; disp.drawOff = new Set();
+  disp.dirOv = Object.assign({}, DIR_OV_DEFAULTS);
   rebuild(true); renderAll(true); pulse('p1'); pulse('p3');
 }
 
@@ -1375,7 +1741,7 @@ function renderNotes() {
   if (!ui.notesOpen) return;
   const m = SNAP.metadata || {};
   fill(el, 
-    h('header', null, 'bench notes', h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'snapshot ' + (m.repoName || '?') + '@' + (m.commit || '?') + ' · ' + fmtN(N) + ' nodes · ' + fmtN(EDGES.length) + ' edges · ' + AREAS.length + ' areas'),
+    h('header', null, 'bench notes', h('span', { style: { color: 'var(--dim)', fontWeight: '400', fontSize: '10.5px' } }, 'snapshot ' + (m.repoName || '?') + '@' + (m.commit || '?') + ' · ' + fmtN(N) + ' nodes · ' + fmtN(EDGES.length) + ' edges'),
       h('button', { class: 'x', 'aria-label': 'close', onclick: () => { ui.notesOpen = false; renderNotes(); } }, '✕')),
     (() => { const b = h('div', { class: 'body' }); b.append($('#NOTES').content.cloneNode(true)); return b; })());
 }
@@ -1385,7 +1751,7 @@ $('#fitBtn').addEventListener('click', () => fitView(true));
 /* ═══════════════════════════════════════════════════════════════════════════
    8 · go
    ═══════════════════════════════════════════════════════════════════════════ */
-window.__bench = { presets, cur, live, base, emitTuning, emitViewConfig, emitValue, selectPreset, forkPreset, rebuild, get simNodes() { return simNodes; }, get links() { return links; }, get sim() { return sim; }, SNAP, PARAM_DEFS, BASES, scaledValue, METRICS, disp, areaState, toggleArea };
+window.__bench = { get bondLinks() { return bondLinks; }, presets, cur, live, base, emitTuning, emitViewConfig, emitValue, selectPreset, forkPreset, rebuild, get simNodes() { return simNodes; }, get links() { return links; }, get sim() { return sim; }, SNAP, PARAM_DEFS, BASES, scaledValue, METRICS, disp };
 resize();
 rebuild(true);
 renderAll();

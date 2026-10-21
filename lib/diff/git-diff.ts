@@ -1,6 +1,10 @@
 import { execFileSync } from 'child_process';
 import { isTestFile } from '@/app/services/analysis/test-file-detector';
 import { runDifftastic, type DifftasticFileResult } from './difftastic';
+import { mapWithConcurrency } from './concurrency';
+
+/** Maximum number of `difft` processes alive at once; 6 measured fastest on an 8-core machine. */
+const DIFFT_CONCURRENCY = 6;
 
 export type ChangedFile = {
   status: 'added' | 'deleted' | 'modified';
@@ -117,18 +121,16 @@ export function listChangedTsFiles(
   }
 
   // Run difftastic on modified files
-  return Promise.all(
-    changedFiles.map(async (file) => {
-      if (file.status === 'modified' && file.oldSource !== undefined && file.newSource !== undefined) {
-        try {
-          file.difft = await runDifftastic(file.oldSource, file.newSource, file.ext);
-        } catch {
-          // If difftastic fails on a specific file, skip it
-        }
+  return mapWithConcurrency(changedFiles, DIFFT_CONCURRENCY, async (file) => {
+    if (file.status === 'modified' && file.oldSource !== undefined && file.newSource !== undefined) {
+      try {
+        file.difft = await runDifftastic(file.oldSource, file.newSource, file.ext);
+      } catch {
+        // If difftastic fails on a specific file, skip it
       }
-      return file;
-    }),
-  );
+    }
+    return file;
+  });
 }
 
 /**

@@ -4,7 +4,6 @@ import '@testing-library/jest-dom';
 import { SelectionProvider, useSelection } from '@/app/contexts/SelectionContext';
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
-import type { Area } from '@/lib/areas/types';
 import type { SelectionContextValue } from '@/app/contexts/SelectionContext';
 
 function makeNode(overrides: Partial<AnalysisNode> & { scipSymbol: string; name: string; filePath: string }): AnalysisNode {
@@ -42,20 +41,6 @@ function makeEdge(from: string, to: string, kind: EdgeKind = EdgeKind.CALLS): An
   };
 }
 
-function makeArea(id: string, name: string, contains: string[], parent: string | null = null, children: string[] = []): Area {
-  return {
-    id,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    name,
-    type: 'business_domain',
-    contains,
-    parent,
-    children,
-    clusterStrength: 0,
-  };
-}
-
 const testNodes: AnalysisNode[] = [
   makeNode({ scipSymbol: 'sym:a', name: 'funcA', filePath: 'src/a.ts' }),
   makeNode({ scipSymbol: 'sym:b', name: 'funcB', filePath: 'src/a.ts' }),
@@ -70,19 +55,12 @@ const testEdges: AnalysisEdge[] = [
 
 const visibleNodeIds = new Set(['sym:a', 'sym:b', 'sym:c', 'sym:d']);
 
-const testAreas: Area[] = [
-  makeArea('area-a', 'Area A', ['sym:a', 'sym:b']),
-  makeArea('area-b', 'Area B', ['sym:c']),
-  makeArea('area-parent', 'Parent', [], null, ['area-a']),
-];
-
 /**
  * Helper: renders a SelectionProvider with test data and exposes
  * the context value for test assertions.
  */
 function renderWithProvider(
   onReady: (ctx: SelectionContextValue) => void,
-  areas: Area[] = [],
   seedNodeIds?: Set<string>,
   value?: SelectionContextValue,
 ) {
@@ -101,7 +79,6 @@ function renderWithProvider(
       nodes={testNodes}
       edges={testEdges}
       visibleNodeIds={visibleNodeIds}
-      areas={areas}
       seedNodeIds={seedNodeIds}
     >
       <TestConsumer onReady={onReady} />
@@ -123,12 +100,10 @@ describe('SelectionContext — new state model', () => {
       expect(ctx!.hasSelection).toBe(false);
       expect(ctx!.state.selectedNodeIds.size).toBe(0);
       expect(ctx!.state.explicitNodeIds.size).toBe(0);
-      expect(ctx!.state.excludedNodeIds.size).toBe(0);
       expect(ctx!.state.lockedNodeIds.size).toBe(0);
-      expect(ctx!.state.lockedAreaIds.size).toBe(0);
     });
 
-    it('equals explicitNodeIds when no area is selected', () => {
+    it('equals explicitNodeIds', () => {
       let ctx: SelectionContextValue | null = null;
       renderWithProvider((c) => { ctx = c; });
       act(() => { ctx!.toggleNode('sym:a'); });
@@ -136,50 +111,18 @@ describe('SelectionContext — new state model', () => {
       expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(true);
       expect(ctx!.state.selectedNodeIds.size).toBe(1);
     });
-
-    it('includes area members when an area is selected', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      // area-a contains sym:a, sym:b
-      expect(ctx!.state.explicitNodeIds.size).toBe(0);
-      expect(ctx!.state.selectedAreaIds.has('area-a')).toBe(true);
-      expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(true);
-      expect(ctx!.state.selectedNodeIds.has('sym:b')).toBe(true);
-      expect(ctx!.state.selectedNodeIds.size).toBe(2);
-    });
-
-    it('includes descendant area members in selectedNodeIds', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [
-        makeArea('parent', 'Parent', [], null, ['child']),
-        makeArea('child', 'Child', ['sym:a'], 'parent', []),
-      ]);
-      act(() => { ctx!.toggleArea('parent'); });
-      // parent area should include child's contains via getDescendantIds
-      expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(true);
-    });
-
-    it('excludes excludedNodeIds from selectedNodeIds', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      // area-a has sym:a, sym:b — toggle area selects both
-      expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(true);
-      expect(ctx!.state.selectedNodeIds.has('sym:b')).toBe(true);
-    });
   });
 
   describe('toggleNode', () => {
-    it('adds to explicitNodeIds when unselected and not covered by an area', () => {
+    it('adds to explicitNodeIds when unselected', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
+      renderWithProvider((c) => { ctx = c; });
       act(() => { ctx!.toggleNode('sym:d'); });
       expect(ctx!.state.explicitNodeIds.has('sym:d')).toBe(true);
       expect(ctx!.state.selectedNodeIds.has('sym:d')).toBe(true);
     });
 
-    it('removes from explicitNodeIds when unselected and not covered by an area', () => {
+    it('removes from explicitNodeIds when selected', () => {
       let ctx: SelectionContextValue | null = null;
       renderWithProvider((c) => { ctx = c; });
       act(() => { ctx!.toggleNode('sym:a'); });
@@ -188,33 +131,9 @@ describe('SelectionContext — new state model', () => {
       expect(ctx!.state.selectedNodeIds.size).toBe(0);
     });
 
-    it('adds to excludedNodeIds when node is covered by a checked area', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      // sym:a is selected via area-a
-      act(() => { ctx!.toggleNode('sym:a'); });
-      // sym:a should move from explicitNodeIds... wait, it was never in explicitNodeIds
-      // When unchecking a node that's covered by a checked area, it should go to excludedNodeIds
-      expect(ctx!.state.excludedNodeIds.has('sym:a')).toBe(true);
-      expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(false);
-      // sym:b should still be selected via area-a
-      expect(ctx!.state.selectedNodeIds.has('sym:b')).toBe(true);
-    });
-
-    it('removes from excludedNodeIds when re-checking a previously excluded node', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleNode('sym:a'); });  // exclude sym:a
-      act(() => { ctx!.toggleNode('sym:a'); });  // re-include sym:a
-      expect(ctx!.state.excludedNodeIds.has('sym:a')).toBe(false);
-      expect(ctx!.state.selectedNodeIds.has('sym:a')).toBe(true);
-    });
-
     it('is a no-op on a locked node', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
+      renderWithProvider((c) => { ctx = c; });
       act(() => { ctx!.toggleNode('sym:a'); });
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       act(() => { ctx!.toggleNode('sym:a'); });
@@ -242,51 +161,6 @@ describe('SelectionContext — new state model', () => {
     });
   });
 
-  describe('toggleArea', () => {
-    it('adds area to selectedAreaIds', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      expect(ctx!.state.selectedAreaIds.has('area-a')).toBe(true);
-      expect(ctx!.hasSelection).toBe(true);
-    });
-
-    it('removes area from selectedAreaIds on second toggle', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleArea('area-a'); });
-      expect(ctx!.state.selectedAreaIds.size).toBe(0);
-      expect(ctx!.hasSelection).toBe(false);
-    });
-
-    it('removes descendant areas from selectedAreaIds when checking a parent', () => {
-      const areas = [
-        makeArea('parent', 'Parent', [], null, ['child']),
-        makeArea('child', 'Child', ['sym:a'], 'parent', []),
-      ];
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, areas);
-      act(() => { ctx!.toggleArea('child'); });
-      expect(ctx!.state.selectedAreaIds.has('child')).toBe(true);
-      act(() => { ctx!.toggleArea('parent'); });
-      expect(ctx!.state.selectedAreaIds.has('parent')).toBe(true);
-      expect(ctx!.state.selectedAreaIds.has('child')).toBe(false);
-    });
-
-    it('clears excludedNodeIds for members when checking an area', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleNode('sym:a'); });  // exclude sym:a
-      expect(ctx!.state.excludedNodeIds.has('sym:a')).toBe(true);
-      // Toggle area off then on
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleArea('area-a'); });
-      expect(ctx!.state.excludedNodeIds.has('sym:a')).toBe(false);
-    });
-  });
-
   describe('locks', () => {
     it('toggleLock on a node locks it', () => {
       let ctx: SelectionContextValue | null = null;
@@ -303,24 +177,6 @@ describe('SelectionContext — new state model', () => {
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       expect(ctx!.state.lockedNodeIds.has('sym:a')).toBe(false);
-    });
-
-    it('toggleLock on an area locks it', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleLock({ kind: 'area', id: 'area-a' }); });
-      expect(ctx!.state.lockedAreaIds.has('area-a')).toBe(true);
-    });
-
-    it('toggleLock on an area clears excludedNodeIds for its members', () => {
-      let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, testAreas);
-      act(() => { ctx!.toggleArea('area-a'); });
-      act(() => { ctx!.toggleNode('sym:a'); });  // exclude sym:a
-      act(() => { ctx!.toggleLock({ kind: 'area', id: 'area-a' }); });
-      // Locking an area should clear exclusions for its members
-      expect(ctx!.state.excludedNodeIds.has('sym:a')).toBe(false);
     });
 
     it('toggleLock with kind:nodes on multiple locked node ids', () => {
@@ -379,7 +235,7 @@ describe('SelectionContext — new state model', () => {
 
     it('resetSelection restores the seed as selected and locked', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [], new Set(['sym:a', 'sym:b']));
+      renderWithProvider((c) => { ctx = c; }, new Set(['sym:a', 'sym:b']));
       // User unlocks a seed, adds another node, then clears everything
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       act(() => { ctx!.toggleNode('sym:c'); });
@@ -471,7 +327,7 @@ describe('SelectionContext — new state model', () => {
     );
   });
 
-  describe('expansions (no area-members)', () => {
+  describe('expansions', () => {
     it('computes same-file, callers, callees expansions', () => {
       let ctx: SelectionContextValue | null = null;
       renderWithProvider((c) => { ctx = c; });
@@ -479,8 +335,6 @@ describe('SelectionContext — new state model', () => {
       expect(ctx!.state.expansions.has('same-file')).toBe(true);
       expect(ctx!.state.expansions.has('callers')).toBe(true);
       expect(ctx!.state.expansions.has('callees')).toBe(true);
-      // area-members should NOT exist
-      expect(ctx!.state.expansions.has('area-members')).toBe(false);
     });
 
     it('toggleExpansionGroup enables a group', () => {
@@ -496,7 +350,7 @@ describe('SelectionContext — new state model', () => {
   describe('diff seeding', () => {
     it('adds seedNodeIds to explicitNodeIds and lockedNodeIds', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [], new Set(['sym:a', 'sym:c']));
+      renderWithProvider((c) => { ctx = c; }, new Set(['sym:a', 'sym:c']));
       expect(ctx!.state.explicitNodeIds.has('sym:a')).toBe(true);
       expect(ctx!.state.explicitNodeIds.has('sym:c')).toBe(true);
       expect(ctx!.state.lockedNodeIds.has('sym:a')).toBe(true);
@@ -506,7 +360,7 @@ describe('SelectionContext — new state model', () => {
 
     it('allows unlocking a seeded node', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [], new Set(['sym:a']));
+      renderWithProvider((c) => { ctx = c; }, new Set(['sym:a']));
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       expect(ctx!.state.lockedNodeIds.has('sym:a')).toBe(false);
       // unlocked node should still be explicitly selected
@@ -515,7 +369,7 @@ describe('SelectionContext — new state model', () => {
 
     it('allows toggling selection off for an unlocked seeded node', () => {
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [], new Set(['sym:a']));
+      renderWithProvider((c) => { ctx = c; }, new Set(['sym:a']));
       act(() => { ctx!.toggleLock({ kind: 'node', id: 'sym:a' }); });
       act(() => { ctx!.toggleNode('sym:a'); });
       expect(ctx!.state.explicitNodeIds.has('sym:a')).toBe(false);
@@ -527,10 +381,7 @@ describe('SelectionContext — new state model', () => {
       const mockValue: SelectionContextValue = {
         state: {
           explicitNodeIds: new Set(['sym:x']),
-          selectedAreaIds: new Set(),
-          excludedNodeIds: new Set(),
           lockedNodeIds: new Set(),
-          lockedAreaIds: new Set(),
           expansions: new Map(),
           selectedNodeIds: new Set(['sym:x']),
         },
@@ -538,7 +389,6 @@ describe('SelectionContext — new state model', () => {
         hasSelection: true,
         toggleNode: jest.fn(),
         toggleNodes: jest.fn(),
-        toggleArea: jest.fn(),
         toggleLock: jest.fn(),
         lockAll: jest.fn(),
         clearUnlocked: jest.fn(),
@@ -549,7 +399,7 @@ describe('SelectionContext — new state model', () => {
       };
 
       let ctx: SelectionContextValue | null = null;
-      renderWithProvider((c) => { ctx = c; }, [], undefined, mockValue);
+      renderWithProvider((c) => { ctx = c; }, undefined, mockValue);
       expect(ctx!.state.selectedNodeIds.has('sym:x')).toBe(true);
       expect(ctx!.hasSelection).toBe(true);
     });

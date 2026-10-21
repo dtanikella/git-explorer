@@ -20,23 +20,10 @@ const mockSelectionState = {
   toggleExpandedNode: jest.fn(),
   state: {
     selectedNodeIds: new Set<string>(),
+    lockedNodeIds: new Set<string>(),
     expansions: new Map(),
   },
 };
-
-const mockAreaStore = {
-  areas: [] as any[],
-  runtimeState: new Map(),
-  nodeToAreas: new Map(),
-  setAreas: jest.fn(),
-  toggleVisibility: jest.fn(),
-  getVisibleAreas: jest.fn(() => [] as any[]),
-  getAreasForNode: jest.fn(() => [] as any[]),
-};
-
-jest.mock('@/app/contexts/AreaContext', () => ({
-  useAreaStore: () => mockAreaStore,
-}));
 
 jest.mock('d3', () => {
   const chainable = (): any => {
@@ -156,9 +143,6 @@ beforeEach(() => {
   mockSelectionState.hasSelection = false;
   mockSelectionState.state.selectedNodeIds = new Set<string>();
   mockSelectionState.state.expansions = new Map();
-  mockAreaStore.areas = [];
-  mockAreaStore.runtimeState = new Map();
-  mockAreaStore.nodeToAreas = new Map();
 });
 
 describe('RepoGraph — props and rendering', () => {
@@ -223,25 +207,8 @@ describe('RepoGraph — canvas rendering', () => {
   });
 });
 
-describe('RepoGraph — area physics', () => {
-  it('registers the area anchor and pull/attract/repel forces when areas are present', async () => {
-    const authArea = {
-      id: 'auth',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      name: 'Auth',
-      type: 'business_domain' as const,
-      contains: ['s1', 's2'],
-      parent: null,
-      children: [],
-      clusterStrength: 0.5,
-    };
-    mockAreaStore.areas = [authArea];
-    mockAreaStore.nodeToAreas = new Map([
-      ['s1', [authArea]],
-      ['s2', [authArea]],
-    ]);
-
+describe('RepoGraph — forces', () => {
+  it('registers only the baseline simulation forces', async () => {
     const mockData = {
       nodes: [
         { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
@@ -257,29 +224,10 @@ describe('RepoGraph — area physics', () => {
     render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData as any} loading={false} error={null} />);
     await act(async () => {});
 
-    const sim = d3Mock.__getLastSim();
-    const registeredForceNames = sim.force.mock.calls.map((call: any[]) => call[0]);
-
-    expect(registeredForceNames).toEqual(
-      expect.arrayContaining(['anchorRepel', 'clusterPull', 'areaAttract', 'parentPull']),
-    );
-  });
-
-  it('does not crash when there are no areas', async () => {
-    mockAreaStore.areas = [];
-    mockAreaStore.nodeToAreas = new Map();
-
-    const mockData = {
-      nodes: [
-        { scipSymbol: 's1', name: 'foo', syntaxType: 'FUNCTION', filePath: 'a.ts', startLine: 1, startCol: 0, isAsync: false, isExported: true, params: [], returnTypeText: null, isDefinition: true, inTestFile: false, referencedAt: [], outboundRefs: [] },
-      ],
-      edges: [],
-      metadata: { repoPath: '/r', language: 'typescript', nodeCount: 1, edgeCount: 0, analysisDurationMs: 10, missingNodeTypes: [], missingEdgeKinds: [] },
-    };
-
-    render(<RepoGraph repoPath="/repo" hideTestFiles={true} analysisData={mockData as any} loading={false} error={null} />);
-    await act(async () => {});
-    // No crash = pass
+    const registered = d3Mock.__getLastSim().force.mock.calls.map((call: any[]) => call[0]);
+    expect(registered).toEqual(expect.arrayContaining(['link', 'charge', 'collide', 'center']));
+    expect(registered).not.toContain('anchorRepel');
+    expect(registered).not.toContain('clusterPull');
   });
 });
 

@@ -43,3 +43,6 @@ next-env.d.ts
 # git worktrees
 .worktrees/
 .worktrees/
+
+# externally-cloned repos for local analysis
+/external/

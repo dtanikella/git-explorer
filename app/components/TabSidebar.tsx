@@ -1,6 +1,6 @@
 'use client';
 
-export type TabId = 'graph' | 'stats' | 'areas' | 'diff';
+export type TabId = 'graph' | 'stats' | 'diff';
 
 interface TabSidebarProps {
   activeTab: TabId;
@@ -11,7 +11,7 @@ interface TabSidebarProps {
  * Sidebar navigation for switching between the main views.
  *
  * @remarks
- * Provides a vertical tab list for Graph, Stats, Areas, and Diff views.
+ * Provides a vertical tab list for Graph, Stats, and Diff views.
  * The active tab is visually highlighted.
  *
  * @param activeTab - The currently active tab ID.
@@ -41,17 +41,6 @@ export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) 
           <rect x="2" y="10" width="4" height="8" rx="0.5" />
           <rect x="8" y="6" width="4" height="12" rx="0.5" />
           <rect x="14" y="2" width="4" height="16" rx="0.5" />
-        </svg>
-      ),
-    },
-    {
-      id: 'areas',
-      label: 'Areas',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <circle cx="8" cy="8" r="5" />
-          <circle cx="13" cy="8" r="5" />
-          <circle cx="10.5" cy="12" r="5" />
         </svg>
       ),
     },

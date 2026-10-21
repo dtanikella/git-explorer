@@ -1,5 +1,4 @@
-import { hashToColor, getAreaColor, deriveBorderColor } from '@/lib/areas/color';
-import type { Area } from '@/lib/areas/types';
+import { hashToColor, deriveBorderColor } from '@/lib/analysis/color';
 
 describe('hashToColor', () => {
   it('returns a 6-digit hex color', () => {
@@ -13,35 +12,6 @@ describe('hashToColor', () => {
 
   it('produces different colors for different inputs', () => {
     expect(hashToColor('auth')).not.toBe(hashToColor('utils'));
-  });
-});
-
-describe('getAreaColor', () => {
-  const baseArea: Area = {
-    id: 'test',
-    created_at: '',
-    updated_at: '',
-    name: 'Test',
-    type: 'utils',
-    contains: [],
-    parent: null,
-    children: [],
-    clusterStrength: 0,
-  };
-
-  it('returns area.color when set', () => {
-    const area = { ...baseArea, color: '#f59e0b' };
-    expect(getAreaColor(area)).toBe('#f59e0b');
-  });
-
-  it('falls back to hashToColor when color is not set', () => {
-    const area = { ...baseArea };
-    expect(getAreaColor(area)).toBe(hashToColor(area.id));
-  });
-
-  it('falls back to hashToColor when color is undefined', () => {
-    const area = { ...baseArea, color: undefined };
-    expect(getAreaColor(area)).toBe(hashToColor(area.id));
   });
 });
 

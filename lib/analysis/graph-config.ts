@@ -1,5 +1,7 @@
 import type { AnalysisNode, AnalysisEdge } from '@/lib/analysis/types';
 import { SyntaxType, EdgeKind } from '@/lib/analysis/types';
+import type { DirectoryEdgeKind, DirectoryHubKind } from '@/lib/analysis/directory-hubs';
+import { DEFAULT_FILE_OVERLAY, type FileOverlayConfig } from '@/lib/analysis/file-overlay';
 
 // ── Resolved value types ──
 
@@ -76,6 +78,65 @@ export interface SimulationParams {
   velocityDecay: number;
 }
 
+/**
+ * Structural bonds: springs between nodes that share a class or a file, independent of any analysis edge.
+ *
+ * @remarks
+ * Consumed by the renderer alongside {@link RepoGraphConfig.forces}`.edge`. Bond links are never drawn.
+ * See {@link buildStructuralBonds} for how pairs are chosen.
+ */
+export interface StructuralBonds {
+  /** spring between a class and each of its members (methods, constructors) */
+  classMember: EdgeForces;
+  /** spring between any two nodes declared in the same file; omit to leave file cohesion to {@link DirectoryHubsConfig} */
+  sameFile?: EdgeForces;
+}
+
+/**
+ * Forces and style for one tier of directory links (node → file, file → folder, folder → parent folder).
+ *
+ * @remarks
+ * `style` is null when the links are simulated but not drawn.
+ */
+export interface DirectoryTier extends EdgeForces {
+  style: EdgeStyle | null;
+}
+
+/**
+ * Forces and style for the synthetic file or folder hubs.
+ *
+ * @remarks
+ * Hubs are anchors: they take part in the simulation but are not selectable, searchable or listed.
+ * `opacity` 0 hides them; raise it to see where the pull is centered.
+ */
+export interface DirectoryHubStyle {
+  /** many-body charge of the hub; 0 leaves sibling hubs unaffected by each other */
+  charge: number;
+  radius: number;
+  opacity: number;
+  color: string;
+}
+
+/**
+ * Directory structure as invisible anchors: one hub per file and per folder, tied together by links of a kind each.
+ *
+ * @see {@link buildDirectoryHubs}
+ */
+export interface DirectoryHubsConfig {
+  tiers: Record<DirectoryEdgeKind, DirectoryTier>;
+  hubs: Record<DirectoryHubKind, DirectoryHubStyle>;
+  /**
+   * How hard each hub is pulled to the centroid of what it holds, 0–1.
+   *
+   * @remarks
+   * d3's link force leaves a hub with hundreds of springs nearly immobile, so without this a hub drifts off
+   * its own members and the overlay centered on it with it.
+   */
+  hubCenter: number;
+  /** file overlays centered on the file hubs, or null for none */
+  overlay: FileOverlayConfig | null;
+}
+
 // ── Accessor function types ──
 
 /**
@@ -145,14 +206,10 @@ export interface RepoGraphConfig {
   forces: {
     node: NodeForcer;
     edge: EdgeForcer;
-    areaCluster: number;
-    areaAttract: number;
-    areaParent: number;
-    anchorRepel: number;
-    areaPin: number;
-    crossAreaPull: number;
-    areaHullCollision: number;
-    layerRadii?: Record<string, number>;
+    /** optional class-member / same-file springs added on top of the analysis edges */
+    bonds?: StructuralBonds;
+    /** optional file and folder hubs; each member is pulled toward its file, each file toward its folder */
+    directory?: DirectoryHubsConfig;
   };
   simulation: SimulationParams;
 }
@@ -197,16 +254,6 @@ export const DEFAULT_NODE_FORCES: NodeForces = {
 export const DEFAULT_EDGE_FORCES: EdgeForces = {
   distance: 80,
   strength: 0.5,
-};
-
-export const DEFAULT_AREA_FORCES = {
-  areaCluster: 0.3,
-  areaAttract: 0.15,
-  areaParent: 0.5,
-  anchorRepel: 4000,
-  areaPin: 0.5,
-  crossAreaPull: 0.25,
-  areaHullCollision: 0.5,
 };
 
 export const DEFAULT_SIMULATION: SimulationParams = {
@@ -259,7 +306,6 @@ export const DEFAULT_REPO_GRAPH_CONFIG: RepoGraphConfig = {
   forces: {
     node: (): NodeForces => ({ ...DEFAULT_NODE_FORCES }),
     edge: (): EdgeForces => ({ ...DEFAULT_EDGE_FORCES }),
-    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -301,7 +347,6 @@ export const INTERNAL_PROCESSING_CONFIG: RepoGraphConfig = {
       [EdgeKind.IMPORTS]: { distance: 200, strength: 0.1 },
       [EdgeKind.USES_TYPE]: { distance: 200, strength: 0.1 },
     }),
-    ...DEFAULT_AREA_FORCES,
   },
   simulation: { ...DEFAULT_SIMULATION },
 };
@@ -604,18 +649,6 @@ const DATA_FLOW_NODE_TYPES = new Set<SyntaxType>([
   ...DATA_FLOW_DATA_TYPES,
 ]);
 
-// Target radii (simulation units, from canvas center) for the three manually-assigned
-// Area names a node can be tagged with in the Data Flow view: `storage` (DB/persistence-adjacent
-// types) pulled toward the center, `ux` (UI-facing types) pulled toward the outer ring, `api`
-// (shared contracts) in between. Untagged nodes are unaffected — see RepoGraph.tsx's `layerRadial`
-// force, which only applies nonzero strength to nodes whose area membership resolves to one of
-// these keys.
-export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
-  storage: 100,
-  api: 260,
-  ux: 420,
-};
-
 /**
  * Builds a {@link RepoGraphConfig} tailored for the "Data Flow" view.
  *
@@ -623,8 +656,7 @@ export const DATA_FLOW_LAYER_RADII: Record<string, number> = {
  * Shows both processing nodes (functions, methods, classes) and data nodes
  * (interfaces, type aliases) connected by any non-IMPORTS edge. Data-type
  * nodes are sized by their usage count from processing-type callers and
- * rendered with labels. The config assigns radial layer strengths for
- * area-tagged nodes (storage, api, ux) via the `layerRadii` force option.
+ * rendered with labels.
  *
  * @param edges - All analysis edges; used to compute per-target usage counts.
  * @param nodes - All analysis nodes; used to build the symbol-to-kind index.
@@ -689,10 +721,162 @@ export function createDataFlowViewConfig(
           0.35 / Math.sqrt(usageByTarget.get(edge.toSymbol) ?? 1),
         ),
       }),
-      layerRadii: DATA_FLOW_LAYER_RADII,
     },
   });
 }
+
+// ── Vanilla View ──
+
+const VANILLA_NODE_TYPES = new Set<SyntaxType>([
+  SyntaxType.FUNCTION,
+  SyntaxType.METHOD,
+  SyntaxType.CONSTRUCTOR,
+  SyntaxType.CLASS,
+]);
+
+/**
+ * Vanilla bond tiers, strongest first: a class hugs its members (20px), a file's nodes stay
+ * close (50px), everything else is held only by a weak 400px analysis edge.
+ */
+export const VANILLA_BONDS: StructuralBonds = {
+  classMember: { distance: 20, strength: 1 },
+  sameFile: { distance: 50, strength: 0.6 },
+};
+
+/** Standard analysis edges in the Vanilla view: long and weak. */
+export const VANILLA_EDGE_FORCES: EdgeForces = { distance: 400, strength: 0.05 };
+
+/**
+ * Owner symbol of a class member, or null when the symbol is not a member.
+ *
+ * @remarks
+ * SCIP member symbols extend their owner: `…/User#serialize().` belongs to `…/User#`.
+ *
+ * @param scipSymbol - The candidate member's SCIP symbol.
+ * @returns The owner's SCIP symbol, or null for top-level symbols.
+ */
+export function ownerSymbol(scipSymbol: string): string | null {
+  const i = scipSymbol.lastIndexOf('#');
+  return i >= 0 && i < scipSymbol.length - 1 ? scipSymbol.slice(0, i + 1) : null;
+}
+
+/** A synthetic spring between two nodes, keyed by SCIP symbol. */
+export interface BondLink {
+  source: string;
+  target: string;
+  distance: number;
+  strength: number;
+}
+
+/**
+ * Derives the class-member and same-file springs for a set of nodes.
+ *
+ * @remarks
+ * A pair gets at most one bond, at its strongest tier: a class and its member get
+ * `classMember` even though they share a file. Nodes are matched by `scipSymbol`;
+ * a member whose owner is not in `nodes` only receives same-file bonds.
+ *
+ * @param nodes - The nodes present in the simulation.
+ * @param bonds - The tier forces to apply.
+ * @returns One {@link BondLink} per bonded pair.
+ */
+export function buildStructuralBonds(
+  nodes: AnalysisNode[],
+  bonds: StructuralBonds,
+): BondLink[] {
+  const present = new Set(nodes.map((n) => n.scipSymbol));
+  const links: BondLink[] = [];
+  const classPairs = new Set<string>();
+  for (const n of nodes) {
+    const owner = ownerSymbol(n.scipSymbol);
+    if (owner && present.has(owner)) {
+      classPairs.add(`${owner}\u0000${n.scipSymbol}`);
+      links.push({ source: owner, target: n.scipSymbol, ...bonds.classMember });
+    }
+  }
+  const byFile = new Map<string, AnalysisNode[]>();
+  if (bonds.sameFile) for (const n of nodes) {
+    const group = byFile.get(n.filePath);
+    if (group) group.push(n); else byFile.set(n.filePath, [n]);
+  }
+  for (const group of byFile.values()) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i].scipSymbol, b = group[j].scipSymbol;
+        if (classPairs.has(`${a}\u0000${b}`) || classPairs.has(`${b}\u0000${a}`)) continue;
+        links.push({ source: a, target: b, ...bonds.sameFile! });
+      }
+    }
+  }
+  return links;
+}
+
+/**
+ * The "Vanilla" view: functions, methods and classes held together by structure, not by calls.
+ *
+ * @remarks
+ * Node-to-node forces are tiered: class↔member is the strongest and shortest bond,
+ * nodes in one file are strongly bonded at a longer length, and every other analysis edge is a weak 400px spring.
+ * Like the other views, only nodes touched by an included edge are rendered.
+ *
+ * @see {@link VANILLA_BONDS}
+ * @see {@link buildStructuralBonds}
+ */
+export const VANILLA_CONFIG: RepoGraphConfig = mergeConfigs(DEFAULT_REPO_GRAPH_CONFIG, {
+  filters: {
+    node: (node: AnalysisNode) => VANILLA_NODE_TYPES.has(node.syntaxType),
+    edge: (edge: AnalysisEdge) => !edge.isExternal,
+  },
+  forces: {
+    edge: (): EdgeForces => ({ ...VANILLA_EDGE_FORCES }),
+    bonds: VANILLA_BONDS,
+  },
+});
+
+// ── Vanilla (directory) View ──
+
+/** Directory tiers, strongest first: a node hugs its file, a file stays near its folder, a folder near its parent. */
+export const VANILLA_DIRECTORY_TIERS: Record<DirectoryEdgeKind, EdgeForces> = {
+  IN_FILE: { distance: 20, strength: 1 },
+  IN_FOLDER: { distance: 80, strength: 0.6 },
+  IN_PARENT: { distance: 160, strength: 0.3 },
+};
+
+/**
+ * Directory hubs of the Vanilla (directory) view: invisible, no charge, links not drawn, pulled to their members' centroid, with a file overlay.
+ */
+export const VANILLA_DIRECTORY: DirectoryHubsConfig = {
+  tiers: {
+    IN_FILE: { ...VANILLA_DIRECTORY_TIERS.IN_FILE, style: null },
+    IN_FOLDER: { ...VANILLA_DIRECTORY_TIERS.IN_FOLDER, style: null },
+    IN_PARENT: { ...VANILLA_DIRECTORY_TIERS.IN_PARENT, style: null },
+  },
+  hubs: {
+    FILE: { charge: 0, radius: 3, opacity: 0, color: '#9ca3af' },
+    FOLDER: { charge: 0, radius: 5, opacity: 0, color: '#6b7280' },
+  },
+  hubCenter: 0.5,
+  overlay: { ...DEFAULT_FILE_OVERLAY },
+};
+
+/**
+ * The "Vanilla (directory)" view: Vanilla with file and folder structure in place of pairwise file bonds.
+ *
+ * @remarks
+ * Same node set, call edges and class↔member bond as {@link VANILLA_CONFIG}. Nodes of a file are
+ * held together by a hidden file hub rather than pairwise bonds, files by their folder's hub, and
+ * folders by their parent's (see {@link VANILLA_DIRECTORY}).
+ *
+ * @see {@link buildDirectoryHubs}
+ */
+export const VANILLA_DIRECTORY_CONFIG: RepoGraphConfig = {
+  ...VANILLA_CONFIG,
+  forces: {
+    ...VANILLA_CONFIG.forces,
+    bonds: { classMember: VANILLA_BONDS.classMember },
+    directory: VANILLA_DIRECTORY,
+  },
+};
 
 /**
  * Merges one or more partial config overrides into a base
@@ -740,14 +924,10 @@ export function mergeConfigs(
       result.forces = {
         node: override.forces.node ?? result.forces.node,
         edge: override.forces.edge ?? result.forces.edge,
-        areaCluster: override.forces.areaCluster ?? result.forces.areaCluster,
-        areaAttract: override.forces.areaAttract ?? result.forces.areaAttract,
-        areaParent: override.forces.areaParent ?? result.forces.areaParent,
-        anchorRepel: override.forces.anchorRepel ?? result.forces.anchorRepel,
-        areaPin: override.forces.areaPin ?? result.forces.areaPin,
-        crossAreaPull: override.forces.crossAreaPull ?? result.forces.crossAreaPull,
-        areaHullCollision: override.forces.areaHullCollision ?? result.forces.areaHullCollision,
-        layerRadii: override.forces.layerRadii ?? result.forces.layerRadii,
+        bonds: override.forces.bonds
+          ? { ...result.forces.bonds, ...override.forces.bonds } as StructuralBonds
+          : result.forces.bonds,
+        directory: (override.forces.directory as DirectoryHubsConfig | undefined) ?? result.forces.directory,
       };
     }
     if (override.simulation) {

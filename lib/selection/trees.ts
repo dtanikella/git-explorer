@@ -2,14 +2,13 @@
  * Tree-building utilities for the shared selection sidebar.
  *
  * @remarks
- * Converts flat area lists and node lists into hierarchical tree
+ * Converts flat node lists into hierarchical tree
  * structures for rendering as nested checkable items.
  *
  * @see `SelectionTree` component for the consumer.
  */
 
 import type { AnalysisNode } from '@/lib/analysis/types';
-import type { Area } from '@/lib/areas/types';
 
 // --- Types ---
 
@@ -18,95 +17,10 @@ export interface TreeNode {
   name: string;
   children?: TreeNode[];
   members?: AnalysisNode[];
-  /** For area nodes: the area id for lookups. */
-  areaId?: string;
   /** For file nodes: the file path. */
   filePath?: string;
   /** For directory and file nodes: the repo-relative path, used to key per-row expansions. */
   path?: string;
-}
-
-/** Id of the synthetic root-level section holding nodes that belong to no area. */
-export const UNASSIGNED_ID = '__unassigned__';
-
-// --- Area Tree ---
-
-/**
- * Builds a hierarchical tree from a flat area list.
- *
- * @remarks
- * Nodes directly under a leaf area are organized by file structure (see
- * {@link buildFileNodes}). Nodes in `nodeSymbols` that no area contains are
- * gathered in a trailing {@link UNASSIGNED_ID} section, organized the same way.
- *
- * @param areas - All area definitions.
- * @param nodeSymbols - A map from scipSymbol to AnalysisNode for member resolution.
- * @returns A root {@link TreeNode} whose children are top-level areas.
- */
-export function buildAreaTree(
-  areas: Area[],
-  nodeSymbols: Map<string, AnalysisNode>,
-): TreeNode {
-  const areaById = new Map(areas.map((a) => [a.id, a]));
-
-  function buildNode(area: Area): TreeNode {
-    const members: AnalysisNode[] = [];
-    for (const sym of area.contains) {
-      const node = nodeSymbols.get(sym);
-      if (node) members.push(node);
-    }
-
-    const children: TreeNode[] = [];
-    for (const childId of area.children) {
-      const child = areaById.get(childId);
-      if (child) children.push(buildNode(child));
-    }
-
-    // A leaf area's nodes are organized by file structure instead of a flat list
-    if (children.length === 0) {
-      const fileChildren = buildFileNodes(members, `${area.id}:`, true);
-      return {
-        id: area.id,
-        name: area.name,
-        areaId: area.id,
-        children: fileChildren.length > 0 ? fileChildren : undefined,
-      };
-    }
-
-    return {
-      id: area.id,
-      name: area.name,
-      areaId: area.id,
-      members: members.length > 0 ? members : undefined,
-      children,
-    };
-  }
-
-  const topLevel = areas
-    .filter((a) => a.parent === null)
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(buildNode);
-
-  const assigned = new Set<string>();
-  for (const area of areas) {
-    for (const sym of area.contains) assigned.add(sym);
-  }
-  const unassigned = [...nodeSymbols.values()].filter((n) => !assigned.has(n.scipSymbol));
-  if (unassigned.length > 0) {
-    topLevel.push({
-      id: UNASSIGNED_ID,
-      name: 'Unassigned',
-      children: buildFileNodes(unassigned, `${UNASSIGNED_ID}:`, true),
-    });
-  }
-
-  const root: TreeNode = {
-    id: '__root__',
-    name: 'Areas',
-    children: topLevel,
-  };
-
-  return root;
 }
 
 // --- File Tree ---

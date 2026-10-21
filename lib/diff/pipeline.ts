@@ -153,32 +153,45 @@ export async function runDiffPipeline(
     };
   }
 
-  // Label each file
-  const allLabels: LabelledDeclaration[] = [];
+  // Steps 6-9: label declarations and join labels to graph nodes
+  let result: ReturnType<typeof joinDiffToAnalysis>['result'];
+  let unmatched: ReturnType<typeof joinDiffToAnalysis>['unmatched'];
+  try {
+    // Label each file
+    const allLabels: LabelledDeclaration[] = [];
 
-  for (const pair of filePairs) {
-    switch (pair.status) {
-      case 'added':
-        allLabels.push(...labelAddedFile(pair));
-        break;
-      case 'deleted':
-        allLabels.push(...labelDeletedFile(pair));
-        break;
-      case 'modified': {
-        const { labels } = labelModifiedFile(pair);
-        allLabels.push(...labels);
-        break;
+    for (const pair of filePairs) {
+      switch (pair.status) {
+        case 'added':
+          allLabels.push(...labelAddedFile(pair));
+          break;
+        case 'deleted':
+          allLabels.push(...labelDeletedFile(pair));
+          break;
+        case 'modified': {
+          const { labels } = labelModifiedFile(pair);
+          allLabels.push(...labels);
+          break;
+        }
       }
     }
-  }
 
-  // Step 9: Join labels to graph nodes
-  const { result, unmatched } = joinDiffToAnalysis(
-    allLabels,
-    headAnalysis,
-    baseAnalysis,
-    { base, head: compare },
-  );
+    // Step 9: Join labels to graph nodes
+    ({ result, unmatched } = joinDiffToAnalysis(
+      allLabels,
+      headAnalysis,
+      baseAnalysis,
+      { base, head: compare },
+    ));
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    return {
+      success: false,
+      state: 'error',
+      code: 'ANALYSIS_FAILED',
+      error: error.message || 'Labelling failed',
+    };
+  }
 
   const counts = countDiff(result);
 
