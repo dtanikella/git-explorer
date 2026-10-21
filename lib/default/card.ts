@@ -1,7 +1,8 @@
-import { SyntaxType } from '@/lib/analysis/types';
+import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
+import { rankedKinds } from './connections';
 import { nodeStyle } from './config';
 import { parentMap } from './hover';
-import type { HierarchyNode } from './types';
+import type { Direction, DotConnections, HierarchyNode } from './types';
 
 /** Longest breadcrumb shown before it is cut from the left. */
 const MAX_BREADCRUMB = 34;
@@ -143,4 +144,80 @@ export function cardContent(target: HierarchyNode, root: HierarchyNode): CardCon
     ],
     kindMix: kindMix(symbols),
   };
+}
+
+/** How each edge kind is labelled in either direction, and the color it is drawn in. */
+export const EDGE_KIND_STYLE: Record<EdgeKind, { out: string; in: string; color: string }> = {
+  [EdgeKind.CALLS]: { out: 'Calls', in: 'Called by', color: '#2563eb' },
+  [EdgeKind.USES_TYPE]: { out: 'Uses type', in: 'Used by', color: '#0891b2' },
+  [EdgeKind.IMPORTS]: { out: 'Imports', in: 'Imported by', color: '#059669' },
+  [EdgeKind.EXTENDS]: { out: 'Extends', in: 'Extended by', color: '#d97706' },
+  [EdgeKind.IMPLEMENTS]: { out: 'Implements', in: 'Implemented by', color: '#db2777' },
+  [EdgeKind.INSTANTIATES]: { out: 'Instantiates', in: 'Instantiated by', color: '#7c3aed' },
+  [EdgeKind.INCLUDES]: { out: 'Includes', in: 'Included by', color: '#65a30d' },
+};
+
+/** Names listed under an expanded category row before `+ N more`. */
+export const MAX_LISTED_NAMES = 5;
+
+/** One connected symbol under a category row. */
+export interface ConnectedName {
+  id: string;
+  name: string;
+  /** file basename */
+  file: string;
+}
+
+/** One category row of the pinned card. */
+export interface ConnectionRow {
+  kind: EdgeKind;
+  label: string;
+  color: string;
+  /** distinct connected symbols */
+  count: number;
+  /** at most {@link MAX_LISTED_NAMES} */
+  names: ConnectedName[];
+  /** how many connected symbols are not listed */
+  more: number;
+}
+
+/** The connections section of the pinned card. */
+export interface ConnectionsView {
+  direction: Direction;
+  /** distinct connected symbols in each direction, for the toggle */
+  counts: Record<Direction, number>;
+  /** ranked by count, highest first; kinds with none in this direction are left out */
+  rows: ConnectionRow[];
+  /** edges that could not be drawn */
+  undrawn: number;
+}
+
+const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+/**
+ * Derives the connections section of a pinned symbol's card.
+ *
+ * @param conn - The pinned symbol's connections, `undefined` when it has none.
+ * @param direction - Which direction the toggle is on.
+ * @param byId - The symbol nodes by id, for names and files.
+ */
+export function connectionsView(conn: DotConnections | undefined, direction: Direction, byId: ReadonlyMap<string, HierarchyNode>): ConnectionsView {
+  const distinct = (d: Direction) => (conn ? new Set([...conn[d].values()].flat()).size : 0);
+  const rows = rankedKinds(conn, direction).map(({ kind, count }) => {
+    const ids = conn![direction].get(kind)!;
+    return {
+      kind,
+      label: EDGE_KIND_STYLE[kind][direction],
+      color: EDGE_KIND_STYLE[kind].color,
+      count,
+      names: ids.slice(0, MAX_LISTED_NAMES).map((id) => ({ id, name: byId.get(id)?.name ?? id, file: basename(byId.get(id)?.path ?? '') })),
+      more: Math.max(0, ids.length - MAX_LISTED_NAMES),
+    };
+  });
+  return { direction, counts: { out: distinct('out'), in: distinct('in') }, rows, undrawn: conn?.undrawn ?? 0 };
+}
+
+/** The direction a newly pinned symbol opens on: outgoing, or incoming when it has no outgoing connections. */
+export function defaultDirection(conn: DotConnections | undefined): Direction {
+  return conn && [...conn.out.values()].some((l) => l.length > 0) ? 'out' : conn && [...conn.in.values()].some((l) => l.length > 0) ? 'in' : 'out';
 }

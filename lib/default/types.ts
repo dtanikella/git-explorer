@@ -1,4 +1,4 @@
-import type { SyntaxType, ParamInfo } from '@/lib/analysis/types';
+import type { EdgeKind, SyntaxType, ParamInfo } from '@/lib/analysis/types';
 
 /** The four tiers of the default view's hierarchy. */
 export type Tier = 'root' | 'folder' | 'file' | 'symbol';
@@ -28,4 +28,30 @@ export interface HierarchyNode {
   depth: number;
   symbol?: SymbolInfo;
   children: HierarchyNode[];
+}
+
+/** Which end of an edge a connection is read from: edges leaving a symbol or edges arriving at it. */
+export type Direction = 'out' | 'in';
+
+/** One distinct, drawable edge between two symbol dots. */
+export interface DotEdge {
+  kind: EdgeKind;
+  from: string;
+  to: string;
+}
+
+/** What one symbol dot is connected to, by edge kind and direction. */
+export interface DotConnections {
+  /** distinct connected dots per kind, in first-seen order */
+  out: Map<EdgeKind, string[]>;
+  in: Map<EdgeKind, string[]>;
+  /** edges at this dot that cannot be drawn: external, unresolved, or ending at no kept symbol */
+  undrawn: number;
+}
+
+/** The connections of every symbol dot, built once per analysis result. */
+export interface ConnectionModel {
+  byDot: Map<string, DotConnections>;
+  /** every distinct drawable edge */
+  edges: DotEdge[];
 }

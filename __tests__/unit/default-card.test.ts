@@ -1,5 +1,6 @@
-import { buildSignature, cardContent, kindLabel } from '@/lib/default/card';
-import { SyntaxType } from '@/lib/analysis/types';
+import { buildSignature, cardContent, connectionsView, defaultDirection, kindLabel } from '@/lib/default/card';
+import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
+import type { DotConnections } from '@/lib/default/types';
 import type { HierarchyNode } from '@/lib/default/types';
 
 const sym = (name: string, type: SyntaxType = SyntaxType.FUNCTION, over: Partial<NonNullable<HierarchyNode['symbol']>> = {}): HierarchyNode => ({
@@ -75,5 +76,42 @@ describe('cardContent', () => {
     expect(c.breadcrumb.length).toBeLessThanOrEqual(34);
     expect(c.breadcrumb.startsWith('…')).toBe(true);
     expect(c.breadcrumb.endsWith('delta-folder')).toBe(true);
+  });
+});
+
+describe('connectionsView', () => {
+  const byId = new Map(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => [id, { ...sym(id), path: `src/${id}.ts` }]));
+  const conn: DotConnections = {
+    out: new Map([[EdgeKind.CALLS, ['a', 'b', 'c', 'd', 'e', 'f', 'g']], [EdgeKind.USES_TYPE, ['a']]]),
+    in: new Map([[EdgeKind.IMPORTS, ['b']]]),
+    undrawn: 2,
+  };
+
+  it('ranks rows by count with direction-specific labels, five names and the remainder', () => {
+    const v = connectionsView(conn, 'out', byId);
+    expect(v.rows.map((r) => [r.label, r.count])).toEqual([['Calls', 7], ['Uses type', 1]]);
+    expect(v.rows[0].names).toHaveLength(5);
+    expect(v.rows[0].names[0]).toEqual({ id: 'a', name: 'a', file: 'a.ts' });
+    expect(v.rows[0].more).toBe(2);
+    expect(v.rows[1].more).toBe(0);
+    expect(v.undrawn).toBe(2);
+  });
+
+  it('counts distinct connected symbols per direction and omits kinds with none', () => {
+    expect(connectionsView(conn, 'out', byId).counts).toEqual({ out: 7, in: 1 });
+    const incoming = connectionsView(conn, 'in', byId);
+    expect(incoming.rows.map((r) => r.label)).toEqual(['Imported by']);
+  });
+
+  it('has no rows for a symbol without connections', () => {
+    expect(connectionsView(undefined, 'out', byId)).toMatchObject({ rows: [], counts: { out: 0, in: 0 }, undrawn: 0 });
+  });
+});
+
+describe('defaultDirection', () => {
+  it('opens on out, or on in when nothing leaves the symbol', () => {
+    expect(defaultDirection({ out: new Map([[EdgeKind.CALLS, ['a']]]), in: new Map(), undrawn: 0 })).toBe('out');
+    expect(defaultDirection({ out: new Map(), in: new Map([[EdgeKind.CALLS, ['a']]]), undrawn: 0 })).toBe('in');
+    expect(defaultDirection(undefined)).toBe('out');
   });
 });
