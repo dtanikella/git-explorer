@@ -46,3 +46,6 @@ next-env.d.ts
 
 # externally-cloned repos for local analysis
 /external/
+
+# git-explorer analysis cache
+/.git-explorer/
