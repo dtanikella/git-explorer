@@ -213,3 +213,69 @@ describe('listChangedTsFiles difft concurrency', () => {
     expect(peak).toBeGreaterThan(1);
   });
 });
+
+
+describe('resolveMergeBase', () => {
+  let repoDir: string;
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repoDir, encoding: 'utf8', stdio: 'pipe' }).trim();
+  const commit = (file: string, body: string, msg: string) => {
+    writeFileSync(join(repoDir, file), body, 'utf8');
+    git('add', '-A');
+    git('commit', '-m', msg);
+    return git('rev-parse', 'HEAD');
+  };
+  let split: string;
+  let mainTip: string;
+  let featureTip: string;
+
+  beforeAll(() => {
+    repoDir = mkdtempSync(join(tmpdir(), 'git-explorer-mergebase-test-'));
+    git('init', '-b', 'main');
+    git('config', 'user.email', 'test@test.com');
+    git('config', 'user.name', 'Test');
+    split = commit('shared.ts', 'export const shared = 1;\n', 'split point');
+    git('checkout', '-b', 'feature');
+    featureTip = commit('feature.ts', 'export const feature = 1;\n', 'feature work');
+    git('checkout', 'main');
+    mainTip = commit('later.ts', 'export const later = 1;\n', 'landed on main after the split');
+    git('checkout', '--orphan', 'unrelated');
+    git('rm', '-rf', '.');
+    commit('other.ts', 'export const other = 1;\n', 'unrelated history');
+  });
+
+  afterAll(() => {
+    rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  it('is the commit where compare split off base, not the tip of base', async () => {
+    const { resolveMergeBase } = await import('@/lib/diff/git-diff');
+    expect(resolveMergeBase(repoDir, 'main', 'feature')).toBe(split);
+  });
+
+  it('lists only what compare added once a base that moved on is replaced by the merge-base', async () => {
+    const { resolveMergeBase, listChangedTsFiles } = await import('@/lib/diff/git-diff');
+    const twoDot = await listChangedTsFiles(repoDir, mainTip, featureTip, { hideTestFiles: true });
+    expect(twoDot.map((f) => f.path).sort()).toEqual(['feature.ts', 'later.ts']);
+
+    const base = resolveMergeBase(repoDir, 'main', 'feature');
+    const files = await listChangedTsFiles(repoDir, base, featureTip, { hideTestFiles: true });
+    expect(files.map((f) => [f.status, f.path])).toEqual([['added', 'feature.ts']]);
+  });
+
+  it('is base itself when compare is an ancestor of base', async () => {
+    const { resolveMergeBase } = await import('@/lib/diff/git-diff');
+    expect(resolveMergeBase(repoDir, 'main', split)).toBe(split);
+    expect(resolveMergeBase(repoDir, split, 'main')).toBe(split);
+  });
+
+  it('falls back to base when the two share no history', async () => {
+    const { resolveMergeBase } = await import('@/lib/diff/git-diff');
+    expect(resolveMergeBase(repoDir, 'main', 'unrelated')).toBe(mainTip);
+  });
+
+  it('throws on a bad ref', async () => {
+    const { resolveMergeBase } = await import('@/lib/diff/git-diff');
+    expect(() => resolveMergeBase(repoDir, 'nope', 'main')).toThrow();
+  });
+});
