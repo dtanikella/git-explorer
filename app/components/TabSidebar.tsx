@@ -5,19 +5,24 @@ export type TabId = 'default' | 'graph' | 'stats' | 'diff';
 interface TabSidebarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  /** whether the default view is marking the changes between two commits */
+  diffMode: boolean;
+  onDiffModeChange: (on: boolean) => void;
 }
 
 /**
  * Sidebar navigation for switching between the main views.
  *
  * @remarks
- * Provides a vertical tab list for DefaultView, Graph, Stats, and Diff views.
- * The active tab is visually highlighted.
+ * Provides a vertical tab list for the DefaultView, Graph and Stats views, and below it the Diff toggle, which turns
+ * diff mode on the default view on and off. It replaces the old Diff tab. The active tab is visually highlighted.
  *
  * @param activeTab - The currently active tab ID.
  * @param onTabChange - Callback when the user clicks a different tab.
+ * @param diffMode - Whether diff mode is on.
+ * @param onDiffModeChange - Callback when the user clicks the Diff toggle.
  */
-export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) {
+export default function TabSidebar({ activeTab, onTabChange, diffMode, onDiffModeChange }: TabSidebarProps) {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     {
       id: 'default',
@@ -55,20 +60,6 @@ export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) 
         </svg>
       ),
     },
-    {
-      id: 'diff',
-      label: 'Diff',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
-          <rect x="3.6" y="3.6" width="12.8" height="12.8" rx="2" transform="rotate(45 10 10)"/>
-          <circle cx="10" cy="6.6" r="1.1" fill="currentColor"/>
-          <circle cx="10" cy="13.4" r="1.1" fill="currentColor"/>
-          <circle cx="13.2" cy="9.4" r="1.1" fill="currentColor"/>
-          <line x1="10" y1="7.4" x2="10" y2="12.6"/>
-          <path d="M10 8.4 L12.6 9.4"/>
-        </svg>
-      ),
-    },
   ];
 
   return (
@@ -85,6 +76,23 @@ export default function TabSidebar({ activeTab, onTabChange }: TabSidebarProps) 
           {tab.icon}
         </button>
       ))}
+      <button
+        aria-label="Diff"
+        aria-pressed={diffMode}
+        onClick={() => onDiffModeChange(!diffMode)}
+        className={`flex items-center justify-center w-10 h-10 mt-2 border-t border-gray-700 text-gray-400 hover:text-white transition-colors ${
+          diffMode ? 'border-l-2 border-l-blue-400 bg-gray-700 text-white' : ''
+        }`}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <rect x="3.6" y="3.6" width="12.8" height="12.8" rx="2" transform="rotate(45 10 10)"/>
+          <circle cx="10" cy="6.6" r="1.1" fill="currentColor"/>
+          <circle cx="10" cy="13.4" r="1.1" fill="currentColor"/>
+          <circle cx="13.2" cy="9.4" r="1.1" fill="currentColor"/>
+          <line x1="10" y1="7.4" x2="10" y2="12.6"/>
+          <path d="M10 8.4 L12.6 9.4"/>
+        </svg>
+      </button>
     </div>
   );
 }

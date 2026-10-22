@@ -3,6 +3,8 @@ import Home from '../app/page';
 import { INTERNAL_PROCESSING_CONFIG, createModulesViewConfig } from '@/lib/analysis/graph-config';
 
 let lastRepoGraphProps: Record<string, unknown> | null = null;
+let lastDefaultViewProps: Record<string, unknown> | null = null;
+let mockDiffResult: unknown = null;
 let lastSelectionProviderProps: Record<string, unknown> | null = null;
 const mockPageToggleNode = jest.fn();
 let mockPageSelectedNodeIds = new Set<string>();
@@ -79,7 +81,8 @@ jest.mock('@/app/components/RepositorySelector', () => {
 
 // Mock DefaultView to avoid d3 ESM imports in the test environment
 jest.mock('@/app/components/default-view/DefaultView', () => {
-  return function MockDefaultView() {
+  return function MockDefaultView(props: Record<string, unknown>) {
+    lastDefaultViewProps = props;
     return <div data-testid="default-view" />;
   };
 });
@@ -110,7 +113,7 @@ jest.mock('@/app/components/diff/useDiff', () => ({
     refs: null,
     base: '',
     compare: '',
-    result: null,
+    result: mockDiffResult,
     loading: false,
     error: null,
     shaValidation: null,
@@ -122,12 +125,13 @@ jest.mock('@/app/components/diff/useDiff', () => ({
 
 // Mock TabSidebar
 jest.mock('@/app/components/TabSidebar', () => {
-  return function MockTabSidebar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
+  return function MockTabSidebar({ onTabChange, diffMode, onDiffModeChange }: { activeTab: string; onTabChange: (tab: string) => void; diffMode: boolean; onDiffModeChange: (on: boolean) => void }) {
     return (
       <div data-testid="tab-sidebar">
         <button onClick={() => onTabChange('graph')}>Graph</button>
         <button onClick={() => onTabChange('stats')}>Stats</button>
         <button onClick={() => onTabChange('diff')}>Diff</button>
+        <button onClick={() => onDiffModeChange(!diffMode)}>Toggle diff mode</button>
       </div>
     );
   };
@@ -196,6 +200,8 @@ jest.mock('@/app/components/stats/StatsTreemap', () => {
 describe('Homepage', () => {
   beforeEach(() => {
     lastRepoGraphProps = null;
+    lastDefaultViewProps = null;
+    mockDiffResult = null;
     lastSelectionProviderProps = null;
     mockPageSelectedNodeIds = new Set<string>();
     mockPageToggleNode.mockClear();
@@ -352,5 +358,52 @@ describe('Homepage', () => {
 
     await waitFor(() => expect(screen.getByTestId('repo-graph')).toBeInTheDocument());
     await waitFor(() => expect(mockPageToggleNode).toHaveBeenCalledWith('symbol-a'));
+  });
+
+  describe('diff mode', () => {
+    const plain = { nodes: [{ scipSymbol: 'plain' }], edges: [] };
+    const diffData = { nodes: [{ scipSymbol: 'head' }, { scipSymbol: 'gone', ghost: true }], edges: [], base: 'b', head: 'h' };
+
+    const loadDefaultView = async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: plain }) });
+      render(<Home />);
+      fireEvent.click(screen.getByRole('button', { name: 'Select directory' }));
+      await waitFor(() => expect(lastDefaultViewProps?.analysisData).toEqual(plain));
+    };
+
+    it('feeds the default view the analysis result with diff mode off, and shows no compare bar', async () => {
+      mockDiffResult = { success: true, state: 'ok', data: diffData };
+      await loadDefaultView();
+      expect(lastDefaultViewProps?.diffMode).toBe(false);
+      expect(screen.queryByTestId('compare-bar')).not.toBeInTheDocument();
+    });
+
+    it('swaps in the diff result, ghosts included, when diff mode turns on, and back when it turns off', async () => {
+      mockDiffResult = { success: true, state: 'ok', data: diffData };
+      await loadDefaultView();
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle diff mode' }));
+      expect(lastDefaultViewProps?.analysisData).toBe(diffData);
+      expect(lastDefaultViewProps?.diffMode).toBe(true);
+      expect(screen.getByTestId('compare-bar')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle diff mode' }));
+      expect(lastDefaultViewProps?.analysisData).toEqual(plain);
+      expect(lastDefaultViewProps?.diffMode).toBe(false);
+    });
+
+    it('keeps the analysis result while there is no diff result yet', async () => {
+      await loadDefaultView();
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle diff mode' }));
+      expect(lastDefaultViewProps?.analysisData).toEqual(plain);
+      expect(lastDefaultViewProps?.diffMode).toBe(false);
+      expect(screen.getByTestId('compare-bar')).toBeInTheDocument();
+    });
+
+    it('brings the default tab forward when diff mode turns on', async () => {
+      await loadDefaultView();
+      fireEvent.click(screen.getByRole('button', { name: 'Stats' }));
+      expect(screen.queryByTestId('default-view')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle diff mode' }));
+      expect(screen.getByTestId('default-view')).toBeInTheDocument();
+    });
   });
 });
