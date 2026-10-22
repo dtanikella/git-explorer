@@ -2,6 +2,7 @@ import { buildSignature, cardContent, connectionsView, defaultDirection, kindLab
 import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
 import type { DotConnections } from '@/lib/default/types';
 import type { HierarchyNode } from '@/lib/default/types';
+import { rollupDiff } from '@/lib/default/diff';
 
 const sym = (name: string, type: SyntaxType = SyntaxType.FUNCTION, over: Partial<NonNullable<HierarchyNode['symbol']>> = {}): HierarchyNode => ({
   id: name, tier: 'symbol', name, path: 'x.ts', depth: 4, children: [], symbol: { syntaxType: type, params: [], returnTypeText: null, ...over },
@@ -113,5 +114,41 @@ describe('defaultDirection', () => {
     expect(defaultDirection({ out: new Map([[EdgeKind.CALLS, ['a']]]), in: new Map(), undrawn: 0 })).toBe('out');
     expect(defaultDirection({ out: new Map(), in: new Map([[EdgeKind.CALLS, ['a']]]), undrawn: 0 })).toBe('in');
     expect(defaultDirection(undefined)).toBe('out');
+  });
+
+  describe('in diff mode', () => {
+    const d = (n: HierarchyNode, diffStatus: NonNullable<HierarchyNode['diffStatus']>, ghost = false): HierarchyNode => ({ ...n, diffStatus, ...(ghost && { ghost }) });
+    const added = d(sym('a'), 'added');
+    const ghost = d(sym('gone'), 'deleted', true);
+    const same = d(sym('same'), 'unchanged');
+    const file = node('x.ts', 'file', [added, same, ghost]);
+    const diffRoot = node('root', 'root', [file]);
+    const rollups = rollupDiff(diffRoot);
+
+    it('adds a status pill and a changed count to a changed symbol', () => {
+      const c = cardContent(added, diffRoot, rollups);
+      expect(c.status).toMatchObject({ label: 'Added' });
+      expect(c.position).toBe('1st of 3 symbols in file · 2 changed');
+      expect(c.ghostNote).toBeUndefined();
+    });
+
+    it('shows no pill on an unchanged symbol but still gives the changed count', () => {
+      const c = cardContent(same, diffRoot, rollups);
+      expect(c.status).toBeUndefined();
+      expect(c.position).toBe('2nd of 3 symbols in file · 2 changed');
+    });
+
+    it('marks a deleted ghost with the base-commit note', () => {
+      const c = cardContent(ghost, diffRoot, rollups);
+      expect(c.status).toMatchObject({ label: 'Deleted' });
+      expect(c.ghostNote).toBe('Shown from the base commit');
+    });
+
+    it('is unchanged when diff mode is off', () => {
+      const c = cardContent(added, diffRoot);
+      expect(c.status).toBeUndefined();
+      expect(c.ghostNote).toBeUndefined();
+      expect(c.position).toBe('1st of 3 symbols');
+    });
   });
 });

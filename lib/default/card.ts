@@ -1,6 +1,7 @@
 import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
 import { rankedKinds } from './connections';
-import { nodeStyle } from './config';
+import { DEFAULT_VIEW_CONFIG, nodeStyle } from './config';
+import type { DiffRollups } from './diff';
 import { parentMap } from './hover';
 import type { Direction, DotConnections, HierarchyNode } from './types';
 
@@ -62,8 +63,12 @@ export interface CardContent {
   kindMix: KindShare[];
   /** symbol cards only */
   signature?: string;
-  /** symbol cards only, e.g. `17th of 58 symbols` */
+  /** symbol cards only, e.g. `17th of 58 symbols`; in diff mode `5th of 9 symbols in file · 8 changed` */
   position?: string;
+  /** diff mode, changed symbols only: the status pill shown beside the kind pill */
+  status?: { label: string; color: string };
+  /** diff mode, deleted symbols only: the name is struck through and this note sits under it */
+  ghostNote?: string;
 }
 
 const symbolsUnder = (n: HierarchyNode): HierarchyNode[] => (n.tier === 'symbol' ? [n] : n.children.flatMap(symbolsUnder));
@@ -89,13 +94,16 @@ function kindMix(symbols: HierarchyNode[]): KindShare[] {
     .sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
 }
 
+const STATUS_LABEL = { added: 'Added', modified: 'Modified', deleted: 'Deleted' } as const;
+
 /**
  * Derives the info card for a hovered folder, file or symbol from the hierarchy alone.
  *
  * @param target - The hovered node.
  * @param root - The hierarchy's root, to find ancestors and siblings.
+ * @param diff - The rollups of a diff-mode hierarchy; omitted with diff mode off, which leaves the card as before.
  */
-export function cardContent(target: HierarchyNode, root: HierarchyNode): CardContent {
+export function cardContent(target: HierarchyNode, root: HierarchyNode, diff?: DiffRollups | null): CardContent {
   const parents = parentMap(root);
   const ancestors: string[] = [];
   for (let p = parents.get(target.id); p && p.tier !== 'root'; p = parents.get(p.id)) ancestors.unshift(p.name);
@@ -104,6 +112,8 @@ export function cardContent(target: HierarchyNode, root: HierarchyNode): CardCon
   if (target.tier === 'symbol') {
     const file = parents.get(target.id);
     const siblings = file?.children ?? [target];
+    const where = `${ordinal(siblings.indexOf(target) + 1)} of ${siblings.length} symbols`;
+    const status = diff && target.diffStatus && target.diffStatus !== 'unchanged' ? target.diffStatus : null;
     return {
       breadcrumb,
       pill: { label: kindLabel(target), color: nodeStyle({ tier: 'symbol', depth: target.depth, syntaxType: target.symbol?.syntaxType }).color },
@@ -111,7 +121,9 @@ export function cardContent(target: HierarchyNode, root: HierarchyNode): CardCon
       tiles: [],
       kindMix: [],
       signature: buildSignature(target),
-      position: `${ordinal(siblings.indexOf(target) + 1)} of ${siblings.length} symbols`,
+      position: diff ? `${where} in file · ${(file && diff.byFile.get(file.id)?.changed) || 0} changed` : where,
+      ...(status && { status: { label: STATUS_LABEL[status], color: DEFAULT_VIEW_CONFIG.diff.color[status] } }),
+      ...(diff && target.ghost && { ghostNote: 'Shown from the base commit' }),
     };
   }
 

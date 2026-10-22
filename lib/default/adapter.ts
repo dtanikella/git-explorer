@@ -1,6 +1,7 @@
 import { SyntaxType } from '@/lib/analysis/types';
 import type { AnalysisResult } from '@/lib/analysis/types';
 import { buildDirectoryHubs, folderHubId } from '@/lib/analysis/directory-hubs';
+import type { GitAnalysisNode } from '@/lib/diff/types';
 import type { HierarchyNode } from './types';
 
 /** Member and reference kinds that are not top-level declarations (DS-4). */
@@ -24,7 +25,8 @@ const isLocalSymbol = (scipSymbol: string) => /#local \d+$/.test(scipSymbol) || 
  * analysis result, so they are derived from each symbol's `filePath` with `buildDirectoryHubs`
  * (DS-2), which also supplies the root folder hub (GM-6). A file with no kept symbol gets no node.
  * Within a folder, subfolders come before files, and otherwise children keep first-seen order, so the output is
- * deterministic. No layout or rendering here.
+ * deterministic. A diff result's `diffStatus` and `ghost` are carried onto its symbols, so ghosts are laid out like any
+ * other symbol. No layout or rendering here.
  *
  * @param result - The analysis result.
  * @param rootName - Label for the synthetic root.
@@ -52,6 +54,7 @@ export function buildHierarchy(result: AnalysisResult, rootName = '/'): Hierarch
     });
   }
   for (const n of symbols) {
+    const { diffStatus, ghost } = n as Partial<GitAnalysisNode>;
     byId.set(n.scipSymbol, {
       id: n.scipSymbol,
       tier: 'symbol',
@@ -59,6 +62,8 @@ export function buildHierarchy(result: AnalysisResult, rootName = '/'): Hierarch
       path: n.filePath,
       depth: 0,
       symbol: { syntaxType: n.syntaxType, params: n.params, returnTypeText: n.returnTypeText },
+      ...(diffStatus && { diffStatus }),
+      ...(ghost && { ghost }),
       children: [],
     });
   }

@@ -1,6 +1,7 @@
 import { buildHierarchy } from '@/lib/default/adapter';
 import { SyntaxType } from '@/lib/analysis/types';
 import type { AnalysisNode, AnalysisResult } from '@/lib/analysis/types';
+import type { GitAnalysisNode } from '@/lib/diff/types';
 import type { HierarchyNode } from '@/lib/default/types';
 
 const node = (over: Partial<AnalysisNode>): AnalysisNode => ({
@@ -89,5 +90,25 @@ describe('buildHierarchy', () => {
 
   it('returns a lone root for an empty result', () => {
     expect(buildHierarchy(result([]))).toMatchObject({ tier: 'root', children: [] });
+  });
+
+  it('carries diffStatus and ghost from a diff result onto symbols, ghosts included', () => {
+    const diffNode = (over: Partial<GitAnalysisNode>) => ({ ...node({}), diffStatus: 'unchanged', ...over }) as GitAnalysisNode;
+    const root = buildHierarchy(result([
+      diffNode({ scipSymbol: 'a', name: 'a', diffStatus: 'added' }),
+      diffNode({ scipSymbol: 'g', name: 'g', diffStatus: 'deleted', ghost: true }),
+      diffNode({ scipSymbol: 'u', name: 'u' }),
+    ]));
+    const by = Object.fromEntries(flatten(root).filter((n) => n.tier === 'symbol').map((n) => [n.name, n]));
+    expect([by.a.diffStatus, by.a.ghost]).toEqual(['added', undefined]);
+    expect([by.g.diffStatus, by.g.ghost]).toEqual(['deleted', true]);
+    expect(by.u.diffStatus).toBe('unchanged');
+  });
+
+  it('leaves diff fields off the symbols of a plain analysis result', () => {
+    const root = buildHierarchy(result([node({ scipSymbol: 's1' })]));
+    const sym = flatten(root).find((n) => n.tier === 'symbol')!;
+    expect('diffStatus' in sym).toBe(false);
+    expect('ghost' in sym).toBe(false);
   });
 });
