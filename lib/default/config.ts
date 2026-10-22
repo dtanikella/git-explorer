@@ -92,6 +92,20 @@ export interface DisplayConfig {
     /** the one border around the whole highlighted slice */
     border: { width: number; color: string; opacity: number };
   };
+  /** how diff mode marks added, modified and deleted symbols */
+  diff: {
+    color: Record<'added' | 'modified' | 'deleted', string>;
+    /** opacity multiplier for a band with no changed symbol beneath it */
+    unchangedBand: number;
+    /** opacity multiplier for an unchanged symbol */
+    unchangedSymbol: number;
+    /** opacity multiplier for a ghost, a deleted symbol drawn from the base commit */
+    ghost: number;
+    /** the ring around a changed symbol; width and gap in px, dash as [dash, gap] in px for a deleted one */
+    outline: { width: number; gap: number; dash: [number, number] };
+    /** the stacked added / modified / deleted strip beside a changed file; all in px */
+    rim: { width: number; gap: number; minArc: number };
+  };
   label: {
     minFont: number;
     maxFont: number;
@@ -180,6 +194,14 @@ export const DEFAULT_VIEW_CONFIG: DisplayConfig = {
     descendant: 1.2,
     rest: 0.5,
     border: { width: 2, color: '#111827', opacity: 0.85 },
+  },
+  diff: {
+    color: { added: '#16a34a', modified: '#d97706', deleted: '#dc2626' },
+    unchangedBand: 0.1,
+    unchangedSymbol: 0.2,
+    ghost: 0.45,
+    outline: { width: 1.6, gap: 2, dash: [3, 2] },
+    rim: { width: 5, gap: 9, minArc: 11 },
   },
   label: {
     minFont: 10,

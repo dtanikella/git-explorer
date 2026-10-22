@@ -12,6 +12,7 @@ import { layoutBands } from '@/lib/default/bands';
 import type { Band } from '@/lib/default/bands';
 import { centreOn, fitTransform } from '@/lib/default/camera';
 import { cardContent, connectionsView, defaultDirection, EDGE_KIND_STYLE } from '@/lib/default/card';
+import { rollupDiff } from '@/lib/default/diff';
 import { buildConnections } from '@/lib/default/connections';
 import { CANVAS_BACKGROUND, DEFAULT_VIEW_CONFIG, nodeStyle } from '@/lib/default/config';
 import { emphasisedOpacity, parentMap, sliceOf } from '@/lib/default/hover';
@@ -28,9 +29,11 @@ interface DefaultViewProps {
   analysisData: AnalysisResult | null;
   loading: boolean;
   error: string | null;
+  /** `analysisData` is a diff result (nodes carry `diffStatus`, plus ghosts): mark the changes. Off draws as before. */
+  diffMode?: boolean;
 }
 
-const { separator, hover: hoverStyle, label: labelStyle } = DEFAULT_VIEW_CONFIG;
+const { separator, hover: hoverStyle, label: labelStyle, diff: diffStyle } = DEFAULT_VIEW_CONFIG;
 
 /** A press that moves farther than this many px is a pan, never a click. */
 const CLICK_SLOP = 4;
@@ -64,11 +67,17 @@ const EDGE_DRAW = {
  * zoom changes. Structure comes from `buildHierarchy`, positions from `layoutRadial`, bands from `layoutBands`, and
  * every size and color from the config, so this component holds no display values of its own.
  *
- * @param analysisData - The page's analysis result.
+ * With `diffMode` on, `analysisData` is a diff result. Changed files keep their color and carry a stacked added /
+ * modified / deleted rim, unchanged files fade and unchanged symbols dim, and changed symbols get a thin outline (dashed
+ * for a deleted one, drawn as a ghost from the base commit). The rollups are found once per result in `model`, so hover
+ * and pin never recompute them.
+ *
+ * @param analysisData - The page's analysis result, or a diff result in diff mode.
  * @param loading - Whether the analysis is running.
  * @param error - The analysis error, if any.
+ * @param diffMode - Whether to mark the changes in `analysisData`.
  */
-export default function DefaultView({ analysisData, loading, error }: DefaultViewProps) {
+export default function DefaultView({ analysisData, loading, error, diffMode = false }: DefaultViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const groupRef = useRef<SVGGElement>(null);
   const transformRef = useRef(zoomIdentity);
@@ -95,8 +104,8 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
     const dots = new Map(layout.nodes.filter((p) => p.node.tier === 'symbol').map((p) => [p.node.id, p]));
     const byId = new Map([...dots].map(([id, p]) => [id, p.node]));
     const conn = buildConnections(analysisData.edges, new Set(dots.keys()));
-    return { root, layout, bands: layoutBands(layout), parents: parentMap(root), dots, byId, conn, symbols: [...byId.values()] };
-  }, [analysisData]);
+    return { root, layout, bands: layoutBands(layout), parents: parentMap(root), dots, byId, conn, symbols: [...byId.values()], diff: diffMode ? rollupDiff(root) : null };
+  }, [analysisData, diffMode]);
 
   const pinnedConn = model && pinned ? model.conn.byDot.get(pinned) : undefined;
   const incident = useMemo(() => (model && pinned ? model.conn.edges.filter((e) => e.from === pinned || e.to === pinned) : []), [model, pinned]);
@@ -195,7 +204,7 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
   // zoom never re-render these.
   const shapes = useMemo(() => {
     if (!model) return null;
-    const { bands, layout, parents } = model;
+    const { bands, layout, parents, diff } = model;
     const enter = (node: HierarchyNode) => (pinned ? {} : { onMouseEnter: () => setHovered(node), onMouseLeave: () => setHovered(null) });
     const inSlice = (id: string) => !slice || slice.chain.has(id) || slice.below.has(id);
     const highlighted = slice && !pinned ? bands.filter((b) => inSlice(b.node.node.id)) : [];
@@ -203,7 +212,7 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
       list.map((b) => <path key={b.node.node.id} d={sectorPath(b)} {...props(b)} />);
     const separated = (b: Band) => ({
       fill: b.color,
-      fillOpacity: emphasisedOpacity(b.opacity, b.node.node.id, slice),
+      fillOpacity: emphasisedOpacity(b.opacity, b.node.node.id, slice) * (diff && !diff.changedIds.has(b.node.node.id) ? diffStyle.unchangedBand : 1),
       stroke: separator.color,
       strokeWidth: separator.width,
       vectorEffect: 'non-scaling-stroke' as const,
@@ -233,26 +242,74 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
         {layout.nodes.filter((p) => p.node.tier === 'symbol').map((p) => {
           const s = nodeStyle(nodeContext(p.node));
           const fileId = parents.get(p.node.id)?.id ?? '';
+          const status = diff && p.node.diffStatus && p.node.diffStatus !== 'unchanged' ? p.node.diffStatus : null;
+          const diffOpacity = !diff ? 1 : !status ? diffStyle.unchangedSymbol : p.node.ghost ? diffStyle.ghost : 1;
+          const opacity = (inSlice(fileId) && (!dimExcept || dimExcept.has(p.node.id)) ? 1 : hoverStyle.rest) * diffOpacity;
           return (
-            <circle
-              key={p.node.id}
-              cx={p.x}
-              cy={p.y}
-              r={s.radius}
-              fill={s.color}
-              opacity={inSlice(fileId) && (!dimExcept || dimExcept.has(p.node.id)) ? 1 : hoverStyle.rest}
-              data-symbol-id={p.node.id}
-              stroke="transparent"
-              strokeWidth={6}
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="all"
-              {...enter(p.node)}
-            />
+            <g key={p.node.id}>
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={s.radius}
+                fill={s.color}
+                opacity={opacity}
+                data-symbol-id={p.node.id}
+                data-diff-status={status ?? undefined}
+                stroke="transparent"
+                strokeWidth={6}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="all"
+                {...enter(p.node)}
+              />
+              {status && (
+                <circle
+                  data-testid="diff-outline"
+                  data-status={status}
+                  cx={p.x}
+                  cy={p.y}
+                  r={s.radius + diffStyle.outline.gap}
+                  fill="none"
+                  stroke={diffStyle.color[status]}
+                  strokeWidth={diffStyle.outline.width}
+                  strokeDasharray={status === 'deleted' ? diffStyle.outline.dash.join(' ') : undefined}
+                  vectorEffect="non-scaling-stroke"
+                  opacity={opacity}
+                  pointerEvents="none"
+                />
+              )}
+            </g>
           );
         })}
       </>
     );
   }, [model, slice, pinned, dimExcept]);
+
+  // The stacked rim beside each changed file. Sized by the zoom `scale`, so it keeps its width and gap on screen.
+  const rimLayer = useMemo(() => {
+    if (!model?.diff) return null;
+    const { diff } = model;
+    const { rim, color } = diffStyle;
+    const u = 1 / scale;
+    const at = (r: number, a: number) => `${r * Math.sin(a)} ${-r * Math.cos(a)}`;
+    return (
+      <g pointerEvents="none" data-testid="diff-rim">
+        {model.bands.flatMap((b) => {
+          const counts = b.tier === 'file' ? diff.byFile.get(b.node.node.id) : undefined;
+          if (!counts) return [];
+          const radius = b.outer + rim.gap * u;
+          const width = Math.max(b.endAngle - b.startAngle, (rim.minArc * u) / radius);
+          let from = (b.startAngle + b.endAngle) / 2 - width / 2;
+          return (['added', 'modified', 'deleted'] as const).flatMap((status) => {
+            if (!counts[status]) return [];
+            const to = from + (width * counts[status]) / counts.changed;
+            const d = `M ${at(radius, from)} A ${radius} ${radius} 0 ${to - from > Math.PI ? 1 : 0} 1 ${at(radius, to)}`;
+            from = to;
+            return [<path key={`${b.node.node.id}-${status}`} data-status={status} d={d} fill="none" stroke={color[status]} strokeWidth={rim.width} vectorEffect="non-scaling-stroke" />];
+          });
+        })}
+      </g>
+    );
+  }, [model, scale]);
 
   // The pinned symbol's edges, rings and arrowheads. Sized by the zoom `scale`, so lines stay readable.
   const edgeLayer = useMemo(() => {
@@ -325,6 +382,7 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
       >
         <g ref={groupRef}>
           {shapes}
+          {rimLayer}
           {edgeLayer}
         </g>
         <LabelLayer labels={labels} slice={slice} />
@@ -332,7 +390,7 @@ export default function DefaultView({ analysisData, loading, error }: DefaultVie
       <SymbolSearch symbols={model.symbols} onPick={pickFromSearch} />
       {cardNode && (
         <InfoCard
-          content={cardContent(cardNode, model.root)}
+          content={cardContent(cardNode, model.root, model.diff)}
           hue={cardHue}
           pinned={
             pinned

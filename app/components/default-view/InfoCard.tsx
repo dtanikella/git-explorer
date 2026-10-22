@@ -51,6 +51,11 @@ export default function InfoCard({ content, hue, pinned }: InfoCardProps) {
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] text-gray-500">{content.breadcrumb}</span>
         <span className="flex shrink-0 items-center gap-1.5">
+          {content.status && (
+            <span data-testid="status-pill" className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: content.status.color }}>
+              {content.status.label}
+            </span>
+          )}
           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: pillColor }}>
             {content.pill.label}
           </span>
@@ -61,9 +66,10 @@ export default function InfoCard({ content, hue, pinned }: InfoCardProps) {
           )}
         </span>
       </div>
-      <div className="mt-2 text-center text-[21px] leading-tight text-gray-900 break-words" style={{ fontWeight: 650 }}>
+      <div className={`mt-2 text-center text-[21px] leading-tight break-words ${content.ghostNote ? 'text-gray-500 line-through' : 'text-gray-900'}`} style={{ fontWeight: 650 }}>
         {content.name}
       </div>
+      {content.ghostNote && <div data-testid="ghost-note" className="mt-1 text-center text-[11px] italic text-gray-500">{content.ghostNote}</div>}
       {content.signature && (
         <pre className="mt-3 whitespace-pre-wrap break-words rounded bg-gray-100 p-2 font-mono text-xs text-gray-800">{content.signature}</pre>
       )}
