@@ -14,6 +14,7 @@ import { centreOn, fitTransform } from '@/lib/default/camera';
 import { cardContent, connectionsView, defaultDirection, EDGE_KIND_STYLE } from '@/lib/default/card';
 import { rollupDiff } from '@/lib/default/diff';
 import { buildConnections } from '@/lib/default/connections';
+import { treeCurve } from '@/lib/default/edge-arc';
 import { CANVAS_BACKGROUND, DEFAULT_VIEW_CONFIG, nodeStyle } from '@/lib/default/config';
 import { emphasisedOpacity, parentMap, sliceOf } from '@/lib/default/hover';
 import type { Slice } from '@/lib/default/hover';
@@ -104,7 +105,8 @@ export default function DefaultView({ analysisData, loading, error, diffMode = f
     const dots = new Map(layout.nodes.filter((p) => p.node.tier === 'symbol').map((p) => [p.node.id, p]));
     const byId = new Map([...dots].map(([id, p]) => [id, p.node]));
     const conn = buildConnections(analysisData.edges, new Set(dots.keys()));
-    return { root, layout, bands: layoutBands(layout), parents: parentMap(root), dots, byId, conn, symbols: [...byId.values()], diff: diffMode ? rollupDiff(root) : null };
+    const positions = new Map(layout.nodes.map((p) => [p.node.id, p]));
+    return { root, layout, bands: layoutBands(layout), parents: parentMap(root), positions, dots, byId, conn, symbols: [...byId.values()], diff: diffMode ? rollupDiff(root) : null };
   }, [analysisData, diffMode]);
 
   const pinnedConn = model && pinned ? model.conn.byDot.get(pinned) : undefined;
@@ -470,7 +472,7 @@ function sectorPath({ inner, outer, startAngle, endAngle }: Band): string {
 }
 
 interface EdgeDrawing {
-  model: { dots: ReadonlyMap<string, PositionedNode> };
+  model: { dots: ReadonlyMap<string, PositionedNode>; positions: ReadonlyMap<string, PositionedNode>; parents: ReadonlyMap<string, HierarchyNode> };
   pinned: string;
   incident: DotEdge[];
   tooMany: boolean;
@@ -487,8 +489,8 @@ interface EdgeDrawing {
  * The edges at a pinned symbol, as curves with arrowheads, plus the pin ring and the rings on a category's targets.
  *
  * @remarks
- * Each edge is a quadratic curve whose control point is the midpoint of its ends pulled to a quarter of the way
- * toward the layout center, which bundles edges. With nothing selected every edge is faint; with a previewed or
+ * Each edge is a spline that follows the hierarchy through every node between its ends, topping out on the lowest node
+ * holding both: the file for two symbols of one file, the folder for symbols in different files (`treeCurve`). With nothing selected every edge is faint; with a previewed or
  * selected kind and direction those edges are strong and the others almost vanish. A hub symbol with more than
  * `MAX_DRAWN_EDGES` edges draws only the emphasised ones. Sizes are in px, divided by the zoom so they stay put.
  */
@@ -508,11 +510,10 @@ function drawEdges({ model, pinned, incident, tooMany, direction, emphasis, targ
     const b = model.dots.get(e.to);
     if (!a || !b) return [];
     const color = EDGE_KIND_STYLE[e.kind].color;
-    const cx = ((a.x + b.x) / 2) * 0.25;
-    const cy = ((a.y + b.y) / 2) * 0.25;
+    const { d, tail } = treeCurve(a, b, model.parents, model.positions);
     const arrow = (look.arrow * grow) / k;
-    const dx = b.x - cx;
-    const dy = b.y - cy;
+    const dx = b.x - tail.x;
+    const dy = b.y - tail.y;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len;
     const uy = dy / len;
@@ -520,7 +521,7 @@ function drawEdges({ model, pinned, incident, tooMany, direction, emphasis, targ
     const tipY = b.y - uy * (r0 + 1 / k);
     return [
       <g key={`${e.kind}-${e.from}-${e.to}-${i}`} data-testid="pin-edge" data-kind={e.kind} data-emphasised={strong || undefined} pointerEvents="none" opacity={look.alpha}>
-        <path d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`} fill="none" stroke={color} strokeWidth={(look.width * grow) / k} />
+        <path d={d} fill="none" stroke={color} strokeWidth={(look.width * grow) / k} />
         {look.arrow > 0 && (
           <polygon
             points={`${tipX},${tipY} ${tipX - ux * arrow - uy * arrow * 0.4},${tipY - uy * arrow + ux * arrow * 0.4} ${tipX - ux * arrow + uy * arrow * 0.4},${tipY - uy * arrow - ux * arrow * 0.4}`}

@@ -169,9 +169,6 @@ export const EDGE_KIND_STYLE: Record<EdgeKind, { out: string; in: string; color:
   [EdgeKind.INCLUDES]: { out: 'Includes', in: 'Included by', color: '#65a30d' },
 };
 
-/** Names listed under an expanded category row before `+ N more`. */
-export const MAX_LISTED_NAMES = 5;
-
 /** One connected symbol under a category row. */
 export interface ConnectedName {
   id: string;
@@ -187,10 +184,23 @@ export interface ConnectionRow {
   color: string;
   /** distinct connected symbols */
   count: number;
-  /** at most {@link MAX_LISTED_NAMES} */
-  names: ConnectedName[];
-  /** how many connected symbols are not listed */
-  more: number;
+  /** every connected symbol, grouped by where it lives: folders, then files, then the symbols in each */
+  locations: LocationGroup[];
+}
+
+/** A folder or file holding connected symbols, for the expandable list under a category row. */
+export interface LocationGroup {
+  /** the group's full path, unique within a row, for remembering whether it is collapsed */
+  key: string;
+  /** a folder's name with a trailing `/`, or a file's name; a chain of folders with one child each is joined as `a/b/` */
+  label: string;
+  kind: 'folder' | 'file';
+  /** connected symbols at or below this group */
+  count: number;
+  /** nested folders and files, folders first, each alphabetical; empty for a file */
+  children: LocationGroup[];
+  /** the symbols of a file, in the order they were found; empty for a folder */
+  symbols: ConnectedName[];
 }
 
 /** The connections section of the pinned card. */
@@ -205,6 +215,48 @@ export interface ConnectionsView {
 }
 
 const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+/**
+ * Groups connected symbols by the folder and file they live in.
+ *
+ * @remarks
+ * A folder that holds nothing but one other folder is joined to it, so `lib/` holding only `default/` shows as `lib/default/`.
+ * Folders sort before files and each group is alphabetical; symbols keep the order they came in.
+ *
+ * @param ids - Ids of the connected symbols.
+ * @param byId - The symbol nodes by id, for names and file paths.
+ */
+export function groupByLocation(ids: readonly string[], byId: ReadonlyMap<string, HierarchyNode>): LocationGroup[] {
+  const top: LocationGroup = { key: '', label: '', kind: 'folder', count: 0, children: [], symbols: [] };
+  for (const id of ids) {
+    const path = byId.get(id)?.path ?? '';
+    const parts = path.split('/').filter(Boolean);
+    let at = top;
+    parts.forEach((part, i) => {
+      const kind = i === parts.length - 1 ? 'file' : 'folder';
+      const key = parts.slice(0, i + 1).join('/');
+      let next = at.children.find((c) => c.key === key);
+      if (!next) at.children.push((next = { key, label: kind === 'folder' ? `${part}/` : part, kind, count: 0, children: [], symbols: [] }));
+      at = next;
+    });
+    at.symbols.push({ id, name: byId.get(id)?.name ?? id, file: basename(path) });
+  }
+  const finish = (g: LocationGroup): LocationGroup => {
+    g.count = g.kind === 'file' ? g.symbols.length : g.children.reduce((n, c) => n + finish(c).count, 0);
+    g.children.sort((a, b) => (a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === 'folder' ? -1 : 1));
+    return g;
+  };
+  finish(top);
+  const join = (g: LocationGroup): LocationGroup => {
+    g.children = g.children.map(join);
+    while (g.kind === 'folder' && g.key !== '' && g.children.length === 1 && g.children[0].kind === 'folder') {
+      const only = g.children[0];
+      g = { ...only, label: g.label + only.label };
+    }
+    return g;
+  };
+  return join(top).children;
+}
 
 /**
  * Derives the connections section of a pinned symbol's card.
@@ -222,8 +274,7 @@ export function connectionsView(conn: DotConnections | undefined, direction: Dir
       label: EDGE_KIND_STYLE[kind][direction],
       color: EDGE_KIND_STYLE[kind].color,
       count,
-      names: ids.slice(0, MAX_LISTED_NAMES).map((id) => ({ id, name: byId.get(id)?.name ?? id, file: basename(byId.get(id)?.path ?? '') })),
-      more: Math.max(0, ids.length - MAX_LISTED_NAMES),
+      locations: groupByLocation(ids, byId),
     };
   });
   return { direction, counts: { out: distinct('out'), in: distinct('in') }, rows, undrawn: conn?.undrawn ?? 0 };

@@ -1,4 +1,4 @@
-import { buildSignature, cardContent, connectionsView, defaultDirection, kindLabel } from '@/lib/default/card';
+import { buildSignature, cardContent, connectionsView, defaultDirection, groupByLocation, kindLabel } from '@/lib/default/card';
 import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
 import type { DotConnections } from '@/lib/default/types';
 import type { HierarchyNode } from '@/lib/default/types';
@@ -88,13 +88,11 @@ describe('connectionsView', () => {
     undrawn: 2,
   };
 
-  it('ranks rows by count with direction-specific labels, five names and the remainder', () => {
+  it('ranks rows by count with direction-specific labels and lists every symbol by location', () => {
     const v = connectionsView(conn, 'out', byId);
     expect(v.rows.map((r) => [r.label, r.count])).toEqual([['Calls', 7], ['Uses type', 1]]);
-    expect(v.rows[0].names).toHaveLength(5);
-    expect(v.rows[0].names[0]).toEqual({ id: 'a', name: 'a', file: 'a.ts' });
-    expect(v.rows[0].more).toBe(2);
-    expect(v.rows[1].more).toBe(0);
+    expect(v.rows[0].locations).toHaveLength(1);
+    expect(v.rows[0].locations[0]).toMatchObject({ label: 'src/', kind: 'folder', count: 7 });
     expect(v.undrawn).toBe(2);
   });
 
@@ -150,5 +148,36 @@ describe('defaultDirection', () => {
       expect(c.ghostNote).toBeUndefined();
       expect(c.position).toBe('1st of 3 symbols');
     });
+  });
+});
+
+describe('groupByLocation', () => {
+  const at = (id: string, path: string): [string, HierarchyNode] => [id, { ...sym(id), path }];
+  const byId = new Map([
+    at('a', 'lib/default/layout.ts'),
+    at('b', 'lib/default/layout.ts'),
+    at('c', 'lib/default/types.ts'),
+    at('d', 'lib/git/analyzer.ts'),
+    at('e', 'app/page.tsx'),
+    at('f', 'main.ts'),
+  ]);
+
+  it('nests folders then files then symbols, folders first and each alphabetical, and counts what is under each', () => {
+    const g = groupByLocation(['f', 'e', 'd', 'c', 'b', 'a'], byId);
+    expect(g.map((x) => [x.label, x.kind, x.count])).toEqual([['app/', 'folder', 1], ['lib/', 'folder', 4], ['main.ts', 'file', 1]]);
+    const lib = g.find((x) => x.label === 'lib/')!;
+    expect(lib.children.map((x) => [x.label, x.count])).toEqual([['default/', 3], ['git/', 1]]);
+    expect(lib.children[0].children.map((x) => x.label)).toEqual(['layout.ts', 'types.ts']);
+    expect(lib.children[0].children[0].symbols.map((s) => s.id)).toEqual(['b', 'a']);
+  });
+
+  it('joins a folder that holds only one folder to it', () => {
+    const g = groupByLocation(['a', 'c'], new Map([at('a', 'lib/default/layout.ts'), at('c', 'lib/default/types.ts')]));
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ label: 'lib/default/', key: 'lib/default', count: 2 });
+  });
+
+  it('puts a file at the top level when it is in no folder', () => {
+    expect(groupByLocation(['f'], byId)).toMatchObject([{ label: 'main.ts', kind: 'file', symbols: [{ id: 'f' }] }]);
   });
 });
