@@ -92,18 +92,20 @@ export class NodeWrapper {
    * @returns An array of matching descendant nodes.
    */
   descendantsOfType(type: string | string[]): NodeWrapper[] {
-    const types = Array.isArray(type) ? type : [type];
+    const types = new Set(Array.isArray(type) ? type : [type]);
     const results: NodeWrapper[] = [];
-    const walk = (node: SyntaxNode) => {
-      if (types.includes(node.type)) {
-        results.push(new NodeWrapper(node));
+    // Pre-order walk with a cursor rooted at this node: the cursor can't leave the subtree, and it avoids
+    // allocating a children array for every node.
+    const cursor = this._node.walk();
+    for (;;) {
+      if (types.has(cursor.nodeType)) {
+        results.push(new NodeWrapper(cursor.currentNode));
       }
-      for (const child of node.children) {
-        walk(child);
+      if (cursor.gotoFirstChild()) continue;
+      while (!cursor.gotoNextSibling()) {
+        if (!cursor.gotoParent()) return results;
       }
-    };
-    walk(this._node);
-    return results;
+    }
   }
 
   /** Access the underlying tree-sitter SyntaxNode for advanced use. */

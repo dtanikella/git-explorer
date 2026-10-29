@@ -173,6 +173,13 @@ export interface AnalysisMetadata {
   analysisDurationMs: number;
   missingNodeTypes: string[];
   missingEdgeKinds: string[];
+  /** Wall-clock time of each pipeline stage, in stage order. */
+  stageTimingsMs?: Record<string, number>;
+  /**
+   * Number of external edges per source symbol (`fromSymbol`). Present when external edges were dropped
+   * from `edges` to keep the payload small; see `compactExternalEdges`.
+   */
+  externalEdgeCounts?: Record<string, number>;
 }
 
 /**

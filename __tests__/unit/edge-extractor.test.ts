@@ -260,6 +260,34 @@ describe('extractEdges', () => {
     expect(edge!.toSymbol).toBe('src/mod.ts#local 5');
   });
 
+  it('attributes each reference to its innermost known enclosing declaration', () => {
+    const source = 'const outer = () => {\n  function inner() {\n    add();\n  }\n  add();\n};';
+    const tree = parseTs(source);
+
+    const addNode = makeNode({ name: 'add', scipSymbol: 'sym:add', filePath: 'src/utils.ts' });
+    const outerNode = makeNode({ name: 'outer', scipSymbol: 'sym:outer', filePath: 'src/index.ts', startLine: 0, startCol: 6 });
+    const innerNode = makeNode({ name: 'inner', scipSymbol: 'sym:inner', filePath: 'src/index.ts', startLine: 1, startCol: 11 });
+    const nodeMap = new Map([['sym:add', addNode], ['sym:outer', outerNode], ['sym:inner', innerNode]]);
+
+    const scipDoc = mockScipDoc('src/index.ts', [
+      { range: [2, 4, 7], symbol: 'sym:add', symbolRoles: 8 },
+      { range: [4, 2, 5], symbol: 'sym:add', symbolRoles: 8 },
+    ]);
+
+    const edges = extractEdges({
+      parsedFiles: new Map([['src/index.ts', { tree, source }]]),
+      scipDocuments: [scipDoc],
+      nodeMap,
+      repoPath: '/repo',
+    });
+
+    expect(edges.map(e => [e.fromSymbol, e.kind, e.edgePosition.line])).toEqual([
+      ['sym:inner', EdgeKind.CALLS, 2],
+      ['sym:outer', EdgeKind.CALLS, 4],
+    ]);
+    expect(addNode.referencedAt.map(r => r.scipSymbol)).toEqual(['sym:inner', 'sym:outer']);
+  });
+
   it('skips edges where source node has no scipSymbol', () => {
     // Simulate: reference occurs at top-level (no enclosing function found)
     const source = 'add(1, 2);';

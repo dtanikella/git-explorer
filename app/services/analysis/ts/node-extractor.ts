@@ -43,6 +43,9 @@ const DECLARATION_TYPES: Record<string, SyntaxType> = {
   internal_module: SyntaxType.NAMESPACE,
 };
 
+// Every node type walkDeclarations looks at, collected in one tree walk.
+const WALKED_TYPES = [...Object.keys(DECLARATION_TYPES), 'arrow_function', 'variable_declarator', 'decorator'];
+
 // method_definition nodes that need reclassifying past the generic METHOD mapping.
 const METHOD_LIKE_TYPES = new Set<SyntaxType>([
   SyntaxType.FUNCTION,
@@ -230,8 +233,20 @@ function walkDeclarations(
   nodes: AnalysisNode[],
   nodeMap: Map<string, AnalysisNode>,
 ): void {
-  const declarationTypes = Object.keys(DECLARATION_TYPES);
-  const allDeclarations = rootNode.descendantsOfType(declarationTypes);
+  // Each bucket keeps document order, and the buckets are processed in a fixed order, so nodes come out
+  // in the same order as four separate walks would produce.
+  const allDeclarations: NodeWrapper[] = [];
+  const arrowFunctions: NodeWrapper[] = [];
+  const variableDeclarators: NodeWrapper[] = [];
+  const decorators: NodeWrapper[] = [];
+  for (const found of rootNode.descendantsOfType(WALKED_TYPES)) {
+    switch (found.type) {
+      case 'arrow_function': arrowFunctions.push(found); break;
+      case 'variable_declarator': variableDeclarators.push(found); break;
+      case 'decorator': decorators.push(found); break;
+      default: allDeclarations.push(found);
+    }
+  }
 
   for (const declNode of allDeclarations) {
     const mappedType = DECLARATION_TYPES[declNode.type];
@@ -277,7 +292,6 @@ function walkDeclarations(
 
   // Also handle arrow functions assigned to variables:
   // const foo = async (x: number) => { ... }
-  const arrowFunctions = rootNode.descendantsOfType(['arrow_function']);
   for (const arrowNode of arrowFunctions) {
     const parent = arrowNode.parent;
     if (!parent || parent.type !== 'variable_declarator') continue;
@@ -319,7 +333,6 @@ function walkDeclarations(
   // Plain variable/constant declarations: const FOO = ...
   // (arrow-function-valued declarators are already captured above as FUNCTION;
   // destructuring patterns are skipped since they have no single symbol name)
-  const variableDeclarators = rootNode.descendantsOfType(['variable_declarator']);
   for (const varNode of variableDeclarators) {
     const valueNode = varNode.childForFieldName('value');
     if (valueNode?.type === 'arrow_function') continue;
@@ -362,7 +375,6 @@ function walkDeclarations(
   // declaration rather than defining a new symbol, so there's no SCIP
   // definition to look up — synthesize a position-qualified id instead,
   // mirroring the `${filePath}#local N` convention for local scip symbols.
-  const decorators = rootNode.descendantsOfType(['decorator']);
   for (const decNode of decorators) {
     const nameChild = decNode.namedChildren[0];
     const callee = nameChild?.type === 'call_expression' ? nameChild.childForFieldName('function') : null;

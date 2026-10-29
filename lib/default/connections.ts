@@ -10,12 +10,18 @@ import type { ConnectionModel, Direction, DotConnections, DotEdge } from './type
  * owner that has a dot (`ownerOf`). An edge between a dot and itself is dropped, and edges of the same kind
  * between the same two dots collapse into one connection, so a connection count is a count of distinct connected
  * symbols. An edge with an external or unresolved end, or an end whose owners have no dot, cannot be drawn: it
- * is counted in `undrawn` on the end that does have a dot. Order follows the input, so output is deterministic.
+ * is counted in `undrawn` on the end that does have a dot. External edges the server already dropped arrive as
+ * `externalEdgeCounts` and are added to `undrawn` the same way. Order follows the input, so output is deterministic.
  *
  * @param edges - The analysis edges.
  * @param dotIds - Ids of the kept symbols, the ones drawn as dots.
+ * @param externalEdgeCounts - Dropped external edges per source symbol (`metadata.externalEdgeCounts`).
  */
-export function buildConnections(edges: readonly AnalysisEdge[], dotIds: ReadonlySet<string>): ConnectionModel {
+export function buildConnections(
+  edges: readonly AnalysisEdge[],
+  dotIds: ReadonlySet<string>,
+  externalEdgeCounts?: Readonly<Record<string, number>>,
+): ConnectionModel {
   const byDot = new Map<string, DotConnections>();
   const entry = (id: string) => {
     let c = byDot.get(id);
@@ -49,6 +55,12 @@ export function buildConnections(edges: readonly AnalysisEdge[], dotIds: Readonl
       entry(from).undrawn++;
     } else if (to) {
       entry(to).undrawn++;
+    }
+  }
+  if (externalEdgeCounts) {
+    for (const [symbol, count] of Object.entries(externalEdgeCounts)) {
+      const from = resolve(symbol);
+      if (from) entry(from).undrawn += count;
     }
   }
   return { byDot, edges: out };

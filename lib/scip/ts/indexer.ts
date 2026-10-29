@@ -4,7 +4,7 @@ import * as path from 'path';
 import { IndexResult, IndexOptions, ScipIndexError } from '../types';
 import { getCachedIndex, saveCachedIndex } from '../cache';
 
-const DEFAULT_TIMEOUT = 60_000;
+const DEFAULT_TIMEOUT = 300_000;
 
 function resolveScipBinary(): string {
   // Construct path manually to avoid Turbopack mangling require.resolve()

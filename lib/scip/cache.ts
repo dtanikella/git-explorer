@@ -21,7 +21,13 @@ function getCachePaths(repoPath: string) {
   };
 }
 
-async function getCurrentHead(repoPath: string): Promise<string> {
+/**
+ * Resolves the commit SHA that HEAD points to.
+ *
+ * @param repoPath - A path inside a git work tree.
+ * @returns The full HEAD SHA.
+ */
+export async function getCurrentHead(repoPath: string): Promise<string> {
   const git = simpleGit(repoPath);
   return (await git.revparse(['HEAD'])).trim();
 }
