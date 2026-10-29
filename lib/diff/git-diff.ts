@@ -32,6 +32,34 @@ function resolveRef(repo: string, ref: string): string {
 }
 
 /**
+ * Finds the commit a comparison should start from: where `compare` split off `base`.
+ *
+ * @remarks
+ * Diffing against this, not against the tip of `base`, shows only what `compare` added, the way a pull request does.
+ * Otherwise every commit that landed on `base` after the split shows up as if `compare` had undone it. When `compare`
+ * is an ancestor of `base`, or the two share no history, there is no split to use and `base` itself is returned.
+ *
+ * @param repo - Absolute path to the repository.
+ * @param base - The base git reference.
+ * @param compare - The compare git reference.
+ * @returns The full SHA of the merge-base, or of `base` when there is none.
+ */
+export function resolveMergeBase(repo: string, base: string, compare: string): string {
+  const baseSha = resolveRef(repo, base);
+  const compareSha = resolveRef(repo, compare);
+  try {
+    return execFileSync('git', ['merge-base', baseSha, compareSha], {
+      cwd: repo,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    // exit 1: no common ancestor
+    return baseSha;
+  }
+}
+
+/**
  * Shows the contents of a file at a specific commit.
  *
  * @param repo - Absolute path to the repository.

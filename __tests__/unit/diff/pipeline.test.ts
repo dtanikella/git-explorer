@@ -167,6 +167,24 @@ describe('runDiffPipeline', () => {
     }
   });
 
+  it('diffs and analyses from the merge-base, not the tip of base', async () => {
+    // main moves on after the split; the pipeline must still start from the split
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repoDir, encoding: 'utf8', stdio: 'pipe' }).trim();
+    git('checkout', '-q', '-b', 'moved-on', baseSha);
+    writeFileSync(join(repoDir, 'later.ts'), 'export const later = 1;\n', 'utf8');
+    git('add', 'later.ts');
+    git('commit', '-q', '-m', 'landed after the split');
+    const movedOn = git('rev-parse', 'HEAD');
+    git('checkout', '-q', compareSha);
+
+    const result = await runDiffPipeline({ repoPath: repoDir, base: movedOn, compare: compareSha, hideTestFiles: true });
+
+    expect(mockListChangedTsFiles).toHaveBeenCalledWith(repoDir, baseSha, compareSha, { hideTestFiles: true });
+    expect(mockAnalyzeCommit).toHaveBeenCalledWith(repoDir, baseSha, { hideTestFiles: true });
+    expect(mockAnalyzeCommit).not.toHaveBeenCalledWith(repoDir, movedOn, expect.anything());
+    expect(result.success && result.data.base).toBe(baseSha);
+  });
+
   it('returns no-changes when no TS files changed', async () => {
     mockListChangedTsFiles.mockResolvedValue([]);
 

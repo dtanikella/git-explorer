@@ -79,6 +79,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabId>('default');
   const [topN, setTopN] = useState(20);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
+  const [diffMode, setDiffMode] = useState(false);
 
   // Graph toolbar state
   const [selectedView, setSelectedView] = useState<string>('modules');
@@ -90,7 +91,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Diff tab state
+  // Diff state, shared by diff mode on the default view (and the old Diff tab code below)
   const diffState = useDiff(repoPath);
   // Fetch data when repoPath or hideTestFiles changes
   useEffect(() => {
@@ -181,6 +182,12 @@ export default function HomePage() {
     searchHandlerRef.current = handler;
   }, []);
 
+  // Diff mode turns on the default view, so the toggle also brings that tab forward.
+  const handleDiffModeChange = useCallback((on: boolean) => {
+    setDiffMode(on);
+    if (on) setActiveTab('default');
+  }, []);
+
   const handleNodeSelect = useCallback((scipSymbol: string) => {
     setActiveTab('graph');
     setPendingSelectionId(scipSymbol);
@@ -249,7 +256,7 @@ export default function HomePage() {
       {/* Row 2: Tab content area */}
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar */}
-        <TabSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <TabSidebar activeTab={activeTab} onTabChange={setActiveTab} diffMode={diffMode} onDiffModeChange={handleDiffModeChange} />
 
         {/* Main content */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -271,7 +278,17 @@ export default function HomePage() {
                 Select a repository to visualize
               </div>
             ) : activeTab === 'default' ? (
-              <DefaultView analysisData={analysisData} loading={loading} error={error} />
+              <div className="h-full min-w-0 flex flex-col gap-2">
+                {diffMode && <CompareBar diffState={diffState} />}
+                <div className="flex-1 min-h-0">
+                  <DefaultView
+                    analysisData={diffMode && diffData ? diffData : analysisData}
+                    loading={loading}
+                    error={error}
+                    diffMode={diffMode && !!diffData}
+                  />
+                </div>
+              </div>
             ) : activeTab === 'diff' ? (
               <div className="h-full min-w-0 flex flex-col gap-2">
                 <CompareBar diffState={diffState} />

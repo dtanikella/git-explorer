@@ -3,37 +3,45 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TabSidebar from '@/app/components/TabSidebar';
 
+const renderSidebar = (over: Partial<React.ComponentProps<typeof TabSidebar>> = {}) => {
+  const props = { activeTab: 'graph' as const, onTabChange: jest.fn(), diffMode: false, onDiffModeChange: jest.fn(), ...over };
+  render(<TabSidebar {...props} />);
+  return props;
+};
+
 describe('TabSidebar', () => {
-  it('renders Graph, Stats, and Diff tab buttons', () => {
-    render(<TabSidebar activeTab="graph" onTabChange={jest.fn()} />);
+  it('renders the Graph and Stats tabs', () => {
+    renderSidebar();
     expect(screen.getByRole('button', { name: /graph/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stats/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /diff/i })).toBeInTheDocument();
   });
 
   it('highlights the active tab', () => {
-    render(<TabSidebar activeTab="stats" onTabChange={jest.fn()} />);
-    const statsBtn = screen.getByRole('button', { name: /stats/i });
-    expect(statsBtn).toHaveClass('border-l-2');
-  });
-
-  it('highlights the diff tab when active', () => {
-    render(<TabSidebar activeTab="diff" onTabChange={jest.fn()} />);
-    const diffBtn = screen.getByRole('button', { name: /diff/i });
-    expect(diffBtn).toHaveClass('border-l-2');
+    renderSidebar({ activeTab: 'stats' });
+    expect(screen.getByRole('button', { name: /stats/i })).toHaveClass('border-l-2');
   });
 
   it('calls onTabChange when clicking a tab', () => {
-    const onTabChange = jest.fn();
-    render(<TabSidebar activeTab="graph" onTabChange={onTabChange} />);
+    const { onTabChange } = renderSidebar();
     fireEvent.click(screen.getByRole('button', { name: /stats/i }));
     expect(onTabChange).toHaveBeenCalledWith('stats');
   });
 
-  it('calls onTabChange when clicking the diff tab', () => {
-    const onTabChange = jest.fn();
-    render(<TabSidebar activeTab="graph" onTabChange={onTabChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /diff/i }));
-    expect(onTabChange).toHaveBeenCalledWith('diff');
+  it('offers Diff as a toggle, not a tab', () => {
+    const { onTabChange, onDiffModeChange } = renderSidebar();
+    const toggle = screen.getByRole('button', { name: /diff/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(onDiffModeChange).toHaveBeenCalledWith(true);
+    expect(onTabChange).not.toHaveBeenCalled();
+  });
+
+  it('shows the toggle pressed while diff mode is on, and clicking turns it off', () => {
+    const { onDiffModeChange } = renderSidebar({ diffMode: true });
+    const toggle = screen.getByRole('button', { name: /diff/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveClass('border-l-2');
+    fireEvent.click(toggle);
+    expect(onDiffModeChange).toHaveBeenCalledWith(false);
   });
 });

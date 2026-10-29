@@ -1,7 +1,8 @@
-import { buildSignature, cardContent, connectionsView, defaultDirection, kindLabel } from '@/lib/default/card';
+import { buildSignature, cardContent, connectionsView, defaultDirection, groupByLocation, kindLabel } from '@/lib/default/card';
 import { EdgeKind, SyntaxType } from '@/lib/analysis/types';
 import type { DotConnections } from '@/lib/default/types';
 import type { HierarchyNode } from '@/lib/default/types';
+import { rollupDiff } from '@/lib/default/diff';
 
 const sym = (name: string, type: SyntaxType = SyntaxType.FUNCTION, over: Partial<NonNullable<HierarchyNode['symbol']>> = {}): HierarchyNode => ({
   id: name, tier: 'symbol', name, path: 'x.ts', depth: 4, children: [], symbol: { syntaxType: type, params: [], returnTypeText: null, ...over },
@@ -87,13 +88,11 @@ describe('connectionsView', () => {
     undrawn: 2,
   };
 
-  it('ranks rows by count with direction-specific labels, five names and the remainder', () => {
+  it('ranks rows by count with direction-specific labels and lists every symbol by location', () => {
     const v = connectionsView(conn, 'out', byId);
     expect(v.rows.map((r) => [r.label, r.count])).toEqual([['Calls', 7], ['Uses type', 1]]);
-    expect(v.rows[0].names).toHaveLength(5);
-    expect(v.rows[0].names[0]).toEqual({ id: 'a', name: 'a', file: 'a.ts' });
-    expect(v.rows[0].more).toBe(2);
-    expect(v.rows[1].more).toBe(0);
+    expect(v.rows[0].locations).toHaveLength(1);
+    expect(v.rows[0].locations[0]).toMatchObject({ label: 'src/', kind: 'folder', count: 7 });
     expect(v.undrawn).toBe(2);
   });
 
@@ -113,5 +112,72 @@ describe('defaultDirection', () => {
     expect(defaultDirection({ out: new Map([[EdgeKind.CALLS, ['a']]]), in: new Map(), undrawn: 0 })).toBe('out');
     expect(defaultDirection({ out: new Map(), in: new Map([[EdgeKind.CALLS, ['a']]]), undrawn: 0 })).toBe('in');
     expect(defaultDirection(undefined)).toBe('out');
+  });
+
+  describe('in diff mode', () => {
+    const d = (n: HierarchyNode, diffStatus: NonNullable<HierarchyNode['diffStatus']>, ghost = false): HierarchyNode => ({ ...n, diffStatus, ...(ghost && { ghost }) });
+    const added = d(sym('a'), 'added');
+    const ghost = d(sym('gone'), 'deleted', true);
+    const same = d(sym('same'), 'unchanged');
+    const file = node('x.ts', 'file', [added, same, ghost]);
+    const diffRoot = node('root', 'root', [file]);
+    const rollups = rollupDiff(diffRoot);
+
+    it('adds a status pill and a changed count to a changed symbol', () => {
+      const c = cardContent(added, diffRoot, rollups);
+      expect(c.status).toMatchObject({ label: 'Added' });
+      expect(c.position).toBe('1st of 3 symbols in file · 2 changed');
+      expect(c.ghostNote).toBeUndefined();
+    });
+
+    it('shows no pill on an unchanged symbol but still gives the changed count', () => {
+      const c = cardContent(same, diffRoot, rollups);
+      expect(c.status).toBeUndefined();
+      expect(c.position).toBe('2nd of 3 symbols in file · 2 changed');
+    });
+
+    it('marks a deleted ghost with the base-commit note', () => {
+      const c = cardContent(ghost, diffRoot, rollups);
+      expect(c.status).toMatchObject({ label: 'Deleted' });
+      expect(c.ghostNote).toBe('Shown from the base commit');
+    });
+
+    it('is unchanged when diff mode is off', () => {
+      const c = cardContent(added, diffRoot);
+      expect(c.status).toBeUndefined();
+      expect(c.ghostNote).toBeUndefined();
+      expect(c.position).toBe('1st of 3 symbols');
+    });
+  });
+});
+
+describe('groupByLocation', () => {
+  const at = (id: string, path: string): [string, HierarchyNode] => [id, { ...sym(id), path }];
+  const byId = new Map([
+    at('a', 'lib/default/layout.ts'),
+    at('b', 'lib/default/layout.ts'),
+    at('c', 'lib/default/types.ts'),
+    at('d', 'lib/git/analyzer.ts'),
+    at('e', 'app/page.tsx'),
+    at('f', 'main.ts'),
+  ]);
+
+  it('nests folders then files then symbols, folders first and each alphabetical, and counts what is under each', () => {
+    const g = groupByLocation(['f', 'e', 'd', 'c', 'b', 'a'], byId);
+    expect(g.map((x) => [x.label, x.kind, x.count])).toEqual([['app/', 'folder', 1], ['lib/', 'folder', 4], ['main.ts', 'file', 1]]);
+    const lib = g.find((x) => x.label === 'lib/')!;
+    expect(lib.children.map((x) => [x.label, x.count])).toEqual([['default/', 3], ['git/', 1]]);
+    expect(lib.children[0].children.map((x) => x.label)).toEqual(['layout.ts', 'types.ts']);
+    expect(lib.children[0].children[0].symbols.map((s) => s.id)).toEqual(['b', 'a']);
+  });
+
+  it('joins a folder that holds only one folder to it', () => {
+    const g = groupByLocation(['a', 'c'], new Map([at('a', 'lib/default/layout.ts'), at('c', 'lib/default/types.ts')]));
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ label: 'lib/default/', key: 'lib/default', count: 2 });
+  });
+
+  it('puts a file at the top level when it is in no folder', () => {
+    expect(groupByLocation(['f'], byId)).toMatchObject([{ label: 'main.ts', kind: 'file', symbols: [{ id: 'f' }] }]);
   });
 });

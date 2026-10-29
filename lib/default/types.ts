@@ -1,4 +1,5 @@
 import type { EdgeKind, SyntaxType, ParamInfo } from '@/lib/analysis/types';
+import type { DiffStatus } from '@/lib/diff/types';
 
 /** The four tiers of the default view's hierarchy. */
 export type Tier = 'root' | 'folder' | 'file' | 'symbol';
@@ -27,6 +28,10 @@ export interface HierarchyNode {
   path: string;
   depth: number;
   symbol?: SymbolInfo;
+  /** set on symbols built from a diff result */
+  diffStatus?: DiffStatus;
+  /** a deleted symbol taken from the base commit */
+  ghost?: boolean;
   children: HierarchyNode[];
 }
 

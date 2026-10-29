@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { EdgeKind } from '@/lib/analysis/types';
-import type { CardContent, ConnectionsView } from '@/lib/default/card';
+import type { CardContent, ConnectionsView, LocationGroup } from '@/lib/default/card';
 import type { Direction } from '@/lib/default/types';
 
 /** What the card needs to be pinned to a symbol and show its connections. */
@@ -33,7 +34,7 @@ interface InfoCardProps {
  * @remarks
  * Presentation only: every field comes from {@link CardContent}. It ignores the pointer, so it never blocks hover on
  * the diagram beneath it. Once a symbol is pinned it takes the pointer, gets a blue outline and a × button, and
- * adds the connections section: an `Out | In` toggle and the edge kinds ranked by count, one expandable to names.
+ * adds the connections section: an `Out | In` toggle and the edge kinds ranked by count, one expandable to the connected symbols, grouped by folder and file.
  *
  * @param content - From `cardContent`.
  * @param hue - Band hue, used for the pill of a folder or file.
@@ -51,6 +52,11 @@ export default function InfoCard({ content, hue, pinned }: InfoCardProps) {
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] text-gray-500">{content.breadcrumb}</span>
         <span className="flex shrink-0 items-center gap-1.5">
+          {content.status && (
+            <span data-testid="status-pill" className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: content.status.color }}>
+              {content.status.label}
+            </span>
+          )}
           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: pillColor }}>
             {content.pill.label}
           </span>
@@ -61,9 +67,10 @@ export default function InfoCard({ content, hue, pinned }: InfoCardProps) {
           )}
         </span>
       </div>
-      <div className="mt-2 text-center text-[21px] leading-tight text-gray-900 break-words" style={{ fontWeight: 650 }}>
+      <div className={`mt-2 text-center text-[21px] leading-tight break-words ${content.ghostNote ? 'text-gray-500 line-through' : 'text-gray-900'}`} style={{ fontWeight: 650 }}>
         {content.name}
       </div>
+      {content.ghostNote && <div data-testid="ghost-note" className="mt-1 text-center text-[11px] italic text-gray-500">{content.ghostNote}</div>}
       {content.signature && (
         <pre className="mt-3 whitespace-pre-wrap break-words rounded bg-gray-100 p-2 font-mono text-xs text-gray-800">{content.signature}</pre>
       )}
@@ -146,17 +153,7 @@ function Connections({ pinned }: { pinned: PinnedCard }) {
                 </span>
               </button>
               {selected && (
-                <ul className="mb-1 ml-6 mt-1 text-xs">
-                  {r.names.map((n) => (
-                    <li key={n.id}>
-                      <button type="button" data-testid="connection-name" onClick={() => pinned.onPick(n.id)} className="flex w-full items-baseline justify-between gap-2 rounded px-1 py-0.5 text-left hover:bg-gray-100">
-                        <span className="min-w-0 truncate text-gray-900">{n.name}</span>
-                        <span className="max-w-[45%] shrink-0 truncate text-[10px] text-gray-400">{n.file}</span>
-                      </button>
-                    </li>
-                  ))}
-                  {r.more > 0 && <li className="px-1 py-0.5 text-gray-500">+ {r.more} more</li>}
-                </ul>
+                <LocationList groups={r.locations} onPick={pinned.onPick} />
               )}
             </li>
           );
@@ -170,5 +167,67 @@ function Connections({ pinned }: { pinned: PinnedCard }) {
       )}
       <div className="mt-2 text-right text-[10px] text-gray-400">Esc clears category, again unpins</div>
     </div>
+  );
+}
+
+/**
+ * The connected symbols under an open category row, as folders and files that each fold open or shut.
+ *
+ * @remarks
+ * Everything starts open. The list scrolls when it grows past a fixed height, so a long one never stretches the card.
+ * Closing a folder or file hides what is under it; the count beside it still says how many symbols that is.
+ */
+function LocationList({ groups, onPick }: { groups: LocationGroup[]; onPick: (id: string) => void }) {
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const render = (g: LocationGroup, depth: number): React.ReactNode => {
+    const open = !closed.has(g.key);
+    return (
+      <li key={g.key}>
+        <button
+          type="button"
+          data-testid="location-group"
+          data-kind={g.kind}
+          aria-expanded={open}
+          onClick={() => toggle(g.key)}
+          style={{ paddingLeft: 4 + depth * 12 }}
+          className="flex w-full items-center gap-1.5 rounded py-0.5 pr-1 text-left hover:bg-gray-100"
+        >
+          <span className="w-2.5 shrink-0 text-[9px] text-gray-400 transition-transform" style={{ transform: open ? 'rotate(90deg)' : undefined }}>
+            ▶
+          </span>
+          <span className={`min-w-0 flex-1 truncate ${g.kind === 'folder' ? 'text-gray-500' : 'text-gray-700'}`}>{g.label}</span>
+          <span className="shrink-0 text-[10px] text-gray-400">{g.count}</span>
+        </button>
+        {open && (
+          <ul>
+            {g.children.map((c) => render(c, depth + 1))}
+            {g.symbols.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  data-testid="connection-name"
+                  onClick={() => onPick(n.id)}
+                  style={{ paddingLeft: 4 + (depth + 1) * 12 + 14 }}
+                  className="w-full truncate rounded py-0.5 pr-1 text-left text-gray-900 hover:bg-gray-100"
+                >
+                  {n.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+  return (
+    <ul data-testid="connection-locations" className="mb-1 ml-3 mt-1 max-h-64 overflow-y-auto text-xs">
+      {groups.map((g) => render(g, 0))}
+    </ul>
   );
 }

@@ -14,7 +14,7 @@ import type {
   LabelledDeclaration,
   DiffResponse,
 } from './types';
-import { listChangedTsFiles, type ChangedFile } from './git-diff';
+import { listChangedTsFiles, resolveMergeBase, type ChangedFile } from './git-diff';
 import { buildFileTrees, type ParsedFilePair } from './file-trees';
 import { labelModifiedFile, labelAddedFile, labelDeletedFile } from './match';
 import { joinDiffToAnalysis, countDiff } from './join';
@@ -30,6 +30,9 @@ export interface DiffPipelineInput {
 
 /**
  * Run the full diff pipeline: steps 3 through 9.
+ *
+ * The base is replaced by the merge-base of base and compare, so only what compare added is labelled, as in a pull
+ * request. The result's `base` is that merge-base commit.
  *
  * Orchestrates: listing changed TS files with difftastic (step 3), building
  * tree-sitter parse trees (step 4), extracting diff units and mapping spans
@@ -60,8 +63,10 @@ export async function runDiffPipeline(
 
   // Step 3: List changed TS files with difftastic
   let changedFiles: ChangedFile[];
+  let baseSha: string;
   try {
-    changedFiles = await listChangedTsFiles(repoPath, base, compare, { hideTestFiles });
+    baseSha = resolveMergeBase(repoPath, base, compare);
+    changedFiles = await listChangedTsFiles(repoPath, baseSha, compare, { hideTestFiles });
   } catch (err: unknown) {
     if (err instanceof DifftUnavailableError) {
       return {
@@ -108,7 +113,7 @@ export async function runDiffPipeline(
         nodes: allUnchanged,
         edges: headAnalysis.edges,
         metadata: { ...headAnalysis.metadata, repoPath },
-        base,
+        base: baseSha,
         head: compare,
       };
 
@@ -141,7 +146,7 @@ export async function runDiffPipeline(
   try {
     [headAnalysis, baseAnalysis] = await Promise.all([
       analyzeCommit(repoPath, compare, { hideTestFiles }),
-      analyzeCommit(repoPath, base, { hideTestFiles }),
+      analyzeCommit(repoPath, baseSha, { hideTestFiles }),
     ]);
   } catch (err: unknown) {
     const error = err as { message?: string };
@@ -181,7 +186,7 @@ export async function runDiffPipeline(
       allLabels,
       headAnalysis,
       baseAnalysis,
-      { base, head: compare },
+      { base: baseSha, head: compare },
     ));
   } catch (err: unknown) {
     const error = err as { message?: string };
