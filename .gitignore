@@ -49,3 +49,6 @@ next-env.d.ts
 
 # git-explorer analysis cache
 /.git-explorer/
+
+# design sandboxes and wireframes (scratch, not committed)
+/docs/wireframes/
