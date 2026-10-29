@@ -12,6 +12,31 @@ import { extractNodes } from './node-extractor';
 import { extractEdges } from './edge-extractor';
 import { assembleResult } from '@/app/services/analysis/shared/graph-assembler';
 
+const FILE_READ_CONCURRENCY = 32;
+
+/**
+ * Reads files with a bounded number of reads in flight.
+ *
+ * @param absolutePaths - Files to read.
+ * @returns Each file's contents in input order, or null where the read failed.
+ */
+async function readSources(absolutePaths: string[]): Promise<Array<string | null>> {
+  const sources: Array<string | null> = new Array(absolutePaths.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < absolutePaths.length) {
+      const i = next++;
+      try {
+        sources[i] = await fs.readFile(absolutePaths[i], 'utf-8');
+      } catch {
+        // left as null
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(FILE_READ_CONCURRENCY, absolutePaths.length) }, worker));
+  return sources;
+}
+
 export interface TsAnalysisOptions {
   hideTestFiles: boolean;
 }
@@ -35,10 +60,19 @@ export async function analyzeTsRepo(
   options: TsAnalysisOptions,
 ): Promise<AnalysisResult> {
   const startTime = Date.now();
+  const stageTimingsMs: Record<string, number> = {};
+  let stageStart = startTime;
+  const endStage = (stage: string) => {
+    const now = Date.now();
+    stageTimingsMs[stage] = now - stageStart;
+    stageStart = now;
+  };
 
   // Stage 1: SCIP indexing
   const indexResult = await indexTypeScriptRepo(repoPath);
+  endStage('index');
   const scipIndex = await readScipIndex(indexResult.indexPath);
+  endStage('readIndex');
 
   // Stage 2: Tree-sitter parsing
   const tsLang = loadLanguage('typescript');
@@ -48,24 +82,21 @@ export async function analyzeTsRepo(
 
   const parsedFiles = new Map<string, { tree: TreeWrapper; source: string }>();
 
-  for (const doc of scipIndex.documents) {
-    const filePath = doc.relativePath;
+  const filePaths = scipIndex.documents
+    .map((doc) => doc.relativePath)
+    .filter((filePath) => !isGeneratedFile(filePath) && !(options.hideTestFiles && isTestFile(filePath)));
+  const sources = await readSources(filePaths.map((filePath) => path.join(repoPath, filePath)));
+  endStage('readFiles');
 
-    if (isGeneratedFile(filePath)) continue;
-    if (options.hideTestFiles && isTestFile(filePath)) continue;
-
-    const absolutePath = path.join(repoPath, filePath);
-    let source: string;
-    try {
-      source = await fs.readFile(absolutePath, 'utf-8');
-    } catch {
-      continue; // skip files that can't be read
-    }
+  filePaths.forEach((filePath, i) => {
+    const source = sources[i];
+    if (source === null) return; // skip files that can't be read
 
     const parser = filePath.endsWith('.tsx') ? tsxParser : tsParser;
     const result = parser.parse(source);
     parsedFiles.set(filePath, { tree: result.tree, source });
-  }
+  });
+  endStage('parse');
 
   // Stage 3: Node extraction
   const { nodes, nodeMap } = extractNodes({
@@ -73,6 +104,7 @@ export async function analyzeTsRepo(
     scipDocuments: scipIndex.documents,
     repoPath,
   });
+  endStage('nodes');
 
   // Mark test file nodes
   if (!options.hideTestFiles) {
@@ -88,6 +120,7 @@ export async function analyzeTsRepo(
     nodeMap,
     repoPath,
   });
+  endStage('edges');
 
   // Stage 5: Assemble result
   return assembleResult({
@@ -96,5 +129,6 @@ export async function analyzeTsRepo(
     repoPath,
     language: 'typescript',
     startTime,
+    stageTimingsMs,
   });
 }

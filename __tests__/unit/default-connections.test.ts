@@ -67,6 +67,14 @@ describe('buildConnections', () => {
     expect(m.byDot.get(B)!.undrawn).toBe(1);
     expect(m.edges).toEqual([]);
   });
+
+  it('adds dropped external edge counts to undrawn after rolling up to a dot', () => {
+    const m = buildConnections([edge(EdgeKind.CALLS, A, B)], DOTS, { [`${A}run().`]: 2, [C]: 1, [sym('Gone#')]: 5 });
+    expect(m.byDot.get(A)!.undrawn).toBe(2);
+    expect(m.byDot.get(C)!.undrawn).toBe(1);
+    expect(m.byDot.get(B)!.undrawn).toBe(0);
+    expect(m.edges).toEqual([{ kind: EdgeKind.CALLS, from: A, to: B }]);
+  });
 });
 
 describe('rankedKinds and distinctConnected', () => {

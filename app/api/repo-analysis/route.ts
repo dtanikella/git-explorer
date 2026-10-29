@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeRepo } from '@/app/services/analysis/controller';
 import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
+import { getCachedResponse, responseCacheKey, setCachedResponse } from '@/app/services/analysis/response-cache';
 
 /**
  * `POST /api/repo-analysis`: Analyzes a repository and returns the
@@ -9,7 +10,8 @@ import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
  * @remarks
  * Responds 200 with the analysis result on success, 400 when the request
  * body is malformed or the path is invalid, 400 when the language is
- * unsupported, and 500 on unexpected errors.
+ * unsupported, and 500 on unexpected errors. Successful responses are cached in
+ * memory per repo, HEAD and `hideTestFiles` (see `response-cache.ts`).
  *
  * @param request - JSON body with `repoPath` (string, required) and
  *   optional `hideTestFiles` (boolean).
@@ -40,12 +42,15 @@ export async function POST(request: NextRequest) {
 
     const hideTestFilesOption: boolean = hideTestFiles !== undefined ? Boolean(hideTestFiles) : true;
 
-    const data = await analyzeRepo(repoPath, { hideTestFiles: hideTestFilesOption });
+    const cacheKey = await responseCacheKey(repoPath, hideTestFilesOption);
+    const cached = cacheKey ? getCachedResponse(cacheKey) : undefined;
+    if (cached !== undefined) return jsonBody(cached);
 
-    return NextResponse.json({
-      success: true,
-      data,
-    });
+    const data = await analyzeRepo(repoPath, { hideTestFiles: hideTestFilesOption });
+    const responseBody = JSON.stringify({ success: true, data });
+    if (cacheKey) setCachedResponse(cacheKey, responseBody);
+
+    return jsonBody(responseBody);
   } catch (error) {
     if (error instanceof UnsupportedLanguageError) {
       return NextResponse.json(
@@ -68,4 +73,8 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+function jsonBody(body: string): NextResponse {
+  return new NextResponse(body, { headers: { 'Content-Type': 'application/json' } });
 }

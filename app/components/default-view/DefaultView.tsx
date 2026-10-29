@@ -104,7 +104,7 @@ export default function DefaultView({ analysisData, loading, error, diffMode = f
     const layout = layoutRadial(root);
     const dots = new Map(layout.nodes.filter((p) => p.node.tier === 'symbol').map((p) => [p.node.id, p]));
     const byId = new Map([...dots].map(([id, p]) => [id, p.node]));
-    const conn = buildConnections(analysisData.edges, new Set(dots.keys()));
+    const conn = buildConnections(analysisData.edges, new Set(dots.keys()), analysisData.metadata.externalEdgeCounts);
     const positions = new Map(layout.nodes.map((p) => [p.node.id, p]));
     return { root, layout, bands: layoutBands(layout), parents: parentMap(root), positions, dots, byId, conn, symbols: [...byId.values()], diff: diffMode ? rollupDiff(root) : null };
   }, [analysisData, diffMode]);

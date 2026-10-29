@@ -12,6 +12,7 @@ export interface AssemblyInput {
   repoPath: string;
   language: string;
   startTime: number;
+  stageTimingsMs?: Record<string, number>;
 }
 
 /**
@@ -39,6 +40,7 @@ export function assembleResult(input: AssemblyInput): AnalysisResult {
       analysisDurationMs: Date.now() - input.startTime,
       missingNodeTypes: [...MISSING_NODE_TYPES],
       missingEdgeKinds: [...MISSING_EDGE_KINDS],
+      ...(input.stageTimingsMs && { stageTimingsMs: input.stageTimingsMs }),
     },
   };
 }

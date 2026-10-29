@@ -15,6 +15,7 @@ import { AnalysisError, UnsupportedLanguageError } from '@/lib/analysis/types';
 import { detectLanguage } from './language-detector';
 import { analyzeTsRepo } from './ts/controller';
 import { analyzeRubyRepo } from './ruby/controller';
+import { compactExternalEdges } from './shared/external-edges';
 
 export interface AnalysisOptions {
   hideTestFiles?: boolean;
@@ -26,7 +27,8 @@ export interface AnalysisOptions {
  *
  * @remarks
  * Validates the path exists, detects the language (TypeScript or Ruby),
- * and calls the appropriate sub-controller.
+ * and calls the appropriate sub-controller. External edges are replaced by
+ * per-symbol counts ({@link compactExternalEdges}).
  *
  * @param repoPath - Absolute path to the git repository root.
  * @param options - Optional analysis options (e.g., `hideTestFiles`).
@@ -57,9 +59,9 @@ export async function analyzeRepo(
   // Delegate to language-specific controller
   switch (language) {
     case 'typescript':
-      return analyzeTsRepo(repoPath, { hideTestFiles });
+      return compactExternalEdges(await analyzeTsRepo(repoPath, { hideTestFiles }));
     case 'ruby':
-      return analyzeRubyRepo(repoPath, { hideTestFiles });
+      return compactExternalEdges(await analyzeRubyRepo(repoPath, { hideTestFiles }));
     default:
       throw new UnsupportedLanguageError(repoPath);
   }
